@@ -8,40 +8,59 @@ body {
     overflow: hidden;
 }
 
-/* Main app layout */
+/* MAIN LAYOUT */
 #app {
     display: flex;
     height: 100vh;
+    overflow: hidden;
 }
 
-/* Left and right panels */
+/* PANELS */
 #image-panel,
 #map-panel {
     flex: 1;
+    min-width: 0;
     display: flex;
     flex-direction: column;
     border-right: 1px solid #ccc;
 }
 
-/* Top header bars */
+/* HEADER */
 .panel-header {
-    padding: 12px;
-    background-color: #f0f0f0;
+    padding: 10px;
+    background: #f0f0f0;
     border-bottom: 1px solid #ccc;
     font-weight: bold;
 }
 
-/* Main content areas */
+/* CONTENT AREAS */
 #image-container,
 #map-container {
     flex: 1;
     position: relative;
-    overflow: hidden;
+    overflow: auto;
+    background: #111;
 }
 
-/* Canvas styling */
+/* CANVAS */
 #image-canvas {
     display: block;
-    max-width: 100%;
-    max-height: 100%;
+}
+
+/* DROP OVERLAY */
+#drop-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    color: #aaa;
+    font-size: 18px;
+
+    pointer-events: none;
 }
