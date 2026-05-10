@@ -426,7 +426,7 @@ function render() {
     state.lines.forEach((line, idx) => {
         const active  = idx === state.activeLineIndex;
         const colour  = lineColour(idx);
-        const alpha   = active ? 1.0 : 0.5;
+        const alpha   = active ? 1.0 : 0.85;
 
         ctx.globalAlpha = alpha;
 
