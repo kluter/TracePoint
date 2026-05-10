@@ -229,13 +229,12 @@ function updateLineManager() {
                     && state.mapPointTarget.lineIndex === lIdx
                     && state.mapPointTarget.pointIndex === pIdx;
 
+                ptItem.title = hasGeo ? 'Re-place on map' : 'Place on map';
                 ptItem.innerHTML =
                     `<span class="pt-label">P${pIdx + 1}</span>` +
-                    `<button class="btn-geo ${isTarget ? 'geo-active' : ''}" title="${hasGeo ? 'Re-place on map' : 'Place on map'}"
-                        onclick="event.stopPropagation(); startMapPoint(${lIdx},${pIdx})">
-                        ${hasGeo ? '📍' : '🗺'}
-                    </button>` +
+                    `<span class="pt-geo-icon ${isTarget ? 'geo-active' : ''}">${hasGeo ? '📍' : '🗺'}</span>` +
                     `<button class="btn-delete" onclick="event.stopPropagation(); deletePoint(${lIdx},${pIdx})">×</button>`;
+                ptItem.onclick = () => startMapPoint(lIdx, pIdx);
                 ptBox.appendChild(ptItem);
             });
 

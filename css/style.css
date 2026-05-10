@@ -84,18 +84,16 @@ button:disabled     { opacity: 0.3; cursor: not-allowed; }
     display: flex; align-items: center; gap: 3px;
     background: #1a1a1a; border: 1px solid #2e2e2e;
     padding: 2px 6px; border-radius: 10px; font-size: 10px;
+    cursor: pointer; transition: background 0.15s, border-color 0.15s;
 }
-.point-item.has-geo { border-color: #004d33; background: #0d1f18; }
+.point-item:hover         { background: #222; border-color: #444; }
+.point-item.has-geo       { border-color: #004d33; background: #0d1f18; }
+.point-item.has-geo:hover { background: #122b20; border-color: #006644; }
 
-.pt-label { color: #888; }
-
-.btn-geo {
-    background: none; border: none; color: #555; cursor: pointer;
-    padding: 0 2px; font-size: 12px; line-height: 1;
-    transition: color 0.15s;
+.pt-geo-icon {
+    font-size: 12px; line-height: 1;
 }
-.btn-geo:hover { color: #00aaff; }
-.btn-geo.geo-active { color: #00ffaa; animation: pulse-btn 1s infinite; }
+.pt-geo-icon.geo-active { animation: pulse-btn 1s infinite; }
 
 @keyframes pulse-btn {
     0%, 100% { opacity: 1; }
