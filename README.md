@@ -98,7 +98,7 @@ npx serve .
 python3 -m http.server
 ```
 
-A sample image (`Wuerzburg_Germany.jpg`) is included in `assets/` if you want to test the tool without having a suitable photo handy.
+A sample image (`Potsdam_Germany.jpg` or `Wuerzburg_Germany.jpg`) is included in `assets/` if you want to test the tool without having a suitable photo handy.
 
 ---
 
