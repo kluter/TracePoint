@@ -1,54 +1,43 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TracePoint</title>
-
+    <!-- Leaflet CSS & JS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <link rel="stylesheet" href="css/style.css">
 </head>
-
 <body>
-
     <div id="app">
-
         <!-- LEFT: IMAGE -->
         <div id="image-panel">
-
             <div class="panel-header">
-                Image View
-            </div>
-
-            <div id="image-container">
-
-                <canvas id="image-canvas"></canvas>
-
-                <div id="drop-overlay">
-                    Drop image here
+                <div class="brand">
+                    <div id="logo-placeholder"></div>
+                    <h1>TracePoint</h1>
                 </div>
-
+                <div class="toolbar" id="toolbar">
+                    <button id="btn-add-line">+ New Line</button>
+                    <button id="btn-mode-toggle" disabled>Mode: Idle</button>
+                </div>
             </div>
-
+            <div id="image-container">
+                <canvas id="image-canvas"></canvas>
+                <div id="drop-overlay">Drop image here</div>
+            </div>
         </div>
 
         <!-- RIGHT: MAP -->
         <div id="map-panel">
-
             <div class="panel-header">
-                Map View
+                <h2>Map View</h2>
+                <div class="toolbar-hint">Align points to map to generate rays</div>
             </div>
-
-            <div id="map-container">
-                <p style="padding: 10px;">Map will be added next step</p>
-            </div>
-
+            <div id="map-container"></div>
         </div>
-
     </div>
-
     <script src="js/script.js"></script>
-
 </body>
-
 </html>

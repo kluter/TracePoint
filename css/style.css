@@ -1,66 +1,70 @@
-* {
-    box-sizing: border-box;
-}
-
+* { box-sizing: border-box; }
 body {
     margin: 0;
-    font-family: Arial, sans-serif;
+    font-family: -apple-system, system-ui, sans-serif;
     overflow: hidden;
+    background: #0a0a0a;
+    color: #e0e0e0;
 }
-
-/* MAIN LAYOUT */
-#app {
-    display: flex;
-    height: 100vh;
-    overflow: hidden;
-}
+#app { display: flex; height: 100vh; }
 
 /* PANELS */
-#image-panel,
-#map-panel {
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    border-right: 1px solid #ccc;
+#image-panel, #map-panel {
+    flex: 1; min-width: 0;
+    display: flex; flex-direction: column;
+    border-right: 1px solid #222;
 }
 
 /* HEADER */
 .panel-header {
-    padding: 10px;
-    background: #f0f0f0;
-    border-bottom: 1px solid #ccc;
-    font-weight: bold;
+    height: 60px; padding: 0 20px;
+    background: #151515; border-bottom: 1px solid #333;
+    display: flex; justify-content: space-between; align-items: center;
+    flex-shrink: 0;
 }
+.brand { display: flex; align-items: center; gap: 10px; }
+.brand h1 { margin: 0; font-size: 18px; color: #fff; letter-spacing: 0.5px; }
+#logo-placeholder { width: 20px; height: 20px; background: #00aaff; border-radius: 3px; }
 
-/* CONTENT AREAS */
-#image-container,
-#map-container {
-    flex: 1;
-    position: relative;
-    overflow: auto;
-    background: #111;
+/* TOOLBAR */
+.toolbar { display: flex; align-items: center; gap: 8px; overflow-x: auto; flex: 1; margin-left: 20px; }
+button {
+    background: #2a2a2a; color: #fff; border: 1px solid #444;
+    padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; white-space: nowrap;
 }
+button:hover:not(:disabled) { background: #333; }
+button.active-mode { background: #00aaff; color: #000; border-color: #00aaff; font-weight: bold; }
+button:disabled { opacity: 0.3; cursor: not-allowed; }
 
-/* CANVAS */
-#image-canvas {
-    display: block;
+/* LINE/POINT ITEMS */
+.line-item {
+    display: flex; align-items: center; gap: 6px;
+    background: #222; padding: 4px 10px; border-radius: 4px;
+    font-size: 12px; cursor: pointer; border: 1px solid transparent;
 }
+.point-manager { display: flex; gap: 4px; padding-left: 10px; border-left: 1px solid #333; }
+.point-item {
+    display: flex; align-items: center; background: #004466;
+    padding: 2px 8px; border-radius: 10px; font-size: 10px;
+}
+.btn-delete { background: none; border: none; color: #ff4444; cursor: pointer; padding: 0 2px; font-size: 14px; }
 
-/* DROP OVERLAY */
+/* CONTENT */
+#image-container, #map-container { flex: 1; position: relative; overflow: auto; background: #111; }
+#image-canvas { display: none; cursor: crosshair; }
 #drop-overlay {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    color: #555; pointer-events: none; border: 2px dashed transparent;
+}
+#image-container.drag-active { background: #1a1a1a; }
+#image-container.drag-active #drop-overlay { border-color: #00aaff; color: #00aaff; }
 
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    color: #aaa;
-    font-size: 18px;
-
+/* Ensure map labels and roads stay on top of the satellite tiles */
+.leaflet-pane.leaflet-shadow-pane {
+    z-index: 600; 
+    pointer-events: none; 
+}
+.leaflet-pane.leaflet-overlay-pane {
+    z-index: 500;
     pointer-events: none;
 }
