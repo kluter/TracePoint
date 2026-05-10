@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TracePoint</title>
-    <!-- Leaflet CSS & JS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <link rel="stylesheet" href="css/style.css">
@@ -26,14 +25,15 @@
             <div id="image-container">
                 <canvas id="image-canvas"></canvas>
                 <div id="drop-overlay">Drop image here</div>
+                <div id="zoom-hint">scroll to zoom · space+drag or middle-drag to pan</div>
             </div>
         </div>
 
         <!-- RIGHT: MAP -->
         <div id="map-panel">
             <div class="panel-header">
-                <h2>Map View</h2>
-                <div class="toolbar-hint">Align points to map to generate rays</div>
+                <h3 style="margin:0; font-size:15px; font-weight:600;">Map View</h3>
+                <div class="toolbar-hint">Place GeoPoints → Rays appear → Intersection = Image origin</div>
             </div>
             <div id="map-container"></div>
         </div>

@@ -1,4 +1,8 @@
+/* ============================================================
+   TracePoint – style.css
+   ============================================================ */
 * { box-sizing: border-box; }
+
 body {
     margin: 0;
     font-family: -apple-system, system-ui, sans-serif;
@@ -6,65 +10,189 @@ body {
     background: #0a0a0a;
     color: #e0e0e0;
 }
+
 #app { display: flex; height: 100vh; }
 
-/* PANELS */
+/* ---- PANELS ---- */
 #image-panel, #map-panel {
     flex: 1; min-width: 0;
     display: flex; flex-direction: column;
     border-right: 1px solid #222;
 }
 
-/* HEADER */
+/* ---- HEADER ---- */
 .panel-header {
-    height: 60px; padding: 0 20px;
-    background: #151515; border-bottom: 1px solid #333;
+    height: 60px; padding: 0 16px;
+    background: #151515; border-bottom: 1px solid #2a2a2a;
     display: flex; justify-content: space-between; align-items: center;
     flex-shrink: 0;
+    gap: 12px;
 }
-.brand { display: flex; align-items: center; gap: 10px; }
-.brand h1 { margin: 0; font-size: 18px; color: #fff; letter-spacing: 0.5px; }
-#logo-placeholder { width: 20px; height: 20px; background: #00aaff; border-radius: 3px; }
 
-/* TOOLBAR */
-.toolbar { display: flex; align-items: center; gap: 8px; overflow-x: auto; flex: 1; margin-left: 20px; }
+.brand { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.brand h1 { margin: 0; font-size: 17px; font-weight: 700; color: #fff; letter-spacing: 0.3px; }
+#logo-placeholder {
+    width: 20px; height: 20px;
+    background: #00aaff; border-radius: 4px;
+    box-shadow: 0 0 8px #00aaff66;
+}
+
+/* ---- TOOLBAR ---- */
+.toolbar {
+    display: flex; align-items: center; gap: 6px;
+    overflow-x: auto; flex: 1;
+    padding: 0 4px;
+    scrollbar-width: none;
+}
+.toolbar::-webkit-scrollbar { display: none; }
+
+/* ---- BUTTONS ---- */
 button {
-    background: #2a2a2a; color: #fff; border: 1px solid #444;
-    padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; white-space: nowrap;
+    background: #1e1e1e; color: #ccc; border: 1px solid #383838;
+    padding: 5px 11px; border-radius: 4px; cursor: pointer;
+    font-size: 11px; white-space: nowrap; transition: background 0.15s, color 0.15s;
 }
-button:hover:not(:disabled) { background: #333; }
-button.active-mode { background: #00aaff; color: #000; border-color: #00aaff; font-weight: bold; }
-button:disabled { opacity: 0.3; cursor: not-allowed; }
+button:hover:not(:disabled) { background: #2a2a2a; color: #fff; }
+button.active-mode  { background: #003a55; color: #00aaff; border-color: #00aaff; font-weight: 600; }
+button.map-mode     { background: #003325; color: #00ffaa; border-color: #00ffaa; }
+button:disabled     { opacity: 0.3; cursor: not-allowed; }
 
-/* LINE/POINT ITEMS */
+/* ---- LINE ITEMS ---- */
 .line-item {
     display: flex; align-items: center; gap: 6px;
-    background: #222; padding: 4px 10px; border-radius: 4px;
-    font-size: 12px; cursor: pointer; border: 1px solid transparent;
+    background: #1a1a1a; padding: 4px 10px;
+    border-radius: 4px; font-size: 11px;
+    cursor: pointer; border: 1px solid #2a2a2a;
+    transition: border-color 0.15s;
 }
-.point-manager { display: flex; gap: 4px; padding-left: 10px; border-left: 1px solid #333; }
-.point-item {
-    display: flex; align-items: center; background: #004466;
-    padding: 2px 8px; border-radius: 10px; font-size: 10px;
-}
-.btn-delete { background: none; border: none; color: #ff4444; cursor: pointer; padding: 0 2px; font-size: 14px; }
+.line-item:hover    { background: #222; }
+.line-item.active-line { border-color: var(--lc, #00aaff); background: #181818; }
 
-/* CONTENT */
-#image-container, #map-container { flex: 1; position: relative; overflow: auto; background: #111; }
-#image-canvas { display: none; cursor: crosshair; }
-#drop-overlay {
-    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
-    color: #555; pointer-events: none; border: 2px dashed transparent;
+.line-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--lc, #00aaff); flex-shrink: 0;
 }
-#image-container.drag-active { background: #1a1a1a; }
+.line-label { color: #aaa; }
+
+/* ---- POINT MANAGER ---- */
+.point-manager {
+    display: flex; gap: 4px;
+    padding-left: 10px; border-left: 1px solid #2a2a2a;
+    flex-wrap: nowrap;
+}
+.point-item {
+    display: flex; align-items: center; gap: 3px;
+    background: #1a1a1a; border: 1px solid #2e2e2e;
+    padding: 2px 6px; border-radius: 10px; font-size: 10px;
+}
+.point-item.has-geo { border-color: #004d33; background: #0d1f18; }
+
+.pt-label { color: #888; }
+
+.btn-geo {
+    background: none; border: none; color: #555; cursor: pointer;
+    padding: 0 2px; font-size: 12px; line-height: 1;
+    transition: color 0.15s;
+}
+.btn-geo:hover { color: #00aaff; }
+.btn-geo.geo-active { color: #00ffaa; animation: pulse-btn 1s infinite; }
+
+@keyframes pulse-btn {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.4; }
+}
+
+.btn-delete {
+    background: none; border: none; color: #554; cursor: pointer;
+    padding: 0 2px; font-size: 13px; line-height: 1;
+    transition: color 0.15s;
+}
+.btn-delete:hover { color: #ff4444; }
+
+/* Map mode hint badge */
+.map-hint {
+    background: #003325; color: #00ffaa; border: 1px solid #00ffaa55;
+    padding: 3px 10px; border-radius: 4px; font-size: 10px;
+    animation: pulse-btn 1.2s infinite;
+    white-space: nowrap; flex-shrink: 0;
+}
+
+/* ---- CONTENT AREAS ---- */
+#image-container {
+    flex: 1; position: relative; overflow: hidden; background: #111;
+    cursor: crosshair;
+}
+#map-container {
+    flex: 1; position: relative; overflow: hidden; background: #111;
+}
+#image-canvas { display: none; cursor: crosshair; position: absolute; top: 0; left: 0; }
+
+#drop-overlay {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    color: #333; font-size: 14px; letter-spacing: 0.5px;
+    pointer-events: none;
+    border: 2px dashed transparent;
+    transition: color 0.2s, border-color 0.2s;
+}
 #image-container.drag-active #drop-overlay { border-color: #00aaff; color: #00aaff; }
 
-/* Ensure map labels and roads stay on top of the satellite tiles */
-.leaflet-pane.leaflet-shadow-pane {
-    z-index: 600; 
-    pointer-events: none; 
+/* Map hint bar */
+.toolbar-hint {
+    font-size: 11px; color: #555; white-space: nowrap;
 }
-.leaflet-pane.leaflet-overlay-pane {
-    z-index: 500;
-    pointer-events: none;
+
+/* Leaflet z-index fixes */
+.leaflet-pane.leaflet-shadow-pane    { z-index: 600; pointer-events: none; }
+.leaflet-pane.leaflet-overlay-pane   { z-index: 500; pointer-events: none; }
+
+/* ---- ZOOM HINT ---- */
+#zoom-hint {
+    position: absolute; bottom: 10px; left: 10px;
+    background: #111a; color: #555; font-size: 10px;
+    padding: 4px 8px; border-radius: 3px; pointer-events: none;
+    letter-spacing: 0.3px;
+}
+
+/* ---- LAYER SWITCHER ---- */
+.layer-switcher-wrap {
+    position: relative;
+}
+.layer-burger {
+    width: 32px; height: 32px; padding: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: #151515 !important; border: 1px solid #333 !important;
+    border-radius: 4px !important; cursor: pointer;
+    color: #aaa; box-shadow: 0 2px 6px #0006;
+    transition: background 0.15s, color 0.15s;
+}
+.layer-burger:hover { background: #222 !important; color: #fff; }
+
+.layer-menu {
+    position: absolute; top: 38px; right: 0;
+    background: #151515; border: 1px solid #2a2a2a;
+    border-radius: 6px; min-width: 170px;
+    box-shadow: 0 4px 16px #000a;
+    overflow: hidden; z-index: 1000;
+}
+.layer-item {
+    padding: 9px 14px; font-size: 12px; color: #bbb;
+    cursor: pointer; transition: background 0.12s, color 0.12s;
+    white-space: nowrap;
+}
+.layer-item:hover  { background: #222; color: #fff; }
+.layer-item.active { color: #00aaff; background: #0a1a2a; }
+.intersection-marker {
+    width: 24px; height: 24px;
+    border-radius: 50%;
+    background: rgba(255, 220, 50, 0.25);
+    border: 2px solid #ffdc32;
+    box-shadow: 0 0 0 0 rgba(255, 220, 50, 0.6);
+    animation: intersection-pulse 1.6s ease-out infinite;
+}
+
+@keyframes intersection-pulse {
+    0%   { box-shadow: 0 0 0 0 rgba(255, 220, 50, 0.7); }
+    70%  { box-shadow: 0 0 0 14px rgba(255, 220, 50, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(255, 220, 50, 0); }
 }
