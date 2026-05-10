@@ -4,6 +4,8 @@
 
 TracePoint is a browser-based tool that lets you geolocate where a photo was taken — without uploading anything. All processing happens locally in your browser.
 
+**[Try it live → kluter.github.io/TracePoint](https://kluter.github.io/TracePoint/)**
+
 ---
 
 ## The Method
