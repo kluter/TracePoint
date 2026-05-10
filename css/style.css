@@ -25,16 +25,22 @@ body {
     height: 60px; padding: 0 16px;
     background: #151515; border-bottom: 1px solid #2a2a2a;
     display: flex; justify-content: space-between; align-items: center;
-    flex-shrink: 0;
+    flex-shrink: 0; position: relative;
     gap: 12px;
 }
 
 .brand { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
 .brand h1 { margin: 0; font-size: 17px; font-weight: 700; color: #fff; letter-spacing: 0.3px; }
-#logo-placeholder {
-    width: 20px; height: 20px;
-    background: #00aaff; border-radius: 4px;
-    box-shadow: 0 0 8px #00aaff66;
+.logo-wrap {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#logo {
+    height: 22px;
+    width: auto;
+    display: block;
 }
 
 /* ---- TOOLBAR ---- */
@@ -42,6 +48,7 @@ body {
     display: flex; align-items: center; gap: 6px;
     overflow-x: auto; flex: 1;
     padding: 0 4px;
+    margin-left: 24px;
     scrollbar-width: none;
 }
 .toolbar::-webkit-scrollbar { display: none; }
@@ -139,9 +146,20 @@ button:disabled     { opacity: 0.3; cursor: not-allowed; }
 }
 #image-container.drag-active #drop-overlay { border-color: #00aaff; color: #00aaff; }
 
+/* GitHub button */
+#btn-github {
+    display: flex; align-items: center; justify-content: center;
+    width: 28px; height: 28px; flex-shrink: 0;
+    color: #555; border-radius: 4px;
+    transition: color 0.15s;
+}
+#btn-github:hover { color: #fff; }
+#btn-github svg   { width: 28px; height: 28px; }
+
 /* Map hint bar */
 .toolbar-hint {
-    font-size: 11px; color: #555; white-space: nowrap;
+    font-size: 13px; color: #555; white-space: nowrap;
+    position: absolute; left: 50%; transform: translateX(-50%);
 }
 
 /* Leaflet z-index fixes */
