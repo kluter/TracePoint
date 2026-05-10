@@ -91,9 +91,14 @@ button:disabled     { opacity: 0.3; cursor: not-allowed; }
 .point-item.has-geo:hover { background: #122b20; border-color: #006644; }
 
 .pt-geo-icon {
-    font-size: 12px; line-height: 1;
+    width: 12px; height: 12px; flex-shrink: 0;
+    color: #556;
 }
-.pt-geo-icon.geo-active { animation: pulse-btn 1s infinite; }
+.point-item:hover .pt-geo-icon  { color: #aaa; }
+.point-item.has-geo .pt-geo-icon { color: #00cc88; }
+.pt-geo-icon.geo-active {
+    animation: pulse-btn 1s infinite;
+}
 
 @keyframes pulse-btn {
     0%, 100% { opacity: 1; }
@@ -109,9 +114,8 @@ button:disabled     { opacity: 0.3; cursor: not-allowed; }
 
 /* Map mode hint badge */
 .map-hint {
-    background: #003325; color: #00ffaa; border: 1px solid #00ffaa55;
     padding: 3px 10px; border-radius: 4px; font-size: 10px;
-    animation: pulse-btn 1.2s infinite;
+    border: 1px solid; animation: pulse-btn 1.2s infinite;
     white-space: nowrap; flex-shrink: 0;
 }
 

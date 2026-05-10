@@ -173,11 +173,24 @@ function lineColour(idx) { return LINE_COLOURS[idx % LINE_COLOURS.length]; }
    ============================================================ */
 function updateUI() {
     // Mode toggle button
+    btnModeToggle.removeAttribute('style');
     if (state.activeLineIndex !== -1) {
+        const c = lineColour(state.activeLineIndex);
         btnModeToggle.disabled = false;
-        if (state.mode === 'drag-line')  { btnModeToggle.textContent = 'Mode: Drag Line'; btnModeToggle.className = ''; }
-        if (state.mode === 'add-point')  { btnModeToggle.textContent = 'Mode: Add Point'; btnModeToggle.className = 'active-mode'; }
-        if (state.mode === 'map-point')  { btnModeToggle.textContent = 'Mode: Map Point'; btnModeToggle.className = 'active-mode map-mode'; }
+        if (state.mode === 'drag-line') {
+            btnModeToggle.textContent = 'Mode: Drag Line';
+            btnModeToggle.className = '';
+        }
+        if (state.mode === 'add-point') {
+            btnModeToggle.textContent = 'Mode: Add Point';
+            btnModeToggle.className = 'active-mode';
+            btnModeToggle.style.cssText = `background:${c}22; color:${c}; border-color:${c};`;
+        }
+        if (state.mode === 'map-point') {
+            btnModeToggle.textContent = 'Mode: Map Point';
+            btnModeToggle.className = 'active-mode map-mode';
+            btnModeToggle.style.cssText = `background:${c}22; color:${c}; border-color:${c};`;
+        }
     } else {
         btnModeToggle.disabled = true;
         btnModeToggle.textContent = 'Mode: Idle';
@@ -230,9 +243,19 @@ function updateLineManager() {
                     && state.mapPointTarget.pointIndex === pIdx;
 
                 ptItem.title = hasGeo ? 'Re-place on map' : 'Place on map';
+                const iconStyle = isTarget ? `style="color:${colour}"` : '';
+                const geoIcon = hasGeo
+                    ? `<svg class="pt-geo-icon ${isTarget ? 'geo-active' : ''}" ${iconStyle} viewBox="0 0 24 24" fill="currentColor">
+                           <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5S10.62 6.5 12 6.5s2.5 1.12 2.5 2.5S13.38 11.5 12 11.5z"/>
+                       </svg>`
+                    : `<svg class="pt-geo-icon ${isTarget ? 'geo-active' : ''}" ${iconStyle} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                           <circle cx="12" cy="12" r="10"/>
+                           <line x1="2" y1="12" x2="22" y2="12"/>
+                           <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+                       </svg>`;
                 ptItem.innerHTML =
                     `<span class="pt-label">P${pIdx + 1}</span>` +
-                    `<span class="pt-geo-icon ${isTarget ? 'geo-active' : ''}">${hasGeo ? '📍' : '🗺'}</span>` +
+                    geoIcon +
                     `<button class="btn-delete" onclick="event.stopPropagation(); deletePoint(${lIdx},${pIdx})">×</button>`;
                 ptItem.onclick = () => startMapPoint(lIdx, pIdx);
                 ptBox.appendChild(ptItem);
@@ -245,8 +268,10 @@ function updateLineManager() {
     /* Hint when in map-point mode */
     if (state.mode === 'map-point' && state.mapPointTarget) {
         const { lineIndex, pointIndex } = state.mapPointTarget;
+        const c = lineColour(lineIndex);
         const hint = document.createElement('div');
         hint.className = 'map-hint';
+        hint.style.cssText = `color:${c}; border-color:${c}55; background:${c}18;`;
         hint.textContent = `Click map → L${lineIndex + 1} P${pointIndex + 1}`;
         toolbar.appendChild(hint);
     }
