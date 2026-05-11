@@ -156,9 +156,27 @@ button:disabled     { opacity: 0.3; cursor: not-allowed; }
 #btn-github:hover { color: #fff; }
 #btn-github svg   { width: 28px; height: 28px; }
 
+/* Navbar right cluster */
+.navbar-right {
+    display: flex; align-items: center; gap: 24px; flex-shrink: 0;
+}
+
+/* Horizon button */
+#btn-horizon {
+    display: flex; align-items: center; gap: 5px;
+    padding: 5px 10px; border-radius: 4px; flex-shrink: 0;
+    background: #1e1e1e; border: 1px solid #383838;
+    color: #aaa; cursor: pointer; font-size: 11px;
+    white-space: nowrap; transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+#btn-horizon:hover          { background: #2a2a2a; color: #fff; }
+#btn-horizon.active-mode    { background: #2a2000; color: #ffdc32; border-color: #ffdc32; font-weight: 600; }
+#btn-horizon.horizon-active { background: #2a1800; color: #ffaa00; border-color: #ffaa00; }
+#btn-horizon svg            { width: 14px; height: 14px; flex-shrink: 0; }
+
 /* Map hint bar */
 .toolbar-hint {
-    font-size: 13px; color: #555; white-space: nowrap;
+    font-size: 13px; color: #777; white-space: nowrap;
     position: absolute; left: 50%; transform: translateX(-50%);
 }
 
@@ -169,7 +187,7 @@ button:disabled     { opacity: 0.3; cursor: not-allowed; }
 /* ---- ZOOM HINT ---- */
 #zoom-hint {
     position: absolute; bottom: 10px; left: 10px;
-    background: #111a; color: #555; font-size: 10px;
+    background: #111a; color: #777; font-size: 10px;
     padding: 4px 8px; border-radius: 3px; pointer-events: none;
     letter-spacing: 0.3px;
 }
