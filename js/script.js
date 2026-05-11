@@ -6,23 +6,25 @@ const canvas      = document.getElementById("image-canvas");
 const ctx         = canvas.getContext("2d");
 const container   = document.getElementById("image-container");
 const overlay     = document.getElementById("drop-overlay");
-const btnAddLine  = document.getElementById("btn-add-line");
+const btnAddLine    = document.getElementById("btn-add-line");
 const btnModeToggle = document.getElementById("btn-mode-toggle");
-const toolbar     = document.getElementById("toolbar");
+const btnHorizon    = document.getElementById("btn-horizon");
+const toolbar       = document.getElementById("toolbar");
 
 /* ---- STATE ---- */
 const state = {
-    mode: 'idle',          // 'idle' | 'drag-line' | 'add-point' | 'map-point'
+    mode: 'idle',          // 'idle' | 'drag-line' | 'add-point' | 'map-point' | 'horizon'
     lines: [],
     activeLineIndex: -1,
-    mapPointTarget: null,  // { lineIndex, pointIndex } – which photo point we're placing on map
+    mapPointTarget: null,  // { lineIndex, pointIndex }
+    horizonPoints: [],     // up to 2 canvas-space points defining the horizon line
     isDragging: false
 };
 let imgElement       = null;
 let currentObjectURL = null;
 
-/* ---- ZOOM / PAN STATE ---- */
-const view = { scale: 1, tx: 0, ty: 0 };
+/* ---- ZOOM / PAN / ROTATION STATE ---- */
+const view = { scale: 1, tx: 0, ty: 0, rotation: 0 };  // rotation in degrees
 let isPanning = false, panStart = { x: 0, y: 0 }, panOrigin = { tx: 0, ty: 0 };
 const MIN_SCALE = 0.1, MAX_SCALE = 20;
 
@@ -31,7 +33,7 @@ function applyTransform() {
     canvas.style.transformOrigin = '0 0';
 }
 
-/* Convert a mouse event's client coords → image-space coords */
+/* Convert mouse client coords → canvas-pixel coords (lines live in canvas space) */
 function clientToImage(e) {
     const rect = container.getBoundingClientRect();
     return {
@@ -200,6 +202,19 @@ function updateUI() {
     // Map cursor
     map.getContainer().style.cursor = (state.mode === 'map-point') ? 'crosshair' : '';
 
+    // Horizon button state
+    if (state.mode === 'horizon') {
+        btnHorizon.classList.add('active-mode');
+        btnHorizon.title = 'Click two points on the image to define the horizon. ESC to cancel.';
+    } else if (view.rotation !== 0) {
+        btnHorizon.classList.add('horizon-active');
+        btnHorizon.classList.remove('active-mode');
+        btnHorizon.title = `Rotation: ${view.rotation.toFixed(1)}° — click to reset`;
+    } else {
+        btnHorizon.classList.remove('active-mode', 'horizon-active');
+        btnHorizon.title = 'Set horizon correction';
+    }
+
     updateLineManager();
 }
 
@@ -317,12 +332,31 @@ btnModeToggle.onclick = () => {
     updateUI();
 };
 
+btnHorizon.onclick = () => {
+    if (!imgElement) return;
+    if (view.rotation !== 0) {
+        // Already rotated → reset
+        view.rotation = 0;
+        state.mode = 'idle';
+        state.horizonPoints = [];
+        render(); updateUI();
+    } else {
+        // Enter horizon mode
+        state.mode = 'horizon';
+        state.horizonPoints = [];
+        render(); updateUI();
+    }
+};
+
 /* ESC to deselect / cancel */
 document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
         if (state.mode === 'map-point') {
             state.mode = 'drag-line';
             state.mapPointTarget = null;
+        } else if (state.mode === 'horizon') {
+            state.mode = 'idle';
+            state.horizonPoints = [];
         } else {
             state.activeLineIndex = -1;
             state.mode = 'idle';
@@ -421,16 +455,25 @@ window.addEventListener('mousemove', (e) => {
 function render() {
     if (!imgElement) return;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.drawImage(imgElement, 0, 0);
 
+    // Draw image rotated around its center
+    const cx = canvas.width  / 2;
+    const cy = canvas.height / 2;
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(view.rotation * Math.PI / 180);
+    ctx.translate(-cx, -cy);
+    ctx.drawImage(imgElement, 0, 0);
+    ctx.restore();
+
+    // Lines are drawn in canvas-pixel space (screen-vertical = scene-vertical after rotation)
     state.lines.forEach((line, idx) => {
         const active  = idx === state.activeLineIndex;
         const colour  = lineColour(idx);
-        const alpha   = active ? 1.0 : 0.85;
+        const alpha   = active ? 1.0 : 0.5;
 
         ctx.globalAlpha = alpha;
 
-        /* Vertical line */
         ctx.beginPath();
         ctx.moveTo(line.x, 0);
         ctx.lineTo(line.x, canvas.height);
@@ -440,11 +483,9 @@ function render() {
         ctx.stroke();
         ctx.setLineDash([]);
 
-        /* Points */
         line.points.forEach((pt, pIdx) => {
             const hasGeo = !!(pt.geo);
 
-            // Tick mark across the line
             ctx.beginPath();
             ctx.moveTo(line.x - 8, pt.y);
             ctx.lineTo(line.x + 8, pt.y);
@@ -452,7 +493,6 @@ function render() {
             ctx.lineWidth   = 2;
             ctx.stroke();
 
-            // Circle
             ctx.beginPath();
             ctx.arc(line.x, pt.y, 6, 0, Math.PI * 2);
             ctx.fillStyle   = hasGeo ? colour : '#0a0a0a';
@@ -461,7 +501,6 @@ function render() {
             ctx.fill();
             ctx.stroke();
 
-            // Label
             ctx.globalAlpha = 1;
             ctx.font        = 'bold 11px monospace';
             ctx.fillStyle   = '#fff';
@@ -471,6 +510,29 @@ function render() {
 
         ctx.globalAlpha = 1;
     });
+
+    // Horizon mode: draw placed point + preview line to mouse
+    if (state.mode === 'horizon' && state.horizonPoints.length > 0) {
+        const p1 = state.horizonPoints[0];
+        const p2 = state.horizonPoints[1] || state._horizonMouse;
+        ctx.save();
+        ctx.strokeStyle = '#ffdc32';
+        ctx.lineWidth   = 1.5;
+        ctx.setLineDash([5, 4]);
+        if (p2) {
+            ctx.beginPath();
+            ctx.moveTo(p1.x, p1.y);
+            ctx.lineTo(p2.x, p2.y);
+            ctx.stroke();
+        }
+        ctx.setLineDash([]);
+        // First point dot
+        ctx.beginPath();
+        ctx.arc(p1.x, p1.y, 5, 0, Math.PI * 2);
+        ctx.fillStyle = '#ffdc32';
+        ctx.fill();
+        ctx.restore();
+    }
 }
 
 /* ============================================================
@@ -478,18 +540,17 @@ function render() {
    ============================================================ */
 canvas.addEventListener('mousedown', (e) => {
     if (isPanning || spaceDown || e.button !== 0) return;
+    if (state.mode === 'horizon') return; // handled in click
     const { x: mx } = clientToImage(e);
     const THRESH = 12 / view.scale;
 
     if (state.mode === 'add-point') {
-        // Clicking away from line in add-point mode → deselect
         let hit = -1;
         state.lines.forEach((line, idx) => { if (Math.abs(line.x - mx) < THRESH) hit = idx; });
         if (hit === -1) { state.activeLineIndex = -1; state.mode = 'idle'; render(); updateUI(); }
         return;
     }
 
-    // idle or drag-line
     let hit = -1;
     state.lines.forEach((line, idx) => { if (Math.abs(line.x - mx) < THRESH) hit = idx; });
     if (hit !== -1) {
@@ -504,14 +565,37 @@ canvas.addEventListener('mousedown', (e) => {
     }
 });
 
+canvas.addEventListener('mousemove', (e) => {
+    if (state.mode === 'horizon') {
+        state._horizonMouse = clientToImage(e);
+        render();
+    }
+});
+
 canvas.addEventListener('click', (e) => {
     if (isPanning || spaceDown) return;
+
+    // Horizon mode: collect two points then apply rotation
+    if (state.mode === 'horizon') {
+        const pt = clientToImage(e);
+        state.horizonPoints.push(pt);
+        if (state.horizonPoints.length === 2) {
+            const [p1, p2] = state.horizonPoints;
+            const angle = Math.atan2(p2.y - p1.y, p2.x - p1.x) * 180 / Math.PI;
+            view.rotation = -angle;
+            state.mode = 'idle';
+            state.horizonPoints = [];
+            state._horizonMouse = null;
+        }
+        render(); updateUI();
+        return;
+    }
+
     if (state.mode !== 'add-point' || state.activeLineIndex === -1) return;
     const { x: mx, y: my } = clientToImage(e);
     const THRESH = 12 / view.scale;
     const line = state.lines[state.activeLineIndex];
     if (Math.abs(line.x - mx) > THRESH) {
-        // Clicked away from line → deselect
         state.activeLineIndex = -1;
         state.mode = 'idle';
         render(); updateUI();

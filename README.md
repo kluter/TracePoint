@@ -24,6 +24,7 @@ The more lines you add, the more rays are generated and the more robustly the in
 
 - Split-panel interface: Photo left, satellite map right
 - Drop any image to load it; scroll to zoom, space+drag or middle-click to pan
+- Horizon correction: Draw a reference line on the image to level a tilted photo before analysis
 - Vertical alignment lines: Add as many as needed, drag to position
 - Point markers on each line, linked to map coordinates with one click
 - Automatic ray casting once two geo points are placed on a line
@@ -35,6 +36,7 @@ The more lines you add, the more rays are generated and the more robustly the in
 
 ## How to Use
 
+**0. Level the image (optional):** If the photo is tilted, click **Level** and draw a line along something that should be horizontal - a roofline, a wall top, a horizon. The image rotates to compensate. Click **Level** again to reset.
 **1. Load a photo:** Drop an image onto the left panel.
 **2. Add a line:** Click **+ New Line** and drag it over a recognisable object you can also find on the map: a building corner, tower, road junction.
 **3. Mark points:** Switch to **Add Point** mode and click on the line at the position of each reference object. You need at least two points per line.
@@ -50,6 +52,8 @@ The more lines you add, the more rays are generated and the more robustly the in
 |---|---|
 | Zoom image | Scroll wheel |
 | Pan image | Space + drag, or middle-click drag |
+| Level image | Level button, then click two points on a horizontal reference |
+| Reset level | Click Level button again when correction is active |
 | Add a line | + New Line button |
 | Drag a line | Click and drag the line |
 | Deselect / cancel | Click blank canvas, or ESC |
