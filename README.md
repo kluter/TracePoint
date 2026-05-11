@@ -1,4 +1,4 @@
-# TracePoint
+<h1><img src="assets/logo.png" alt="TracePoint Logo" width="32" height="32" style="vertical-align:middle; margin-right:8px;">TracePoint</h1>
 
 **Locate the origin point of a photograph using geometric ray intersection.**
 
