@@ -41,7 +41,9 @@ The more lines you add, the more rays are generated and the more robustly the in
 **3. Mark points:** Switch to **Add Point** mode and click on the line at the position of each reference object. You need at least two points per line.
 **4. Place points on the map:** Click the map pill next to each point, then click its location on the map. The tool advances automatically.
 **5. Read the result:** Once two lines each have two geo points, rays appear and the intersection is calculated. The pulsing yellow marker shows the estimated origin.
+
 > **Level the image (optional):** If the photo is tilted, click **Level** and draw a line along something that should be horizontal - a roofline, a wall top, a horizon. The image rotates to compensate. Click **Level** again to reset.
+
 > **Tips:** Use objects spread across different depths for a more accurate bearing. Three or more lines significantly improve accuracy when the first two rays are nearly parallel. Press **ESC** to deselect or cancel at any time.
 
 ---
