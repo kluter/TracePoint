@@ -45,6 +45,8 @@ The more lines you add, the more rays are generated and the more robustly the in
 5. **Read the result:** Once two lines each have two geo points, rays appear and the intersection is calculated. The pulsing yellow marker shows the estimated origin.
 > **Tips:** Use objects spread across different depths for a more accurate bearing. Three or more lines significantly improve accuracy when the first two rays are nearly parallel. Press **ESC** to deselect or cancel at any time.
 
+![TracePoint Demo](assets/TracePoint_Demo.gif)
+
 ---
 
 ## Controls
