@@ -2,61 +2,45 @@
 
 **Locate the origin point of a photograph using geometric ray intersection.**
 
-TracePoint is a browser-based tool that lets you geolocate where a photo was taken - without uploading anything. All processing happens locally in your browser.
+`TracePoint` is a browser-based geolocation tool built for OSINT investigators, journalists, and researchers who already know how to geolocate images, and want a dedicated instrument to do it faster and more precisely. No uploads. No server. Everything runs locally in your browser.
 
 **[Try it live → kluter.github.io/TracePoint](https://kluter.github.io/TracePoint/)**
+
+![TracePoint Result](assets/Potsdam_Result.jpg)
 
 ---
 
 ## The Method
 
-If you draw a vertical line across a photograph, that line passes through objects at different depths: something in the foreground, something in the midground, something on the horizon. Each of those objects can be found on a map and represents a point on a geographic bearing line - a **ray**.
+Draw a vertical line across a photograph and it passes through objects at different depths - foreground, midground, horizon. Each of those objects can be found on a map, and together they define a geographic bearing: a **ray**.
 
-When you repeat this for a second vertical line in the same photo, you get a second ray. **The point where the two rays cross is the location the photographer was standing.**
+Repeat for a second line and you get a second ray. **Where the rays cross is where the photographer was standing.**
 
-The more lines you add, the more rays are generated, and the more precisely the intersection can be averaged. The method is essentially a photographic application of the surveying technique known as **Resection by Intersection** - the same principle used when triangulating a position from known landmarks.
+The more lines you add, the more rays are generated and the more robustly the intersection is averaged. This is a photographic application of the surveying technique known as **Resection by Intersection** — the same principle used to triangulate a position from known landmarks. `TracePoint` turns that manual, tab-switching workflow into a single focused tool.
 
 ---
 
 ## Features
 
-- **Split-panel interface:** Photo on the left, satellite map on the right.
-- **Drop any image** directly onto the photo panel to load it.
-- **Vertical alignment lines:** Add as many as you need, drag to position them.
-- **Point markers:** Lock specific objects on each line to use as geo references.
-- **Zoom & pan the photo:** Scroll to zoom, space+drag or middle-click to pan.
-- **Map geo-linking:** Click the map to place the geographic location of each marked object.
-- **Automatic ray casting:** Once two geo points are placed on a line, a ray is drawn extending 50 km in both directions.
-- **Intersection marker:** When two or more rays exist, their crossing point is calculated and shown on the map with a pulsing marker and **lat/lon** readout.
-- **Multiple ray averaging:** With three or more lines, all pairwise intersections are averaged for a more robust estimate.
-- **Map layer switcher:** Choose from Esri Satellite, OpenStreetMap, OSM Humanitarian, Esri Topo, or Esri Streets via the ☰ menu.
-- **Fully client-side:** No server, no uploads, no tracking!
+- Split-panel interface: Photo left, satellite map right
+- Drop any image to load it; scroll to zoom, space+drag or middle-click to pan
+- Vertical alignment lines: Add as many as needed, drag to position
+- Point markers on each line, linked to map coordinates with one click
+- Automatic ray casting once two geo points are placed on a line
+- Intersection marker with lat/lon readout, averaged across all ray pairs
+- Map layer switcher: Esri Satellite, OpenStreetMap, OSM Humanitarian, Esri Topo, Esri Streets
+- Fully client-side: No server, no uploads, no tracking
 
 ---
 
 ## How to Use
 
-### 1. Load a photo
-Drop an image onto the left panel. It will fit to the panel automatically. Use scroll to zoom in, and space+drag or middle-click to pan around.
-
-### 2. Add a line
-Click **+ New Line**. A vertical line appears at the centre of the image. Drag it left or right until it passes through a recognisable object - a building edge, a tower, a road junction - that you can also find on a map.
-
-### 3. Mark points on the line
-Click **Mode: Drag Line** to toggle into **Add Point** mode. Click on the line at the height of each object you want to use as a reference. Each click places a point marker. You need at least two points per line.
-
-### 4. Place the points on the map
-Each point gets a map button in the toolbar. Click it, then click the corresponding location on the map. The tool advances through unplaced points automatically. Once a point is placed it shows a circle icon and can be repositioned at any time.
-
-### 5. Read the result
-As soon as two lines each have two geo points, rays appear on the map and the intersection is calculated. The yellow pulsing marker shows the estimated origin position. The popup displays the exact coordinates.
-
-### Tips
-- Use objects that are clearly identifiable on satellite imagery: Building corners, road markings, distinct trees
-- Objects spread across different distances along the line give a more accurate bearing than objects close together
-- Three or more lines can improve accuracy, especially if the first two rays are nearly parallel
-- You can switch map layers at any time using the ☰ button in the top-right of the map panel; your choice is remembered between sessions
-- Press **Escape** at any time to deselect the active line or cancel map-point placement
+**1. Load a photo:** Drop an image onto the left panel.
+**2. Add a line:** Click **+ New Line** and drag it over a recognisable object you can also find on the map: a building corner, tower, road junction.
+**3. Mark points:** Switch to **Add Point** mode and click on the line at the position of each reference object. You need at least two points per line.
+**4. Place points on the map:** Click the map pill next to each point, then click its location on the map. The tool advances automatically.
+**5. Read the result:** Once two lines each have two geo points, rays appear and the intersection is calculated. The pulsing yellow marker shows the estimated origin.
+**Tips:** Use objects spread across different depths for a more accurate bearing. Three or more lines significantly improve accuracy when the first two rays are nearly parallel. Press **ESC** to deselect or cancel at any time.
 
 ---
 
@@ -68,29 +52,23 @@ As soon as two lines each have two geo points, rays appear on the map and the in
 | Pan image | Space + drag, or middle-click drag |
 | Add a line | + New Line button |
 | Drag a line | Click and drag the line |
-| Deselect / cancel | Click blank canvas, or Escape |
-| Add a point | Switch to Add Point mode, click on the line |
-| Place point on map | Click 🗺 next to the point, then click the map |
-| Delete a line or point | × button next to it in the toolbar |
+| Deselect / cancel | Click blank canvas, or ESC |
+| Add a point | Add Point mode, click on the line |
+| Place point on map | Click the map pill, then click the map |
+| Delete a line or point | × button in the toolbar |
 | Switch map layer | ☰ button, top-right of map |
 
 ---
 
 ## Technical Notes
 
-**Coordinate maths.** Rays are computed using the bearing between two geo-referenced points on a line. Intersection is solved by treating latitude and longitude as a flat 2D plane. This is accurate to within a few metres for scenes spanning less than roughly 10 km, which covers virtually all real-world photography scenarios.
+Rays are computed from the bearing between two geo-referenced points. Intersection uses flat-plane geometry on lat/lon coordinates — accurate to within a few metres for scenes under ~10 km, which covers virtually all real-world photography. Each ray extends 50 km in both directions, long enough to contain any realistic intersection while keeping the map readable.
 
-**Ray length.** Each ray is drawn 50 km in both directions from the first geo point. This is long enough to always contain the intersection for any realistic scene, while keeping the map readable.
-
-**Privacy.** No data leaves your machine. The tool uses only your local browser and public tile servers (Esri, OpenStreetMap) for map imagery.
-
-**Dependencies.** [Leaflet](https://leafletjs.com/) for the map. Everything else is vanilla HTML, CSS, and JavaScript.
+No data leaves your machine. Map imagery is served by public tile servers (Esri, OpenStreetMap). The only dependency is [Leaflet](https://leafletjs.com/), everything else is vanilla HTML, CSS, and JavaScript.
 
 ---
 
 ## Running Locally
-
-No build step required. Clone or download the repository and open `index.html` in any modern browser, or serve it with any static file server:
 
 ```bash
 npx serve .
@@ -98,7 +76,7 @@ npx serve .
 python3 -m http.server
 ```
 
-A sample image (`Potsdam_Germany.jpg` or `Wuerzburg_Germany.jpg`) is included in `assets/` if you want to test the tool without having a suitable photo handy.
+Sample images (`Potsdam_Germany.jpg`, `Wuerzburg_Germany.jpg`) are in `assets/` if you want to test without a photo of your own.
 
 ---
 
