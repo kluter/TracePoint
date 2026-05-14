@@ -16,7 +16,7 @@ Draw a vertical line across a photograph and it passes through objects at differ
 
 Repeat for a second line and you get a second ray. **Where the rays cross is where the photographer was standing.**
 
-The more lines you add, the more rays are generated and the more robustly the intersection is averaged. This is a photographic application of the surveying technique known as **Resection by Intersection** — the same principle used to triangulate a position from known landmarks. `TracePoint` turns that manual, tab-switching workflow into a single focused tool.
+The more lines you add, the more rays are generated and the more robustly the intersection is averaged. This is a photographic application of the surveying technique known as **[Resection by Intersection](https://en.wikipedia.org/wiki/Position_resection_and_intersection)** — the same principle used to triangulate a position from known landmarks. `TracePoint` turns that manual, tab-switching workflow into a single focused tool.
 
 ---
 
