@@ -16,18 +16,24 @@ const toolbar       = document.getElementById("toolbar");
    Each session owns one image and all work done on it.
    ============================================================ */
 function createSession(name) {
+    const sessionIdx = sessions ? sessions.length : 0;
+    const colour     = LINE_COLOURS[sessionIdx % LINE_COLOURS.length];
+    const layerGroup = L.layerGroup().addTo(map);
     return {
         name,
+        colour,
         imgElement:       null,
         currentObjectURL: null,
         lines:            [],
         horizonPoints:    [],
         view:             { scale: 1, tx: 0, ty: 0, rotation: 0 },
+        layerGroup,
         mapObjects:       { rays: [], geoMarkers: [], intersectionMarker: null }
     };
 }
 
-const sessions = [createSession('Image 1')];
+/* sessions and activeSessionIndex are initialised after map is created (see below) */
+let sessions;
 let activeSessionIndex = 0;
 
 /* Convenience accessor – always returns the active session */
@@ -64,6 +70,8 @@ function clientToImage(e) {
 
 /* ---- MAP LAYERS ---- */
 const map = L.map('map-container', { maxZoom: 21 }).setView([20, 0], 2);
+
+/* sessions initialised after LINE_COLOURS and map are both defined (see below) */
 
 /* ---- TILE LAYER DEFINITIONS ---- */
 const TILE_SETS = [
@@ -173,13 +181,22 @@ const LayerSwitcher = L.Control.extend({
 new LayerSwitcher().addTo(map);
 
 /* ============================================================
-   COLOUR PALETTE – one colour per line index
+   COLOUR PALETTE
+   Sessions each get a base colour; lines within a session step
+   through the same palette offset by the session's position.
    ============================================================ */
 const LINE_COLOURS = [
     '#00aaff', '#ff6b35', '#7fff6b', '#ff35c8',
     '#ffe135', '#35ffe1', '#b535ff', '#ff3535'
 ];
-function lineColour(idx) { return LINE_COLOURS[idx % LINE_COLOURS.length]; }
+
+/* Colour for a line, taking session offset into account */
+function lineColour(lineIdx, sessionIdx = activeSessionIndex) {
+    return LINE_COLOURS[(sessionIdx * 2 + lineIdx) % LINE_COLOURS.length];
+}
+
+/* Now both map and LINE_COLOURS exist — safe to create the first session */
+sessions = [createSession('Image 1')];
 
 /* ============================================================
    UI HELPERS
@@ -187,7 +204,7 @@ function lineColour(idx) { return LINE_COLOURS[idx % LINE_COLOURS.length]; }
 function updateUI() {
     btnModeToggle.removeAttribute('style');
     if (state.activeLineIndex !== -1) {
-        const c = lineColour(state.activeLineIndex);
+        const c = lineColour(state.activeLineIndex, activeSessionIndex);
         btnModeToggle.disabled = false;
         if (state.mode === 'drag-line') {
             const line = sess().lines[state.activeLineIndex];
@@ -233,7 +250,7 @@ function updateLineManager() {
     toolbar.querySelectorAll('.line-item, .point-manager, .map-hint').forEach(el => el.remove());
 
     sess().lines.forEach((line, lIdx) => {
-        const colour = lineColour(lIdx);
+        const colour = lineColour(lIdx, activeSessionIndex);
         const active = lIdx === state.activeLineIndex;
 
         const item = document.createElement('div');
@@ -290,7 +307,7 @@ function updateLineManager() {
 
     if (state.mode === 'map-point' && state.mapPointTarget) {
         const { lineIndex, pointIndex } = state.mapPointTarget;
-        const c = lineColour(lineIndex);
+        const c = lineColour(lineIndex, activeSessionIndex);
         const hint = document.createElement('div');
         hint.className = 'map-hint';
         hint.style.cssText = `color:${c}; border-color:${c}55; background:${c}18;`;
@@ -477,7 +494,7 @@ function render() {
 
     s.lines.forEach((line, idx) => {
         const active  = idx === state.activeLineIndex;
-        const colour  = lineColour(idx);
+        const colour  = lineColour(idx, activeSessionIndex);
         const alpha   = active ? 1.0 : 0.5;
 
         ctx.globalAlpha = alpha;
@@ -641,13 +658,14 @@ map.on('click', (e) => {
    MAP OBJECTS – markers & rays
    ============================================================ */
 function clearMapObjectsForLine(lIdx) {
-    const mo = sess().mapObjects;
+    const s  = sess();
+    const mo = s.mapObjects;
     if (mo.geoMarkers[lIdx]) {
-        mo.geoMarkers[lIdx].forEach(m => map.removeLayer(m));
+        mo.geoMarkers[lIdx].forEach(m => s.layerGroup.removeLayer(m));
         mo.geoMarkers[lIdx] = [];
     }
     if (mo.rays[lIdx]) {
-        map.removeLayer(mo.rays[lIdx]);
+        s.layerGroup.removeLayer(mo.rays[lIdx]);
         mo.rays[lIdx] = null;
     }
 }
@@ -656,7 +674,7 @@ function rebuildMapForLine(lIdx) {
     clearMapObjectsForLine(lIdx);
     const s      = sess();
     const line   = s.lines[lIdx];
-    const colour = lineColour(lIdx);
+    const colour = lineColour(lIdx, activeSessionIndex);
     const mo     = s.mapObjects;
 
     if (!mo.geoMarkers[lIdx]) mo.geoMarkers[lIdx] = [];
@@ -666,7 +684,7 @@ function rebuildMapForLine(lIdx) {
         const marker = L.circleMarker([pt.geo.lat, pt.geo.lng], {
             radius: 6, color: colour, fillColor: colour,
             fillOpacity: 0.9, weight: 2
-        }).bindTooltip(`L${lIdx + 1} P${pIdx + 1}`, { permanent: false }).addTo(map);
+        }).bindTooltip(`L${lIdx + 1} P${pIdx + 1}`, { permanent: false }).addTo(s.layerGroup);
         mo.geoMarkers[lIdx].push(marker);
     });
 
@@ -683,16 +701,17 @@ function rebuildMapForLine(lIdx) {
     mo.rays[lIdx] = L.polyline(
         [[bwd.lat, bwd.lng], [p1.lat, p1.lng], [p2.lat, p2.lng], [fwd.lat, fwd.lng]],
         { color: colour, weight: 2, opacity: 0.85, dashArray: '6 4' }
-    ).addTo(map);
+    ).addTo(s.layerGroup);
 }
 
 /* ============================================================
    INTERSECTION
    ============================================================ */
 function recomputeIntersection() {
-    const mo = sess().mapObjects;
+    const s  = sess();
+    const mo = s.mapObjects;
     if (mo.intersectionMarker) {
-        map.removeLayer(mo.intersectionMarker);
+        s.layerGroup.removeLayer(mo.intersectionMarker);
         mo.intersectionMarker = null;
     }
 
@@ -725,7 +744,7 @@ function recomputeIntersection() {
 
     mo.intersectionMarker = L.marker([avgLat, avgLng], { icon })
         .bindPopup(`<b>📍 Estimated origin</b><br>${avgLat.toFixed(6)}, ${avgLng.toFixed(6)}`)
-        .addTo(map);
+        .addTo(sess().layerGroup);
 
     mo.intersectionMarker.openPopup();
     map.setView([avgLat, avgLng], Math.max(map.getZoom(), 13));
