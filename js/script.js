@@ -391,12 +391,103 @@ document.addEventListener('keydown', (e) => {
 });
 
 /* ============================================================
+   SESSION MANAGEMENT
+   ============================================================ */
+function renderSessionMenu() {
+    const menu = document.getElementById('session-menu');
+    if (!menu) return;
+    menu.innerHTML = '';
+
+    sessions.forEach((s, idx) => {
+        const item = document.createElement('div');
+        item.className = 'session-item' + (idx === activeSessionIndex ? ' active-session' : '');
+        item.style.setProperty('--sc', s.colour);
+        item.innerHTML =
+            `<span class="session-dot"></span>` +
+            `<span class="session-name">${s.name}</span>` +
+            `<button class="btn-delete" title="Remove image"
+                 onclick="event.stopPropagation(); removeSession(${idx})">×</button>`;
+        item.onclick = () => {
+            switchToSession(idx);
+            menu.style.display = 'none';
+        };
+        menu.appendChild(item);
+    });
+
+    const divider = document.createElement('div');
+    divider.className = 'session-divider';
+    menu.appendChild(divider);
+
+    const addBtn = document.createElement('div');
+    addBtn.className = 'session-add';
+    addBtn.textContent = '+ Add image';
+    addBtn.onclick = () => { addSession(); menu.style.display = 'none'; };
+    menu.appendChild(addBtn);
+}
+
+function switchToSession(idx) {
+    state.mode           = 'idle';
+    state.activeLineIndex = -1;
+    state.mapPointTarget  = null;
+    state.isDragging      = false;
+    state._horizonMouse   = null;
+
+    activeSessionIndex = idx;
+    const s = sess();
+
+    if (s.imgElement) {
+        canvas.width         = s.imgElement.width;
+        canvas.height        = s.imgElement.height;
+        canvas.style.display = 'block';
+        overlay.style.display = 'none';
+        applyTransform();
+        render();
+    } else {
+        canvas.style.display  = 'none';
+        overlay.style.display = 'flex';
+    }
+
+    updateUI();
+    renderSessionMenu();
+}
+
+function addSession() {
+    sessions.push(createSession(`Image ${sessions.length + 1}`));
+    switchToSession(sessions.length - 1);
+}
+
+window.removeSession = (idx) => {
+    map.removeLayer(sessions[idx].layerGroup);
+    if (sessions[idx].currentObjectURL) URL.revokeObjectURL(sessions[idx].currentObjectURL);
+    sessions.splice(idx, 1);
+    if (sessions.length === 0) sessions.push(createSession('Image 1'));
+    switchToSession(Math.min(idx, sessions.length - 1));
+};
+
+/* Wire up session burger button */
+document.getElementById('btn-session-burger').onclick = () => {
+    const menu = document.getElementById('session-menu');
+    const open = menu.style.display !== 'none';
+    renderSessionMenu();
+    menu.style.display = open ? 'none' : 'block';
+};
+
+/* Close session menu on outside click */
+document.addEventListener('click', (e) => {
+    const wrap = document.getElementById('session-manager-wrap');
+    if (wrap && !wrap.contains(e.target)) {
+        document.getElementById('session-menu').style.display = 'none';
+    }
+});
+
+/* ============================================================
    IMAGE HANDLING
    ============================================================ */
 function loadImage(file) {
     const s = sess();
     if (s.currentObjectURL) URL.revokeObjectURL(s.currentObjectURL);
     s.currentObjectURL = URL.createObjectURL(file);
+    s.name = file.name.replace(/\.[^.]+$/, ''); // use filename (no extension) as session name
     s.imgElement = new Image();
     s.imgElement.onload = () => {
         canvas.width  = s.imgElement.width;
@@ -409,6 +500,7 @@ function loadImage(file) {
         s.view.ty = (cr.height - s.imgElement.height * s.view.scale) / 2;
         applyTransform();
         render();
+        renderSessionMenu();
     };
     s.imgElement.src = s.currentObjectURL;
 }
