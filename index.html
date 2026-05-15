@@ -65,8 +65,25 @@
             <div class="panel-header">
                 <h3 style="margin:0; font-size:15px; font-weight:600;">Map View</h3>
                 <div class="toolbar-hint">Place geo points → Rays appear → Intersection = Image origin</div>
+                <button id="btn-help" title="How to use TracePoint">?</button>
             </div>
             <div id="map-container"></div>
+            <div id="help-card" style="display:none">
+                <div class="help-header">
+                    <span>How TracePoint works</span>
+                    <button class="help-close" id="btn-help-close">×</button>
+                </div>
+                <ol class="help-steps">
+                    <li><b>Load an image</b> — drop a photo onto the left panel, or pick the demo from the image menu <span class="help-key">☰</span></li>
+                    <li><b>Level the image</b> (optional) — use the <span class="help-key">Level</span> tool to correct a tilted horizon before adding lines. Makes alignment more accurate</li>
+                    <li><b>Add a line</b> — click <span class="help-key">+ New Line</span>, then drag it to align with a direction visible in the scene (road, shadow, building edge pointing away from the subject)</li>
+                    <li><b>Place 2 reference points</b> — switch to <span class="help-key">Add Point</span> mode, click the line twice. Then click each point's <span class="help-key">🌐 P1</span> pill and mark its real-world location on the map</li>
+                    <li><b>Repeat</b> for a second line — once two rays are drawn their intersection marks the estimated camera position</li>
+                </ol>
+                <p class="help-demo-note" id="help-demo-note" style="display:none">
+                    💡 You loaded the Potsdam demo. Try adding a line along the road or a building edge, then find that same feature on the map.
+                </p>
+            </div>
         </div>
     </div>
     <script src="js/script.js"></script>

@@ -27,6 +27,7 @@ function createSession(name) {
         lines:            [],
         horizonPoints:    [],
         view:             { scale: 1, tx: 0, ty: 0, rotation: 0 },
+        mapView:          null,
         layerGroup,
         mapObjects:       { rays: [], geoMarkers: [], intersectionMarker: null }
     };
@@ -398,6 +399,17 @@ function renderSessionMenu() {
     if (!menu) return;
     menu.innerHTML = '';
 
+    // Demo entry at the top
+    const demoItem = document.createElement('div');
+    demoItem.className = 'session-item session-demo';
+    demoItem.innerHTML = `<span>📷</span><span class="session-name">Demo — Potsdam</span>`;
+    demoItem.onclick = () => { loadDemoImage(); menu.style.display = 'none'; };
+    menu.appendChild(demoItem);
+
+    const demoDivider = document.createElement('div');
+    demoDivider.className = 'session-divider';
+    menu.appendChild(demoDivider);
+
     sessions.forEach((s, idx) => {
         const item = document.createElement('div');
         item.className = 'session-item' + (idx === activeSessionIndex ? ' active-session' : '');
@@ -432,8 +444,20 @@ function switchToSession(idx) {
     state.isDragging      = false;
     state._horizonMouse   = null;
 
+    // Save outgoing session's map position (guard: session may already be gone if called from removeSession)
+    if (sessions[activeSessionIndex]) {
+        sessions[activeSessionIndex].mapView = { center: map.getCenter(), zoom: map.getZoom() };
+    }
+
     activeSessionIndex = idx;
     const s = sess();
+
+    if (s.mapView) {
+        map.setView(s.mapView.center, s.mapView.zoom);
+    } else {
+        const hasGeoWork = s.lines.some(l => l.points.some(p => p.geo));
+        if (!hasGeoWork) map.setView([20, 0], 2);
+    }
 
     if (s.imgElement) {
         canvas.width         = s.imgElement.width;
@@ -463,6 +487,39 @@ window.removeSession = (idx) => {
     if (sessions.length === 0) sessions.push(createSession('Image 1'));
     switchToSession(Math.min(idx, sessions.length - 1));
 };
+
+/* ============================================================
+   HELP CARD
+   ============================================================ */
+function showHelp(isDemo = false) {
+    document.getElementById('help-card').style.display = 'block';
+    document.getElementById('help-demo-note').style.display = isDemo ? 'block' : 'none';
+}
+
+function hideHelp() {
+    document.getElementById('help-card').style.display = 'none';
+}
+
+document.getElementById('btn-help').onclick       = () => {
+    const card = document.getElementById('help-card');
+    if (card.style.display === 'none') showHelp(false); else hideHelp();
+};
+document.getElementById('btn-help-close').onclick = hideHelp;
+
+/* ============================================================
+   DEMO IMAGE
+   ============================================================ */
+function loadDemoImage() {
+    fetch('assets/Potsdam_Germany.jpg')
+        .then(r => r.blob())
+        .then(blob => {
+            const file = new File([blob], 'Potsdam_Germany.jpg', { type: 'image/jpeg' });
+            if (sess().imgElement) addSession();
+            loadImage(file);
+            map.setView([52.3899735750511, 13.060147762298586], 16);
+            showHelp(true);
+        });
+}
 
 /* Wire up session burger button */
 document.getElementById('btn-session-burger').onclick = () => {
