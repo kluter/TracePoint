@@ -180,7 +180,10 @@ function updateUI() {
         const c = lineColour(state.activeLineIndex);
         btnModeToggle.disabled = false;
         if (state.mode === 'drag-line') {
+            const line = state.lines[state.activeLineIndex];
             btnModeToggle.textContent = 'Mode: Drag Line';
+            btnModeToggle.title = (line && line.points.length >= 2)
+                ? '2 points placed — delete one to add another' : '';
             btnModeToggle.className = '';
         }
         if (state.mode === 'add-point') {
@@ -328,7 +331,11 @@ btnAddLine.onclick = () => {
 
 btnModeToggle.onclick = () => {
     if (state.mode === 'map-point') { state.mode = 'drag-line'; state.mapPointTarget = null; }
-    else state.mode = (state.mode === 'drag-line') ? 'add-point' : 'drag-line';
+    else {
+        const line = state.lines[state.activeLineIndex];
+        const lineFull = line && line.points.length >= 2;
+        state.mode = (state.mode === 'drag-line' && !lineFull) ? 'add-point' : 'drag-line';
+    }
     updateUI();
 };
 
@@ -601,7 +608,9 @@ canvas.addEventListener('click', (e) => {
         render(); updateUI();
         return;
     }
+    if (line.points.length >= 2) return;
     line.points.push({ y: my, geo: null });
+    if (line.points.length === 2) state.mode = 'drag-line';
     render(); updateUI();
 });
 
