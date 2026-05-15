@@ -18,6 +18,7 @@ body {
     flex: 1; min-width: 0;
     display: flex; flex-direction: column;
     border-right: 1px solid #222;
+    position: relative;
 }
 
 /* ---- HEADER ---- */
@@ -235,6 +236,54 @@ button:disabled     { opacity: 0.3; cursor: not-allowed; }
     100% { box-shadow: 0 0 0 0 rgba(255, 220, 50, 0); }
 }
 
+/* ---- HELP BUTTON ---- */
+#btn-help {
+    width: 26px; height: 26px; padding: 0; flex-shrink: 0;
+    border-radius: 50%; font-size: 13px; font-weight: 700;
+    background: #1e1e1e; border: 1px solid #383838; color: #666;
+    cursor: pointer; transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+#btn-help:hover { background: #2a2a2a; color: #fff; border-color: #555; }
+
+/* ---- HELP CARD ---- */
+#help-card {
+    position: absolute; top: 70px; right: 10px;
+    width: 380px; background: #151515;
+    border: 1px solid #2a2a2a; border-radius: 8px;
+    box-shadow: 0 4px 20px #000c; z-index: 1000;
+    padding: 0; overflow: hidden;
+}
+.help-header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 11px 14px; background: #1a1a1a;
+    border-bottom: 1px solid #2a2a2a;
+    font-size: 13px; font-weight: 600; color: #ddd;
+}
+.help-close {
+    background: none; border: none; color: #555;
+    font-size: 18px; line-height: 1; cursor: pointer; padding: 0;
+    transition: color 0.15s;
+}
+.help-close:hover { color: #fff; }
+.help-steps {
+    margin: 0; padding: 14px 16px 14px 30px;
+    display: flex; flex-direction: column; gap: 10px;
+    font-size: 12px; color: #aaa; line-height: 1.5;
+}
+.help-steps li { padding-left: 4px; }
+.help-steps b  { color: #ddd; }
+.help-key {
+    display: inline-block;
+    background: #252525; border: 1px solid #383838;
+    border-radius: 3px; padding: 0px 5px;
+    font-size: 10px; color: #bbb; white-space: nowrap;
+}
+.help-demo-note {
+    margin: 0; padding: 10px 14px 12px;
+    font-size: 11px; color: #888; line-height: 1.5;
+    border-top: 1px solid #2a2a2a; background: #111;
+}
+
 /* ---- SESSION MANAGER ---- */
 .session-manager-wrap {
     position: absolute; top: 10px; right: 10px;
@@ -280,3 +329,5 @@ button:disabled     { opacity: 0.3; cursor: not-allowed; }
     cursor: pointer; transition: background 0.12s, color 0.12s;
 }
 .session-add:hover { background: #222; color: #fff; }
+.session-demo { color: #888; font-style: italic; }
+.session-demo:hover { color: #fff; }
