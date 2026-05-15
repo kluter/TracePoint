@@ -24,11 +24,13 @@ The more lines you add, the more rays are generated and the more robustly the in
 
 - Split-panel interface: Photo left, satellite map right
 - Drop any image to load it; scroll to zoom, space+drag or middle-click to pan
+- **Image session manager:** work on multiple images in one session — all rays visible on the map simultaneously, each with its own independent intersection result
+- Built-in Potsdam demo image with an interactive step-by-step guide
 - Horizon correction: Draw a reference line on the image to level a tilted photo before analysis
 - Vertical alignment lines: Add as many as needed, drag to position
-- Point markers on each line, linked to map coordinates with one click
-- Automatic ray casting once two geo points are placed on a line
-- Intersection marker with lat/lon readout, averaged across all ray pairs
+- Two reference points per line, each linked to a map coordinate with one click
+- Automatic ray casting once both geo points are placed
+- Intersection marker with lat/lon readout, averaged across all ray pairs per session
 - Map layer switcher: Esri Satellite, OpenStreetMap, OSM Humanitarian, Esri Topo, Esri Streets
 - Fully client-side: No server, no uploads, no tracking
 
@@ -36,13 +38,16 @@ The more lines you add, the more rays are generated and the more robustly the in
 
 ## How to Use
 
+> **New to TracePoint?** Click the **☰** button on the image panel and select **Demo — Potsdam** to load a sample image with a built-in guide. Or click **?** in the map panel header at any time to open the guide manually.
+
 > **Level the image (optional):** If the photo is tilted, click **Level** first and draw a line along something that should be horizontal — a roofline, a wall top, a horizon. The image rotates to compensate. Click **Level** again to reset.
- 
-1. **Load a photo:** Drop an image onto the left panel.
+
+1. **Load a photo:** Drop an image onto the left panel. To work on multiple images at once, open the **☰** image menu and click **+ Add image**.
 2. **Add a line:** Click **+ New Line** and drag it over a recognisable object you can also find on the map: a building corner, tower, road junction.
-3. **Mark points:** Switch to **Add Point** mode and click on the line at the position of each reference object. You need at least two points per line.
-4. **Place points on the map:** Click the map pill next to each point, then click its location on the map. The tool advances automatically.
+3. **Mark points:** Switch to **Add Point** mode and click on the line twice to place exactly two reference points.
+4. **Place points on the map:** Click the **🌐 P1** pill next to each point, then click its location on the map. The tool advances automatically.
 5. **Read the result:** Once two lines each have two geo points, rays appear and the intersection is calculated. The pulsing yellow marker shows the estimated origin.
+6. **Add more images:** Use the **☰** image menu to add further sessions. Each session shows its own rays and intersection on the map simultaneously.
 > **Tips:** Use objects spread across different depths for a more accurate bearing. Three or more lines significantly improve accuracy when the first two rays are nearly parallel. Press **ESC** to deselect or cancel at any time.
 
 ![TracePoint Demo](assets/TracePoint_Demo.gif)
@@ -64,6 +69,8 @@ The more lines you add, the more rays are generated and the more robustly the in
 | Place point on map | Click the map pill, then click the map |
 | Delete a line or point | × button in the toolbar |
 | Switch map layer | ☰ button, top-right of map |
+| Manage image sessions | ☰ button, top-right of image panel |
+| Open help guide | ? button, top-right of map panel |
 
 ---
 
@@ -83,7 +90,7 @@ npx serve .
 python3 -m http.server
 ```
 
-Sample images (`Potsdam_Germany.jpg`, `Wuerzburg_Germany.jpg`) are in `assets/` if you want to test without a photo of your own.
+A Potsdam demo image is built into the tool — open the **☰** image menu and select **Demo — Potsdam**. Additional sample images (`Potsdam_Germany.jpg`, `Wuerzburg_Germany.jpg`) are also in `assets/`.
 
 ---
 
