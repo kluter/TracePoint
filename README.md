@@ -90,7 +90,7 @@ npx serve .
 python3 -m http.server
 ```
 
-A Potsdam demo image is built into the tool — open the **☰** image menu and select **Demo — Potsdam**. Additional sample images (`Potsdam_Germany.jpg`, `Wuerzburg_Germany.jpg`) are also in `assets/`.
+A Potsdam demo image is built into the tool — open the **☰** image menu and select **Demo — Potsdam**.
 
 ---
 
