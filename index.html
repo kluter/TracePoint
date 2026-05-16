@@ -45,7 +45,11 @@
             </div>
             <div id="image-container">
                 <canvas id="image-canvas"></canvas>
-                <div id="drop-overlay">Drop image here</div>
+                <div id="drop-overlay">
+                    Drop image here
+                    <button id="btn-browse" type="button">Browse</button>
+                </div>
+                <input type="file" id="file-picker" accept="image/*" style="display:none">
                 <div id="zoom-hint">scroll to zoom · space+drag or middle-drag to pan</div>
                 <div class="session-manager-wrap" id="session-manager-wrap">
                     <button class="session-burger" id="btn-session-burger" title="Manage images">

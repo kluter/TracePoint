@@ -139,12 +139,20 @@ button:disabled     { opacity: 0.3; cursor: not-allowed; }
 
 #drop-overlay {
     position: absolute; inset: 0;
-    display: flex; align-items: center; justify-content: center;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 10px;
     color: #333; font-size: 14px; letter-spacing: 0.5px;
     pointer-events: none;
     border: 2px dashed transparent;
     transition: color 0.2s, border-color 0.2s;
 }
+#btn-browse {
+    pointer-events: auto;
+    background: #1a1a1a; color: #555; border: 1px solid #2e2e2e;
+    padding: 5px 14px; border-radius: 4px; font-size: 11px;
+    cursor: pointer; transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+#btn-browse:hover { background: #222; color: #aaa; border-color: #444; }
 #image-container.drag-active #drop-overlay { border-color: #00aaff; color: #00aaff; }
 
 /* GitHub button */

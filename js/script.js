@@ -16,12 +16,9 @@ const toolbar       = document.getElementById("toolbar");
    Each session owns one image and all work done on it.
    ============================================================ */
 function createSession(name) {
-    const sessionIdx = sessions ? sessions.length : 0;
-    const colour     = LINE_COLOURS[sessionIdx % LINE_COLOURS.length];
     const layerGroup = L.layerGroup().addTo(map);
     return {
         name,
-        colour,
         imgElement:       null,
         currentObjectURL: null,
         lines:            [],
@@ -191,9 +188,14 @@ const LINE_COLOURS = [
     '#ffe135', '#35ffe1', '#b535ff', '#ff3535'
 ];
 
-/* Colour for a line, taking session offset into account */
+/* Derive a stable colour slot from the session name if it matches "Image N", else fall back to position */
+function sessionColourIndex(sessionIdx) {
+    const m = sessions[sessionIdx]?.name.match(/^Image (\d+)$/);
+    return m ? parseInt(m[1]) - 1 : sessionIdx;
+}
+
 function lineColour(lineIdx, sessionIdx = activeSessionIndex) {
-    return LINE_COLOURS[(sessionIdx * 2 + lineIdx) % LINE_COLOURS.length];
+    return LINE_COLOURS[(sessionColourIndex(sessionIdx) * 2 + lineIdx) % LINE_COLOURS.length];
 }
 
 /* Now both map and LINE_COLOURS exist — safe to create the first session */
@@ -413,7 +415,7 @@ function renderSessionMenu() {
     sessions.forEach((s, idx) => {
         const item = document.createElement('div');
         item.className = 'session-item' + (idx === activeSessionIndex ? ' active-session' : '');
-        item.style.setProperty('--sc', s.colour);
+        item.style.setProperty('--sc', LINE_COLOURS[(sessionColourIndex(idx) * 2) % LINE_COLOURS.length]);
         item.innerHTML =
             `<span class="session-dot"></span>` +
             `<span class="session-name">${s.name}</span>` +
@@ -438,6 +440,7 @@ function renderSessionMenu() {
 }
 
 function switchToSession(idx) {
+    hideHelp();
     state.mode           = 'idle';
     state.activeLineIndex = -1;
     state.mapPointTarget  = null;
@@ -475,17 +478,32 @@ function switchToSession(idx) {
     renderSessionMenu();
 }
 
+function nextSessionName() {
+    const used = new Set(sessions.map(s => s.name.match(/^Image (\d+)$/)?.[1]).filter(Boolean).map(Number));
+    let n = 1;
+    while (used.has(n)) n++;
+    return `Image ${n}`;
+}
+
 function addSession() {
-    sessions.push(createSession(`Image ${sessions.length + 1}`));
+    sessions.push(createSession(nextSessionName()));
     switchToSession(sessions.length - 1);
 }
 
 window.removeSession = (idx) => {
     map.removeLayer(sessions[idx].layerGroup);
     if (sessions[idx].currentObjectURL) URL.revokeObjectURL(sessions[idx].currentObjectURL);
+    hideHelp();
+    // Save active session's map view before splice shifts indices
+    if (activeSessionIndex !== idx && sessions[activeSessionIndex]) {
+        sessions[activeSessionIndex].mapView = { center: map.getCenter(), zoom: map.getZoom() };
+    }
     sessions.splice(idx, 1);
-    if (sessions.length === 0) sessions.push(createSession('Image 1'));
+    const wasLast = sessions.length === 0;
+    if (wasLast) sessions.push(createSession('Image 1'));
+    activeSessionIndex = sessions.length; // out of range → switchToSession skips its save step
     switchToSession(Math.min(idx, sessions.length - 1));
+    if (wasLast) map.setView([20, 0], 2);
 };
 
 /* ============================================================
@@ -568,6 +586,13 @@ container.addEventListener('drop', (e) => {
     e.preventDefault(); container.classList.remove('drag-active');
     const file = e.dataTransfer.files[0];
     if (file && file.type.startsWith('image/')) loadImage(file);
+});
+
+const filePicker = document.getElementById('file-picker');
+document.getElementById('btn-browse').addEventListener('click', () => filePicker.click());
+filePicker.addEventListener('change', () => {
+    const file = filePicker.files[0];
+    if (file) { loadImage(file); filePicker.value = ''; }
 });
 
 /* ============================================================
