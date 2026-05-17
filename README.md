@@ -22,23 +22,22 @@ The more lines you add, the more rays are generated and the more robustly the in
 
 ## Features
 
-- Split-panel interface: Photo left, satellite map right
-- Drop any image to load it, or click **Browse** — scroll to zoom, space+drag or middle-click to pan
-- **Image session manager:** work on multiple images in one session — all rays visible on the map simultaneously, each with its own independent intersection result
-- **Bearing display:** once an intersection is found, each line shows its outward bearing in degrees — the direction from the estimated camera position toward the reference points
-- **Session export and import:** save any session or all sessions as JSON, then restore them later. Lines, geo points, bearing, and map view are all preserved; a restore prompt guides you to reload the image
-- **EXIF metadata viewer:** click the `</>` button in the top-left of the image panel to read camera make, model, lens, capture settings (date, focal length, aperture, shutter, ISO, flash), GPS coordinates, altitude, camera direction, and attribution fields. If GPS is present, a single click drops a reference marker on the map
-- Built-in Potsdam demo image with an interactive step-by-step guide
-- Horizon correction: Draw a reference line on the image to level a tilted photo before analysis
-- Vertical alignment lines with two geo-referenced points each — rays cast automatically, intersection averaged across all pairs per session
+- Split-panel interface: photo left, satellite map right
+- Drop any image to load it, or click **Browse**
+- **Multi-image session manager:** all sessions visible on the map simultaneously, each with its own intersection result
+- **Bearing display:** each line shows its outward bearing once an intersection is found
+- **Session export and import:** save and restore lines, geo points, bearing and map view as JSON
+- **EXIF metadata viewer:** camera, lens, capture settings, GPS, altitude and camera direction read from the image. GPS can be placed on the map as a reference marker
+- Built-in Potsdam demo with step-by-step guide
+- Horizon correction for tilted images
 - Map layer switcher: Esri Satellite, OpenStreetMap, OSM Humanitarian, Esri Topo, Esri Streets
-- Fully client-side: No server, no uploads, no tracking
+- Fully client-side: no server, no uploads, no tracking
 
 ---
 
 ## How to Use
 
-> Start with the **☰** menu on the image panel and select **Demo: Potsdam** for a guided walkthrough. If the photo is tilted, use the **Level** button first to compensate before adding lines.
+> Start with the **☰** menu on the image panel and select **Demo — Potsdam** for a guided walkthrough. If the photo is tilted, use the **Level** button first to compensate before adding lines.
 
 1. **Load a photo:** Drop an image onto the left panel, or click **Browse**. To work on multiple images at once, open the **☰** image menu and click **+ Add image**.
 2. **Add a line:** Click **+ New Line** and drag it over a recognisable object you can also find on the map: a building corner, tower, road junction.
