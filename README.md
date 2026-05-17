@@ -23,14 +23,13 @@ The more lines you add, the more rays are generated and the more robustly the in
 ## Features
 
 - Split-panel interface: Photo left, satellite map right
-- Drop any image to load it; scroll to zoom, space+drag or middle-click to pan
+- Drop any image to load it, or click **Browse** — scroll to zoom, space+drag or middle-click to pan
 - **Image session manager:** work on multiple images in one session — all rays visible on the map simultaneously, each with its own independent intersection result
+- **Bearing display:** once an intersection is found, each line shows its outward bearing in degrees — the direction from the estimated camera position toward the reference points
+- **Session export and import:** save any session or all sessions as JSON, then restore them later — lines, geo points, bearing, and map view all preserved; a restore prompt guides you to reload the image
 - Built-in Potsdam demo image with an interactive step-by-step guide
 - Horizon correction: Draw a reference line on the image to level a tilted photo before analysis
-- Vertical alignment lines: Add as many as needed, drag to position
-- Two reference points per line, each linked to a map coordinate with one click
-- Automatic ray casting once both geo points are placed
-- Intersection marker with lat/lon readout, averaged across all ray pairs per session
+- Vertical alignment lines with two geo-referenced points each — rays cast automatically, intersection averaged across all pairs per session
 - Map layer switcher: Esri Satellite, OpenStreetMap, OSM Humanitarian, Esri Topo, Esri Streets
 - Fully client-side: No server, no uploads, no tracking
 
@@ -42,12 +41,14 @@ The more lines you add, the more rays are generated and the more robustly the in
 
 > **Level the image (optional):** If the photo is tilted, click **Level** first and draw a line along something that should be horizontal — a roofline, a wall top, a horizon. The image rotates to compensate. Click **Level** again to reset.
 
-1. **Load a photo:** Drop an image onto the left panel. To work on multiple images at once, open the **☰** image menu and click **+ Add image**.
+1. **Load a photo:** Drop an image onto the left panel, or click **Browse**. To work on multiple images at once, open the **☰** image menu and click **+ Add image**.
 2. **Add a line:** Click **+ New Line** and drag it over a recognisable object you can also find on the map: a building corner, tower, road junction.
 3. **Mark points:** Switch to **Add Point** mode and click on the line twice to place exactly two reference points.
 4. **Place points on the map:** Click the **🌐 P1** pill next to each point, then click its location on the map. The tool advances automatically.
 5. **Read the result:** Once two lines each have two geo points, rays appear and the intersection is calculated. The pulsing yellow marker shows the estimated origin.
 6. **Add more images:** Use the **☰** image menu to add further sessions. Each session shows its own rays and intersection on the map simultaneously.
+7. **Save your work:** Click the **↓** button on any session row to export it as JSON, or use **↓ Export all sessions** to save everything at once. To restore, click **↑ Import session** and reload the image when prompted.
+
 > **Tips:** Use objects spread across different depths for a more accurate bearing. Three or more lines significantly improve accuracy when the first two rays are nearly parallel. Press **ESC** to deselect or cancel at any time.
 
 ![TracePoint Demo](assets/TracePoint_Demo.gif)
@@ -70,6 +71,10 @@ The more lines you add, the more rays are generated and the more robustly the in
 | Delete a line or point | × button in the toolbar |
 | Switch map layer | ☰ button, top-right of map |
 | Manage image sessions | ☰ button, top-right of image panel |
+| Browse for image | Click the drop zone |
+| Export session | ↓ button on session row in ☰ menu |
+| Export all sessions | ↓ Export all sessions in ☰ menu |
+| Import session | ↑ Import session in ☰ menu |
 | Open help guide | ? button, top-right of map panel |
 
 ---
@@ -89,8 +94,6 @@ npx serve .
 # or
 python3 -m http.server
 ```
-
-A Potsdam demo image is built into the tool — open the **☰** image menu and select **Demo — Potsdam**.
 
 ---
 
