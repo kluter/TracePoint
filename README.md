@@ -26,7 +26,8 @@ The more lines you add, the more rays are generated and the more robustly the in
 - Drop any image to load it, or click **Browse** — scroll to zoom, space+drag or middle-click to pan
 - **Image session manager:** work on multiple images in one session — all rays visible on the map simultaneously, each with its own independent intersection result
 - **Bearing display:** once an intersection is found, each line shows its outward bearing in degrees — the direction from the estimated camera position toward the reference points
-- **Session export and import:** save any session or all sessions as JSON, then restore them later — lines, geo points, bearing, and map view all preserved; a restore prompt guides you to reload the image
+- **Session export and import:** save any session or all sessions as JSON, then restore them later. Lines, geo points, bearing, and map view are all preserved; a restore prompt guides you to reload the image
+- **EXIF metadata viewer:** click the `</>` button in the top-left of the image panel to read camera make, model, lens, capture settings (date, focal length, aperture, shutter, ISO, flash), GPS coordinates, altitude, camera direction, and attribution fields. If GPS is present, a single click drops a reference marker on the map
 - Built-in Potsdam demo image with an interactive step-by-step guide
 - Horizon correction: Draw a reference line on the image to level a tilted photo before analysis
 - Vertical alignment lines with two geo-referenced points each — rays cast automatically, intersection averaged across all pairs per session
@@ -48,6 +49,8 @@ The more lines you add, the more rays are generated and the more robustly the in
 5. **Read the result:** Once two lines each have two geo points, rays appear and the intersection is calculated. The pulsing yellow marker shows the estimated origin.
 6. **Add more images:** Use the **☰** image menu to add further sessions. Each session shows its own rays and intersection on the map simultaneously.
 7. **Save your work:** Click the **↓** button on any session row to export it as JSON, or use **↓ Export all sessions** to save everything at once. To restore, click **↑ Import session** and reload the image when prompted.
+
+> **EXIF metadata:** Once an image is loaded, the `</>` button appears in the top-left of the image panel. It shows camera settings, capture date, and GPS data if present. If GPS coordinates are available, use **Show on map** to drop a reference marker at the recorded location. This is useful for cross-checking against your triangulated result.
 
 > **Tips:** Use objects spread across different depths for a more accurate bearing. Three or more lines significantly improve accuracy when the first two rays are nearly parallel. Press **ESC** to deselect or cancel at any time.
 
@@ -76,6 +79,8 @@ The more lines you add, the more rays are generated and the more robustly the in
 | Export all sessions | ↓ Export all sessions in ☰ menu |
 | Import session | ↑ Import session in ☰ menu |
 | Open help guide | ? button, top-right of map panel |
+| View image metadata | `</>` button, top-left of image panel |
+| Place EXIF GPS on map | Show on map button inside the metadata card |
 
 ---
 
