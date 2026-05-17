@@ -298,6 +298,70 @@ button:disabled     { opacity: 0.3; cursor: not-allowed; }
     border-top: 1px solid #2a2a2a; background: #111;
 }
 
+/* ---- EXIF VIEWER ---- */
+.exif-wrap {
+    position: absolute; top: 10px; left: 10px;
+    z-index: 1000;
+}
+.exif-burger {
+    width: 32px; height: 32px; padding: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: #151515; border: 1px solid #333;
+    border-radius: 4px; cursor: pointer;
+    color: #aaa; box-shadow: 0 2px 6px #0006;
+    transition: background 0.15s, color 0.15s;
+}
+.exif-burger svg { width: 14px; height: 14px; display: block; }
+.exif-burger:hover { background: #222; color: #fff; }
+
+.exif-card {
+    position: absolute; top: 38px; left: 0;
+    background: #151515; border: 1px solid #2a2a2a;
+    border-radius: 6px; min-width: 220px;
+    box-shadow: 0 4px 16px #000a;
+    overflow: hidden; z-index: 1000;
+}
+.exif-card-header {
+    padding: 10px 14px; background: #1a1a1a;
+    border-bottom: 1px solid #2a2a2a;
+    font-size: 12px; font-weight: 600; color: #ddd;
+}
+.exif-table {
+    width: 100%; border-collapse: collapse;
+    padding: 6px 0;
+}
+.exif-table tr td {
+    padding: 5px 14px; font-size: 11px; line-height: 1.4;
+}
+.exif-table tr td:first-child { color: #555; white-space: nowrap; padding-right: 8px; }
+.exif-table tr td:last-child  { color: #bbb; }
+.exif-empty {
+    padding: 12px 14px; font-size: 11px; color: #555; font-style: italic;
+}
+.exif-gps-btn {
+    display: flex; align-items: center; justify-content: center; gap: 5px;
+    width: calc(100% - 28px); margin: 6px 14px 10px;
+    padding: 5px 10px; font-size: 11px; font-weight: 600;
+    background: #2e1a1a; border: 1px solid #7a2a2a;
+    border-radius: 4px; color: #e06060; cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+}
+.exif-gps-btn:hover { background: #3a2020; color: #f08080; }
+.exif-gps-btn svg { width: 13px; height: 13px; flex-shrink: 0; }
+.exif-gps-marker {
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    background: rgba(220, 60, 60, 0.25);
+    border: 2px solid #e03c3c;
+    box-shadow: 0 0 0 0 rgba(220, 60, 60, 0.6);
+    animation: exif-gps-pulse 1.6s ease-out infinite;
+}
+@keyframes exif-gps-pulse {
+    0%   { box-shadow: 0 0 0 0 rgba(220, 60, 60, 0.7); }
+    70%  { box-shadow: 0 0 0 14px rgba(220, 60, 60, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(220, 60, 60, 0); }
+}
+
 /* ---- SESSION MANAGER ---- */
 .session-manager-wrap {
     position: absolute; top: 10px; right: 10px;
