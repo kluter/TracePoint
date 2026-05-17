@@ -256,12 +256,26 @@ function updateLineManager() {
         const colour = lineColour(lIdx, activeSessionIndex);
         const active = lIdx === state.activeLineIndex;
 
+        const placedPts = line.points.filter(p => p.geo);
+        const intersection = sess().mapObjects.intersectionLatLng;
+        const bearingLabel = (placedPts.length >= 2 && intersection)
+            ? (() => {
+                const mid = {
+                    lat: (placedPts[0].geo.lat + placedPts[1].geo.lat) / 2,
+                    lng: (placedPts[0].geo.lng + placedPts[1].geo.lng) / 2
+                };
+                const deg = Math.round(bearingDeg(intersection, mid));
+                return `<span class="line-bearing">${deg.toString().padStart(3, '0')}°</span>`;
+            })()
+            : '';
+
         const item = document.createElement('div');
         item.className = 'line-item' + (active ? ' active-line' : '');
         item.style.setProperty('--lc', colour);
         item.innerHTML =
             `<span class="line-dot"></span>` +
             `<span class="line-label">L${lIdx + 1}</span>` +
+            bearingLabel +
             `<button class="btn-delete" title="Delete line"
                 onclick="event.stopPropagation(); deleteLine(${lIdx})">×</button>`;
         item.onclick = () => {
@@ -887,6 +901,7 @@ function recomputeIntersection() {
     if (mo.intersectionMarker) {
         s.layerGroup.removeLayer(mo.intersectionMarker);
         mo.intersectionMarker = null;
+        mo.intersectionLatLng = null;
     }
 
     const rays = [];
@@ -915,6 +930,8 @@ function recomputeIntersection() {
         html: `<div class="intersection-marker"></div>`,
         iconSize: [24, 24], iconAnchor: [12, 12]
     });
+
+    mo.intersectionLatLng = { lat: avgLat, lng: avgLng };
 
     mo.intersectionMarker = L.marker([avgLat, avgLng], { icon })
         .bindPopup(`<b>📍 Estimated origin</b><br>${avgLat.toFixed(6)}, ${avgLng.toFixed(6)}`)

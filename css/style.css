@@ -81,6 +81,7 @@ button:disabled     { opacity: 0.3; cursor: not-allowed; }
     background: var(--lc, #00aaff); flex-shrink: 0;
 }
 .line-label { color: #aaa; }
+.line-bearing { color: #555; font-size: 10px; font-variant-numeric: tabular-nums; margin-left: 2px; }
 
 /* ---- POINT MANAGER ---- */
 .point-manager {
