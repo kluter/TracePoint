@@ -38,9 +38,7 @@ The more lines you add, the more rays are generated and the more robustly the in
 
 ## How to Use
 
-> **New to TracePoint?** Click the **☰** button on the image panel and select **Demo — Potsdam** to load a sample image with a built-in guide. Or click **?** in the map panel header at any time to open the guide manually.
-
-> **Level the image (optional):** If the photo is tilted, click **Level** first and draw a line along something that should be horizontal — a roofline, a wall top, a horizon. The image rotates to compensate. Click **Level** again to reset.
+> Start with the **☰** menu on the image panel and select **Demo: Potsdam** for a guided walkthrough. If the photo is tilted, use the **Level** button first to compensate before adding lines.
 
 1. **Load a photo:** Drop an image onto the left panel, or click **Browse**. To work on multiple images at once, open the **☰** image menu and click **+ Add image**.
 2. **Add a line:** Click **+ New Line** and drag it over a recognisable object you can also find on the map: a building corner, tower, road junction.
@@ -49,8 +47,6 @@ The more lines you add, the more rays are generated and the more robustly the in
 5. **Read the result:** Once two lines each have two geo points, rays appear and the intersection is calculated. The pulsing yellow marker shows the estimated origin.
 6. **Add more images:** Use the **☰** image menu to add further sessions. Each session shows its own rays and intersection on the map simultaneously.
 7. **Save your work:** Click the **↓** button on any session row to export it as JSON, or use **↓ Export all sessions** to save everything at once. To restore, click **↑ Import session** and reload the image when prompted.
-
-> **EXIF metadata:** Once an image is loaded, the `</>` button appears in the top-left of the image panel. It shows camera settings, capture date, and GPS data if present. If GPS coordinates are available, use **Show on map** to drop a reference marker at the recorded location. This is useful for cross-checking against your triangulated result.
 
 > **Tips:** Use objects spread across different depths for a more accurate bearing. Three or more lines significantly improve accuracy when the first two rays are nearly parallel. Press **ESC** to deselect or cancel at any time.
 
@@ -109,12 +105,12 @@ python3 -m http.server
 
 ## Changelog
 
-**v1.4.0:** EXIF metadata viewer with GPS map marker.
-**v1.3.0:** Session export / import, browse button, bearing display.
-**v1.2.1:** Session naming, colour and map view fixes.
-**v1.2.0:** Multi-image session manager.
-**v1.1.0:** Horizon correction tool.
-**v1.0.0:** Initial release.
+- **v1.4.0:** EXIF metadata viewer with GPS map marker.
+- **v1.3.0:** Session export / import, browse button, bearing display.
+- **v1.2.1:** Session naming, colour and map view fixes.
+- **v1.2.0:** Multi-image session manager.
+- **v1.1.0:** Horizon correction tool.
+- **v1.0.0:** Initial release.
 
 ---
 
