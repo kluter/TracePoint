@@ -26,7 +26,7 @@ function createSession(name) {
         view:             { scale: 1, tx: 0, ty: 0, rotation: 0 },
         mapView:          null,
         layerGroup,
-        mapObjects:       { rays: [], geoMarkers: [], intersectionMarker: null }
+        mapObjects:       { rays: [], geoMarkers: [], intersectionMarker: null, intersectionLatLng: null }
     };
 }
 
@@ -433,6 +433,13 @@ function renderSessionMenu() {
         item.innerHTML =
             `<span class="session-dot"></span>` +
             `<span class="session-name">${s.name}</span>` +
+            (s.lines.length > 0
+                ? `<button class="btn-session-export" title="Export session"
+                       onclick="event.stopPropagation(); exportSession(${idx})">
+                       <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                           <line x1="5" y1="1" x2="5" y2="8"/><polyline points="2,5.5 5,8.5 8,5.5"/>
+                       </svg></button>`
+                : '') +
             `<button class="btn-delete" title="Remove image"
                  onclick="event.stopPropagation(); removeSession(${idx})">×</button>`;
         item.onclick = () => {
@@ -451,6 +458,26 @@ function renderSessionMenu() {
     addBtn.textContent = '+ Add image';
     addBtn.onclick = () => { addSession(); menu.style.display = 'none'; };
     menu.appendChild(addBtn);
+
+    const importBtn = document.createElement('div');
+    importBtn.className = 'session-add session-import';
+    importBtn.innerHTML = `<span class="export-icon">
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="5" y1="9" x2="5" y2="2"/><polyline points="2,4.5 5,1.5 8,4.5"/>
+        </svg></span> Import session`;
+    importBtn.onclick = () => { jsonPicker.click(); menu.style.display = 'none'; };
+    menu.appendChild(importBtn);
+
+    if (sessions.some(s => s.lines.length > 0)) {
+        const exportAllBtn = document.createElement('div');
+        exportAllBtn.className = 'session-add session-export-all';
+        exportAllBtn.innerHTML = `<span class="export-icon">
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="5" y1="1" x2="5" y2="8"/><polyline points="2,5.5 5,8.5 8,5.5"/>
+            </svg></span> Export all sessions`;
+        exportAllBtn.onclick = () => { exportAllSessions(); menu.style.display = 'none'; };
+        menu.appendChild(exportAllBtn);
+    }
 }
 
 function switchToSession(idx) {
@@ -486,6 +513,7 @@ function switchToSession(idx) {
     } else {
         canvas.style.display  = 'none';
         overlay.style.display = 'flex';
+        updateDropOverlay();
     }
 
     updateUI();
@@ -572,21 +600,44 @@ document.addEventListener('click', (e) => {
 /* ============================================================
    IMAGE HANDLING
    ============================================================ */
+function updateDropOverlay() {
+    const s = sess();
+    if (s.pendingImageFilename) {
+        overlay.innerHTML =
+            `<span class="drop-restored-title">Session restored</span>` +
+            `<span class="drop-restore">reload <strong>${s.pendingImageFilename}</strong> to continue</span>` +
+            `<button id="btn-browse" type="button">Browse</button>`;
+        document.getElementById('btn-browse').addEventListener('click',
+            () => document.getElementById('file-picker').click());
+    } else {
+        overlay.innerHTML =
+            `Drop image here` +
+            `<button id="btn-browse" type="button">Browse</button>`;
+        document.getElementById('btn-browse').addEventListener('click',
+            () => document.getElementById('file-picker').click());
+    }
+}
+
 function loadImage(file) {
     const s = sess();
+    const isRestore = !!s.pendingImageFilename;
     if (s.currentObjectURL) URL.revokeObjectURL(s.currentObjectURL);
     s.currentObjectURL = URL.createObjectURL(file);
-    s.name = file.name.replace(/\.[^.]+$/, ''); // use filename (no extension) as session name
+    s.imageFilename = file.name;
+    s.pendingImageFilename = null;
+    if (!isRestore) s.name = file.name.replace(/\.[^.]+$/, '');
     s.imgElement = new Image();
     s.imgElement.onload = () => {
         canvas.width  = s.imgElement.width;
         canvas.height = s.imgElement.height;
         canvas.style.display = 'block';
         overlay.style.display = 'none';
-        const cr = container.getBoundingClientRect();
-        s.view.scale = Math.min(cr.width / s.imgElement.width, cr.height / s.imgElement.height, 1);
-        s.view.tx = (cr.width  - s.imgElement.width  * s.view.scale) / 2;
-        s.view.ty = (cr.height - s.imgElement.height * s.view.scale) / 2;
+        if (!isRestore) {
+            const cr = container.getBoundingClientRect();
+            s.view.scale = Math.min(cr.width / s.imgElement.width, cr.height / s.imgElement.height, 1);
+            s.view.tx = (cr.width  - s.imgElement.width  * s.view.scale) / 2;
+            s.view.ty = (cr.height - s.imgElement.height * s.view.scale) / 2;
+        }
         applyTransform();
         render();
         renderSessionMenu();
@@ -608,6 +659,126 @@ filePicker.addEventListener('change', () => {
     const file = filePicker.files[0];
     if (file) { loadImage(file); filePicker.value = ''; }
 });
+
+/* ============================================================
+   JSON PICKER  (import trigger)
+   ============================================================ */
+const jsonPicker = document.getElementById('json-picker');
+jsonPicker.addEventListener('change', () => {
+    const file = jsonPicker.files[0];
+    if (file) { importSessions(file); jsonPicker.value = ''; }
+});
+
+/* ============================================================
+   EXPORT / IMPORT
+   ============================================================ */
+function sessionToData(s) {
+    return {
+        name:              s.name,
+        imageFilename:     s.imageFilename || null,
+        lines:             s.lines.map((l, lIdx) => {
+            const placed = l.points.filter(p => p.geo);
+            const intersection = s.mapObjects.intersectionLatLng;
+            let bearing = null;
+            if (placed.length >= 2 && intersection) {
+                const mid = {
+                    lat: (placed[0].geo.lat + placed[1].geo.lat) / 2,
+                    lng: (placed[0].geo.lng + placed[1].geo.lng) / 2
+                };
+                bearing = Math.round(bearingDeg(intersection, mid));
+            }
+            return {
+                label:   `L${lIdx + 1}`,
+                x:       l.x,
+                bearing: bearing,
+                points:  l.points.map((pt, pIdx) => ({
+                    label: `L${lIdx + 1}P${pIdx + 1}`,
+                    y:     pt.y,
+                    geo:   pt.geo || null
+                }))
+            };
+        }),
+        view:              { ...s.view },
+        mapView:           s.mapView
+            ? { center: { lat: s.mapView.center.lat, lng: s.mapView.center.lng }, zoom: s.mapView.zoom }
+            : null,
+        intersection:      s.mapObjects.intersectionLatLng || null
+    };
+}
+
+function downloadJSON(data, filename) {
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url; a.download = filename; a.click();
+    URL.revokeObjectURL(url);
+}
+
+window.exportSession = (idx) => {
+    const s  = sessions[idx];
+    if (idx === activeSessionIndex) s.mapView = { center: map.getCenter(), zoom: map.getZoom() };
+    const ts = new Date().toISOString().slice(0, 16).replace('T', '_').replace(/:/g, '-');
+    downloadJSON(
+        { json_version: 1, exported: new Date().toISOString(), sessions: [sessionToData(s)] },
+        `tracepoint_${s.name}_${ts}.json`
+    );
+};
+
+function exportAllSessions() {
+    if (sessions[activeSessionIndex]) {
+        sessions[activeSessionIndex].mapView = { center: map.getCenter(), zoom: map.getZoom() };
+    }
+    const ts = new Date().toISOString().slice(0, 16).replace('T', '_').replace(/:/g, '-');
+    downloadJSON(
+        { json_version: 1, exported: new Date().toISOString(),
+          sessions: sessions.filter(s => s.lines.length > 0).map(sessionToData) },
+        `tracepoint_all_${ts}.json`
+    );
+}
+
+function importSessions(file) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        try {
+            const data = JSON.parse(e.target.result);
+            const list = data.sessions;
+            if (!Array.isArray(list) || list.length === 0) return alert('No sessions found in file.');
+
+            list.forEach(sd => {
+                // Reuse the current session slot if it's completely empty
+                const cur = sess();
+                let s;
+                if (!cur.imgElement && cur.lines.length === 0) {
+                    s = cur;
+                    s.name = sd.name;
+                } else {
+                    s = createSession(sd.name);
+                    sessions.push(s);
+                }
+
+                s.imageFilename        = sd.imageFilename || null;
+                s.pendingImageFilename = sd.imageFilename || null;
+                s.lines = (sd.lines || []).map(l => ({
+                    x:      l.x,
+                    points: (l.points || []).map(pt => ({ y: pt.y, geo: pt.geo || null }))
+                }));
+                if (sd.view)    Object.assign(s.view, sd.view);
+                if (sd.mapView) s.mapView = sd.mapView;
+
+                switchToSession(sessions.indexOf(s));
+                s.lines.forEach((_, lIdx) => rebuildMapForLine(lIdx));
+                recomputeIntersection();
+                if (sd.mapView) map.setZoom(sd.mapView.zoom);
+                updateUI();
+            });
+
+            renderSessionMenu();
+        } catch (err) {
+            alert('Invalid TracePoint session file.');
+        }
+    };
+    reader.readAsText(file);
+}
 
 /* ============================================================
    ZOOM  (wheel on container)
