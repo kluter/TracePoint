@@ -60,6 +60,9 @@ The more lines you add, the more rays are generated and the more robustly the in
 
 ## Controls
 
+<details>
+<summary>Click to expand the full controls reference</summary>
+
 | Action | How |
 |---|---|
 | Zoom image | Scroll wheel |
@@ -81,6 +84,8 @@ The more lines you add, the more rays are generated and the more robustly the in
 | Open help guide | ? button, top-right of map panel |
 | View image metadata | `</>` button, top-left of image panel |
 | Place EXIF GPS on map | Show on map button inside the metadata card |
+
+</details>
 
 ---
 
