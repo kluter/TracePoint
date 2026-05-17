@@ -88,7 +88,7 @@ The more lines you add, the more rays are generated and the more robustly the in
 
 Rays are computed from the bearing between two geo-referenced points. Intersection uses flat-plane geometry on lat/lon coordinates — accurate to within a few metres for scenes under ~10 km, which covers virtually all real-world photography. Each ray extends 50 km in both directions, long enough to contain any realistic intersection while keeping the map readable.
 
-No data leaves your machine. Map imagery is served by public tile servers (Esri, OpenStreetMap). The only dependency is [Leaflet](https://leafletjs.com/), everything else is vanilla HTML, CSS, and JavaScript.
+No data leaves your machine. Map imagery is served by public tile servers (Esri, OpenStreetMap). Dependencies are [Leaflet](https://leafletjs.com/) for maps and [exifr](https://github.com/MikeKovarik/exifr) by MikeKovarik for metadata parsing. Everything else is vanilla HTML, CSS, and JavaScript.
 
 ---
 
