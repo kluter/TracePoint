@@ -6,7 +6,7 @@
 
 **[Try it live → kluter.github.io/TracePoint](https://kluter.github.io/TracePoint/)**
 
-![TracePoint Result](assets/Potsdam_Result.jpg)
+![TracePoint Demo](assets/TracePoint_Demo.gif)
 
 ---
 
@@ -51,7 +51,7 @@ The more lines you add, the more rays are generated and the more robustly the in
 
 > **Tips:** Use objects spread across different depths for a more accurate bearing. Three or more lines significantly improve accuracy when the first two rays are nearly parallel. Press **ESC** to deselect or cancel at any time.
 
-![TracePoint Demo](assets/TracePoint_Demo.gif)
+![TracePoint Result](assets/Potsdam_Result.jpg)
 
 ---
 
