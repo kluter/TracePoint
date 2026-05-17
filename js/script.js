@@ -19,6 +19,7 @@ function createSession(name) {
     const layerGroup = L.layerGroup().addTo(map);
     return {
         name,
+        colourIndex:      nextFreeColourIndex(),
         imgElement:       null,
         currentObjectURL: null,
         lines:            [],
@@ -26,7 +27,8 @@ function createSession(name) {
         view:             { scale: 1, tx: 0, ty: 0, rotation: 0 },
         mapView:          null,
         layerGroup,
-        mapObjects:       { rays: [], geoMarkers: [], intersectionMarker: null, intersectionLatLng: null }
+        mapObjects:       { rays: [], geoMarkers: [], intersectionMarker: null, intersectionLatLng: null },
+        exifGpsMarker:    null
     };
 }
 
@@ -184,14 +186,20 @@ new LayerSwitcher().addTo(map);
    through the same palette offset by the session's position.
    ============================================================ */
 const LINE_COLOURS = [
-    '#00aaff', '#ff6b35', '#7fff6b', '#ff35c8',
-    '#ffe135', '#35ffe1', '#b535ff', '#ff3535'
+    '#ffe135', '#ff6b35', '#7fff6b', '#ff35c8',
+    '#35ffe1', '#00aaff', '#b535ff', '#ff3535'
 ];
 
-/* Derive a stable colour slot from the session name if it matches "Image N", else fall back to position */
+/* Find the lowest colour slot not already claimed by an existing session */
+function nextFreeColourIndex() {
+    const used = new Set((sessions || []).map(s => s.colourIndex));
+    let n = 0;
+    while (used.has(n % LINE_COLOURS.length)) n++;
+    return n % LINE_COLOURS.length;
+}
+
 function sessionColourIndex(sessionIdx) {
-    const m = sessions[sessionIdx]?.name.match(/^Image (\d+)$/);
-    return m ? parseInt(m[1]) - 1 : sessionIdx;
+    return sessions[sessionIdx]?.colourIndex ?? sessionIdx % LINE_COLOURS.length;
 }
 
 function lineColour(lineIdx, sessionIdx = activeSessionIndex) {
@@ -360,7 +368,12 @@ window.startMapPoint = (lIdx, pIdx) => {
 
 btnAddLine.onclick = () => {
     if (!sess().imgElement) return alert("Drop an image first.");
-    sess().lines.push({ x: canvas.width / 2, points: [] });
+    const v  = sess().view;
+    const cr = container.getBoundingClientRect();
+    // Place the line at the horizontal centre of the currently visible viewport
+    const viewCenterX = (cr.width / 2 - v.tx) / v.scale;
+    const clampedX    = Math.max(0, Math.min(canvas.width, viewCenterX));
+    sess().lines.push({ x: clampedX, points: [], pristine: true });
     state.activeLineIndex = sess().lines.length - 1;
     state.mode = 'drag-line';
     render(); updateUI();
@@ -433,7 +446,7 @@ function renderSessionMenu() {
         item.innerHTML =
             `<span class="session-dot"></span>` +
             `<span class="session-name">${s.name}</span>` +
-            (s.lines.length > 0
+            (s.imgElement
                 ? `<button class="btn-session-export" title="Export session"
                        onclick="event.stopPropagation(); exportSession(${idx})">
                        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -468,7 +481,7 @@ function renderSessionMenu() {
     importBtn.onclick = () => { jsonPicker.click(); menu.style.display = 'none'; };
     menu.appendChild(importBtn);
 
-    if (sessions.some(s => s.lines.length > 0)) {
+    if (sessions.some(s => s.imgElement)) {
         const exportAllBtn = document.createElement('div');
         exportAllBtn.className = 'session-add session-export-all';
         exportAllBtn.innerHTML = `<span class="export-icon">
@@ -502,6 +515,12 @@ function switchToSession(idx) {
         const hasGeoWork = s.lines.some(l => l.points.some(p => p.geo));
         if (!hasGeoWork) map.setView([20, 0], 2);
     }
+
+    const exifWrap = document.getElementById('exif-wrap');
+    const exifCard = document.getElementById('exif-card');
+    // Show exif button if an image is loaded, or if exif data was restored from JSON
+    exifWrap.style.display = (s.imgElement || s.exif) ? 'block' : 'none';
+    exifCard.style.display = 'none';
 
     if (s.imgElement) {
         canvas.width         = s.imgElement.width;
@@ -643,6 +662,15 @@ function loadImage(file) {
         renderSessionMenu();
     };
     s.imgElement.src = s.currentObjectURL;
+
+    // Read EXIF metadata — enable all segments so XMP/IPTC fields are included
+    exifr.parse(file, { tiff: true, exif: true, gps: true, xmp: true, iptc: true })
+        .then(exif => { s.exif = exif || null; })
+        .catch(() => { s.exif = null; })
+        .finally(() => {
+            document.getElementById('exif-wrap').style.display = 'block';
+            document.getElementById('exif-card').style.display = 'none';
+        });
 }
 
 container.addEventListener('dragover',  (e) => { e.preventDefault(); container.classList.add('drag-active'); });
@@ -658,6 +686,221 @@ document.getElementById('btn-browse').addEventListener('click', () => filePicker
 filePicker.addEventListener('change', () => {
     const file = filePicker.files[0];
     if (file) { loadImage(file); filePicker.value = ''; }
+});
+
+/* ============================================================
+   EXIF CARD
+   ============================================================ */
+function formatExifDate(val) {
+    if (!val) return null;
+    if (val instanceof Date) {
+        return val.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+    }
+    // exifr sometimes returns a string "YYYY:MM:DD HH:MM:SS"
+    if (typeof val === 'string') {
+        const m = val.match(/^(\d{4}):(\d{2}):(\d{2}) (\d{2}):(\d{2}):(\d{2})$/);
+        if (m) {
+            const d = new Date(+m[1], +m[2]-1, +m[3], +m[4], +m[5], +m[6]);
+            return d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+        }
+        return val;
+    }
+    return String(val);
+}
+
+function formatExposure(val) {
+    if (val == null) return null;
+    if (val >= 1) return `${val}s`;
+    const denom = Math.round(1 / val);
+    return `1/${denom}s`;
+}
+
+function formatFlash(val) {
+    if (val == null) return null;
+    return (val & 0x01) ? 'Fired' : 'No flash';
+}
+
+function formatOrientation(val) {
+    const map = { 1:'Normal', 2:'Mirrored', 3:'180°', 4:'Mirrored 180°',
+                  5:'90° CCW mirrored', 6:'90° CW', 7:'90° CW mirrored', 8:'90° CCW' };
+    return map[val] || null;
+}
+
+function formatWhiteBalance(val) {
+    if (val == null) return null;
+    return val === 0 ? 'Auto' : val === 1 ? 'Manual' : null;
+}
+
+function formatExposureMode(val) {
+    if (val == null) return null;
+    return (['Auto', 'Manual', 'Auto bracket'][val]) ?? null;
+}
+
+function formatGPSSpeed(speed, ref) {
+    if (speed == null) return null;
+    const unit = ref === 'M' ? 'mph' : ref === 'N' ? 'kn' : 'km/h';
+    return `${speed.toFixed(1)} ${unit}`;
+}
+
+function formatGPSTimestamp(ts, dateStamp) {
+    if (ts == null) return null;
+    let time;
+    if (Array.isArray(ts) && ts.length === 3) {
+        time = ts.map(n => String(Math.floor(n)).padStart(2, '0')).join(':');
+    } else if (ts instanceof Date) {
+        time = ts.toISOString().slice(11, 19);
+    } else return null;
+    const date = dateStamp ? String(dateStamp).replace(/:/g, '-') + ' ' : '';
+    return `${date}${time} UTC`;
+}
+
+/* Return the first non-null value found across multiple possible field names */
+function pick(e, ...keys) {
+    for (const k of keys) { if (e[k] != null) return e[k]; }
+    return null;
+}
+
+/* Convert DMS array [deg, min, sec] or plain decimal to decimal degrees */
+function dmsToDecimal(val) {
+    if (val == null) return null;
+    if (typeof val === 'number') return val;
+    if (Array.isArray(val) && val.length === 3) return val[0] + val[1] / 60 + val[2] / 3600;
+    return null;
+}
+
+function cardinalDir(deg) {
+    const dirs = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+    return dirs[Math.round(deg / 45) % 8];
+}
+
+function renderExifCard() {
+    const s    = sess();
+    const card = document.getElementById('exif-card');
+    if (!s.exif) {
+        card.innerHTML = '<p class="exif-empty">No metadata found</p>';
+        return;
+    }
+    try {
+        const e   = s.exif;
+        const lat = dmsToDecimal(e.GPSLatitude);
+        const lng = dmsToDecimal(e.GPSLongitude);
+        const alt = dmsToDecimal(e.GPSAltitude);
+        const dir = e.GPSImgDirection != null ? Number(e.GPSImgDirection) : null;
+        const trk = e.GPSTrack        != null ? Number(e.GPSTrack)        : null;
+
+        const cameraStr = [e.Make, e.Model].filter(Boolean).join(' ') || null;
+        const lensStr   = e.LensModel && e.LensModel !== e.Model ? e.LensModel : null;
+        const imgW      = pick(e, 'ImageWidth',  'ExifImageWidth',  'PixelXDimension');
+        const imgH      = pick(e, 'ImageHeight', 'ExifImageHeight', 'PixelYDimension');
+        const date      = pick(e, 'DateTimeOriginal', 'DateTimeDigitized', 'DateTime');
+        const software  = pick(e, 'Software', 'CreatorTool');
+        const creator   = pick(e, 'Creator', 'Byline', 'Artist');
+        const desc      = pick(e, 'Description', 'Caption', 'Caption-Abstract', 'ImageDescription');
+        const kwRaw     = pick(e, 'Keywords', 'Subject');
+        const keywords  = kwRaw ? (Array.isArray(kwRaw) ? kwRaw.join(', ') : String(kwRaw)) : null;
+        const copyright = pick(e, 'Copyright', 'Rights');
+
+        const rows = [
+            // — Camera —
+            ['Camera',        cameraStr],
+            ['Lens',          lensStr],
+            ['Software',      software],
+            // — Exposure —
+            ['Date',          formatExifDate(date)],
+            ['Focal length',  pick(e, 'FocalLength')         != null ? `${e.FocalLength} mm` : null],
+            ['35mm equiv',    pick(e, 'FocalLengthIn35mmFilm')!= null ? `${e.FocalLengthIn35mmFilm} mm` : null],
+            ['Aperture',      pick(e, 'FNumber', 'ApertureValue') != null ? `f/${e.FNumber ?? e.ApertureValue}` : null],
+            ['Shutter',       formatExposure(pick(e, 'ExposureTime', 'ShutterSpeedValue'))],
+            ['ISO',           pick(e, 'ISO', 'ISOSpeedRatings', 'PhotographicSensitivity') != null ? `${pick(e, 'ISO', 'ISOSpeedRatings', 'PhotographicSensitivity')}` : null],
+            ['Flash',         formatFlash(pick(e, 'Flash'))],
+            ['Exposure',      formatExposureMode(pick(e, 'ExposureMode'))],
+            ['White balance', formatWhiteBalance(pick(e, 'WhiteBalance'))],
+            // — Image —
+            ['Resolution',    imgW && imgH ? `${imgW} × ${imgH}` : null],
+            ['Orientation',   formatOrientation(pick(e, 'Orientation'))],
+            // — Location —
+            ['GPS',           lat != null && lng != null ? `${lat.toFixed(5)}, ${lng.toFixed(5)}` : null],
+            ['Altitude',      alt != null ? `${Math.round(alt)} m` : null],
+            ['Cam direction', dir != null ? `${Math.round(dir)}° ${cardinalDir(dir)}` : null],
+            ['Travel dir',    trk != null ? `${Math.round(trk)}° ${cardinalDir(trk)}` : null],
+            ['Speed',         formatGPSSpeed(pick(e, 'GPSSpeed'), pick(e, 'GPSSpeedRef'))],
+            ['GPS time',      formatGPSTimestamp(pick(e, 'GPSTimeStamp'), pick(e, 'GPSDateStamp'))],
+            // — Attribution —
+            ['Creator',       creator],
+            ['Description',   desc],
+            ['Keywords',      keywords],
+            ['Copyright',     copyright]
+        ].filter(r => r[1] != null);
+
+        if (!rows.length) {
+            card.innerHTML = '<p class="exif-empty">No metadata found</p>';
+            return;
+        }
+        const crosshair = `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+            <circle cx="8" cy="8" r="3"/>
+            <line x1="8" y1="1" x2="8" y2="4.5"/>
+            <line x1="8" y1="11.5" x2="8" y2="15"/>
+            <line x1="1" y1="8" x2="4.5" y2="8"/>
+            <line x1="11.5" y1="8" x2="15" y2="8"/>
+        </svg>`;
+        const gpsBtn = (lat != null && lng != null)
+            ? `<button class="exif-gps-btn" onclick="goToExifGps()">${crosshair}Show on map</button>`
+            : '';
+        card.innerHTML =
+            '<div class="exif-card-header">Image metadata</div>' +
+            '<table class="exif-table">' +
+            rows.map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join('') +
+            '</table>' + gpsBtn;
+    } catch (err) {
+        card.innerHTML = '<p class="exif-empty">Could not read metadata</p>';
+    }
+}
+
+window.goToExifGps = () => {
+    const s   = sess();
+    const lat = dmsToDecimal(s.exif?.GPSLatitude);
+    const lng = dmsToDecimal(s.exif?.GPSLongitude);
+    if (lat == null || lng == null) return;
+
+    // Remove previous EXIF GPS marker for this session
+    if (s.exifGpsMarker) {
+        s.layerGroup.removeLayer(s.exifGpsMarker);
+        s.exifGpsMarker = null;
+    }
+
+    const icon = L.divIcon({
+        className: '',
+        html: '<div class="exif-gps-marker"></div>',
+        iconSize:   [20, 20],
+        iconAnchor: [10, 10]
+    });
+
+    s.exifGpsMarker = L.marker([lat, lng], { icon })
+        .bindPopup(`<b>EXIF GPS</b><br>${lat.toFixed(5)}, ${lng.toFixed(5)}`)
+        .addTo(s.layerGroup);
+
+    s.exifGpsMarker.openPopup();
+    map.setView([lat, lng], Math.max(map.getZoom(), 16));
+};
+
+/* Button toggle */
+document.getElementById('btn-exif').addEventListener('click', (e) => {
+    e.stopPropagation();
+    const card = document.getElementById('exif-card');
+    const open = card.style.display !== 'none';
+    if (open) {
+        card.style.display = 'none';
+    } else {
+        renderExifCard();
+        card.style.display = 'block';
+    }
+});
+
+/* Close on outside click */
+document.addEventListener('click', (e) => {
+    const wrap = document.getElementById('exif-wrap');
+    const card = document.getElementById('exif-card');
+    if (!wrap.contains(e.target)) card.style.display = 'none';
 });
 
 /* ============================================================
@@ -702,7 +945,9 @@ function sessionToData(s) {
         mapView:           s.mapView
             ? { center: { lat: s.mapView.center.lat, lng: s.mapView.center.lng }, zoom: s.mapView.zoom }
             : null,
-        intersection:      s.mapObjects.intersectionLatLng || null
+        intersection:      s.mapObjects.intersectionLatLng || null,
+        exif:              s.exif || null,
+        colourIndex:       s.colourIndex ?? null
     };
 }
 
@@ -731,7 +976,7 @@ function exportAllSessions() {
     const ts = new Date().toISOString().slice(0, 16).replace('T', '_').replace(/:/g, '-');
     downloadJSON(
         { json_version: 1, exported: new Date().toISOString(),
-          sessions: sessions.filter(s => s.lines.length > 0).map(sessionToData) },
+          sessions: sessions.filter(s => s.imgElement).map(sessionToData) },
         `tracepoint_all_${ts}.json`
     );
 }
@@ -756,16 +1001,27 @@ function importSessions(file) {
                     sessions.push(s);
                 }
 
+                if (sd.colourIndex != null) s.colourIndex = sd.colourIndex;
+                if ('exif' in sd) s.exif = sd.exif;
                 s.imageFilename        = sd.imageFilename || null;
                 s.pendingImageFilename = sd.imageFilename || null;
                 s.lines = (sd.lines || []).map(l => ({
                     x:      l.x,
                     points: (l.points || []).map(pt => ({ y: pt.y, geo: pt.geo || null }))
                 }));
-                if (sd.view)    Object.assign(s.view, sd.view);
-                if (sd.mapView) s.mapView = sd.mapView;
+                if (sd.view) Object.assign(s.view, sd.view);
 
+                // Switch first — switchToSession saves the outgoing session's live map
+                // position; setting s.mapView before the call would get overwritten when
+                // s === sessions[activeSessionIndex] (reused empty slot case).
                 switchToSession(sessions.indexOf(s));
+
+                // Restore imported mapView after the switch so it can't be clobbered
+                if (sd.mapView) {
+                    s.mapView = sd.mapView;
+                    map.setView(sd.mapView.center, sd.mapView.zoom);
+                }
+
                 s.lines.forEach((_, lIdx) => rebuildMapForLine(lIdx));
                 recomputeIntersection();
                 if (sd.mapView) map.setZoom(sd.mapView.zoom);
@@ -851,21 +1107,33 @@ function render() {
     ctx.drawImage(s.imgElement, 0, 0);
     ctx.restore();
 
+    let needsRerender = false;
+
     s.lines.forEach((line, idx) => {
-        const active  = idx === state.activeLineIndex;
-        const colour  = lineColour(idx, activeSessionIndex);
-        const alpha   = active ? 1.0 : 0.5;
+        const active    = idx === state.activeLineIndex;
+        const colour    = lineColour(idx, activeSessionIndex);
+        const alpha = (active || line.pristine) ? 1.0 : 0.5;
+
+        if (line.pristine) needsRerender = true;
 
         ctx.globalAlpha = alpha;
+
+        // Pulsing glow for untouched lines — persists until the user grabs and drags
+        if (line.pristine) {
+            const pulse = Math.sin(Date.now() / 250);   // -1 … +1
+            ctx.shadowColor = colour;
+            ctx.shadowBlur  = 22 + 12 * pulse;          // 10 … 34
+        }
 
         ctx.beginPath();
         ctx.moveTo(line.x, 0);
         ctx.lineTo(line.x, canvas.height);
         ctx.strokeStyle = colour;
-        ctx.lineWidth   = active ? 2.5 : 1.5;
-        ctx.setLineDash(active ? [] : [6, 4]);
+        ctx.lineWidth   = line.pristine ? 3.5 : (active ? 2.5 : 1.5);
+        ctx.setLineDash(active || line.pristine ? [] : [6, 4]);
         ctx.stroke();
         ctx.setLineDash([]);
+        ctx.shadowBlur  = 0;
 
         line.points.forEach((pt, pIdx) => {
             const hasGeo = !!(pt.geo);
@@ -894,6 +1162,8 @@ function render() {
 
         ctx.globalAlpha = 1;
     });
+
+    if (needsRerender) requestAnimationFrame(render);
 
     if (state.mode === 'horizon' && s.horizonPoints.length > 0) {
         const p1 = s.horizonPoints[0];
@@ -939,6 +1209,7 @@ canvas.addEventListener('mousedown', (e) => {
         state.activeLineIndex = hit;
         state.isDragging = true;
         state.mode = 'drag-line';
+        sess().lines[hit].pristine = false;
         render(); updateUI();
     } else {
         state.activeLineIndex = -1;

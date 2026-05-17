@@ -52,6 +52,15 @@
                 <input type="file" id="file-picker" accept="image/*" style="display:none">
                 <input type="file" id="json-picker" accept=".json" style="display:none">
                 <div id="zoom-hint">scroll to zoom · space+drag or middle-drag to pan</div>
+                <div class="exif-wrap" id="exif-wrap" style="display:none">
+                    <button class="exif-burger" id="btn-exif" title="Image metadata">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="16 18 22 12 16 6"/>
+                            <polyline points="8 6 2 12 8 18"/>
+                        </svg>
+                    </button>
+                    <div class="exif-card" id="exif-card" style="display:none"></div>
+                </div>
                 <div class="session-manager-wrap" id="session-manager-wrap">
                     <button class="session-burger" id="btn-session-burger" title="Manage images">
                         <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
@@ -91,6 +100,7 @@
             </div>
         </div>
     </div>
+    <script src="js/exifr.min.js"></script>
     <script src="js/script.js"></script>
 </body>
 </html>
