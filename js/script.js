@@ -16,14 +16,14 @@ const toastCounts = new Map();
 const TOAST_DURATION = 7000;
 const TOAST_MAX_STACK = 3;
 
-function showToast(msg) {
+function showToast(msg, type = 'error') {
     const count = toastCounts.get(msg) || 0;
     if (count >= TOAST_MAX_STACK) return;
     toastCounts.set(msg, count + 1);
 
     const container = document.getElementById('toast-container');
     const item = document.createElement('div');
-    item.className = 'toast-item';
+    item.className = 'toast-item' + (type === 'success' ? ' toast-success' : '');
     item.innerHTML = `<span>${escHtml(msg)}</span><button class="toast-close" aria-label="Dismiss">×</button>`;
     item.querySelector('.toast-close').onclick = () => dismissToast(item, msg);
     container.appendChild(item);
@@ -1024,6 +1024,7 @@ window.exportSession = (idx) => {
         { json_version: 1, exported: new Date().toISOString(), sessions: [sessionToData(s)] },
         `tracepoint_${s.name}_${ts}.json`
     );
+    showToast('Session exported.', 'success');
 };
 
 function exportAllSessions() {
@@ -1036,6 +1037,7 @@ function exportAllSessions() {
           sessions: sessions.filter(s => s.imgElement).map(sessionToData) },
         `tracepoint_all_${ts}.json`
     );
+    showToast('All sessions exported.', 'success');
 }
 
 function importSessions(file) {
@@ -1099,6 +1101,7 @@ function importSessions(file) {
             });
 
             renderSessionMenu();
+            showToast(`${list.length} session${list.length > 1 ? 's' : ''} imported.`, 'success');
         } catch (err) {
             showToast('Invalid TracePoint session file.');
         }
