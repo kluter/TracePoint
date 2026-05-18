@@ -12,6 +12,36 @@ const btnHorizon    = document.getElementById("btn-horizon");
 const toolbar       = document.getElementById("toolbar");
 
 let pulseFrameId = null;
+const toastCounts = new Map();
+const TOAST_DURATION = 7000;
+const TOAST_MAX_STACK = 3;
+
+function showToast(msg) {
+    const count = toastCounts.get(msg) || 0;
+    if (count >= TOAST_MAX_STACK) return;
+    toastCounts.set(msg, count + 1);
+
+    const container = document.getElementById('toast-container');
+    const item = document.createElement('div');
+    item.className = 'toast-item';
+    item.innerHTML = `<span>${escHtml(msg)}</span><button class="toast-close" aria-label="Dismiss">×</button>`;
+    item.querySelector('.toast-close').onclick = () => dismissToast(item, msg);
+    container.appendChild(item);
+    requestAnimationFrame(() => item.classList.add('toast-visible'));
+
+    setTimeout(() => dismissToast(item, msg), TOAST_DURATION);
+}
+
+function dismissToast(item, msg) {
+    if (!item.isConnected) return;
+    item.classList.add('toast-hiding');
+    item.addEventListener('transitionend', () => {
+        item.remove();
+        const n = toastCounts.get(msg) || 1;
+        if (n <= 1) toastCounts.delete(msg);
+        else toastCounts.set(msg, n - 1);
+    }, { once: true });
+}
 
 toolbar.addEventListener('click', e => {
     const btn = e.target.closest('[data-action]');
@@ -388,7 +418,7 @@ window.startMapPoint = (lIdx, pIdx) => {
 };
 
 btnAddLine.onclick = () => {
-    if (!sess().imgElement) return alert("Drop an image first.");
+    if (!sess().imgElement) return showToast("Drop an image first.");
     const v  = sess().view;
     const cr = container.getBoundingClientRect();
     // Place the line at the horizontal centre of the currently visible viewport
@@ -1014,7 +1044,7 @@ function importSessions(file) {
         try {
             const data = JSON.parse(e.target.result);
             const list = data.sessions;
-            if (!Array.isArray(list) || list.length === 0) return alert('No sessions found in file.');
+            if (!Array.isArray(list) || list.length === 0) return showToast('No sessions found in file.');
 
             list.forEach(sd => {
                 // Reuse the current session slot if it's completely empty
@@ -1040,7 +1070,16 @@ function importSessions(file) {
                             .filter(pt => pt && typeof pt.y === 'number')
                             .map(pt => ({ y: pt.y, geo: pt.geo || null }))
                     }));
-                if (sd.view) Object.assign(s.view, sd.view);
+                if (sd.view && typeof sd.view === 'object') {
+                    const { scale, tx, ty, rotation } = sd.view;
+                    const validScale = typeof scale === 'number' && isFinite(scale);
+                    if (validScale) {
+                        s.view.scale = scale;
+                        if (typeof tx === 'number' && isFinite(tx)) s.view.tx = tx;
+                        if (typeof ty === 'number' && isFinite(ty)) s.view.ty = ty;
+                    }
+                    if (typeof rotation === 'number' && isFinite(rotation)) s.view.rotation = rotation;
+                }
 
                 // Switch first — switchToSession saves the outgoing session's live map
                 // position; setting s.mapView before the call would get overwritten when
@@ -1061,7 +1100,7 @@ function importSessions(file) {
 
             renderSessionMenu();
         } catch (err) {
-            alert('Invalid TracePoint session file.');
+            showToast('Invalid TracePoint session file.');
         }
     };
     reader.readAsText(file);
