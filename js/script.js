@@ -11,6 +11,58 @@ const btnModeToggle = document.getElementById("btn-mode-toggle");
 const btnHorizon    = document.getElementById("btn-horizon");
 const toolbar       = document.getElementById("toolbar");
 
+let pulseFrameId = null;
+const toastCounts = new Map();
+const TOAST_DURATION = 7000;
+const TOAST_MAX_STACK = 3;
+
+function showToast(msg, type = 'error') {
+    const count = toastCounts.get(msg) || 0;
+    if (count >= TOAST_MAX_STACK) return;
+    toastCounts.set(msg, count + 1);
+
+    const container = document.getElementById('toast-container');
+    const item = document.createElement('div');
+    item.className = 'toast-item' + (type === 'success' ? ' toast-success' : '');
+    item.innerHTML = `<span>${escHtml(msg)}</span><button class="toast-close" aria-label="Dismiss">×</button>`;
+    item.querySelector('.toast-close').onclick = () => dismissToast(item, msg);
+    container.appendChild(item);
+    requestAnimationFrame(() => item.classList.add('toast-visible'));
+
+    setTimeout(() => dismissToast(item, msg), TOAST_DURATION);
+}
+
+function dismissToast(item, msg) {
+    if (!item.isConnected) return;
+    item.classList.add('toast-hiding');
+    item.addEventListener('transitionend', () => {
+        item.remove();
+        const n = toastCounts.get(msg) || 1;
+        if (n <= 1) toastCounts.delete(msg);
+        else toastCounts.set(msg, n - 1);
+    }, { once: true });
+}
+
+toolbar.addEventListener('click', e => {
+    const btn = e.target.closest('[data-action]');
+    if (!btn) return;
+    e.stopPropagation();
+    if (btn.dataset.action === 'delete-line')  deleteLine(+btn.dataset.idx);
+    if (btn.dataset.action === 'delete-point') deletePoint(+btn.dataset.lidx, +btn.dataset.pidx);
+});
+
+document.getElementById('session-menu').addEventListener('click', e => {
+    const btn = e.target.closest('[data-action]');
+    if (!btn) return;
+    e.stopPropagation();
+    if (btn.dataset.action === 'export-session') exportSession(+btn.dataset.idx);
+    if (btn.dataset.action === 'remove-session') removeSession(+btn.dataset.idx);
+});
+
+document.getElementById('exif-card').addEventListener('click', e => {
+    if (e.target.closest('[data-action="exif-gps"]')) goToExifGps();
+});
+
 /* ============================================================
    SESSION MODEL
    Each session owns one image and all work done on it.
@@ -284,8 +336,7 @@ function updateLineManager() {
             `<span class="line-dot"></span>` +
             `<span class="line-label">L${lIdx + 1}</span>` +
             bearingLabel +
-            `<button class="btn-delete" title="Delete line"
-                onclick="event.stopPropagation(); deleteLine(${lIdx})">×</button>`;
+            `<button class="btn-delete" title="Delete line" data-action="delete-line" data-idx="${lIdx}">×</button>`;
         item.onclick = () => {
             state.activeLineIndex = lIdx;
             if (state.mode === 'map-point') state.mode = 'drag-line';
@@ -321,7 +372,7 @@ function updateLineManager() {
                 ptItem.innerHTML =
                     `<span class="pt-label">P${pIdx + 1}</span>` +
                     geoIcon +
-                    `<button class="btn-delete" onclick="event.stopPropagation(); deletePoint(${lIdx},${pIdx})">×</button>`;
+                    `<button class="btn-delete" data-action="delete-point" data-lidx="${lIdx}" data-pidx="${pIdx}">×</button>`;
                 ptItem.onclick = () => startMapPoint(lIdx, pIdx);
                 ptBox.appendChild(ptItem);
             });
@@ -367,7 +418,7 @@ window.startMapPoint = (lIdx, pIdx) => {
 };
 
 btnAddLine.onclick = () => {
-    if (!sess().imgElement) return alert("Drop an image first.");
+    if (!sess().imgElement) return showToast("Drop an image first.");
     const v  = sess().view;
     const cr = container.getBoundingClientRect();
     // Place the line at the horizontal centre of the currently visible viewport
@@ -443,18 +494,22 @@ function renderSessionMenu() {
         const item = document.createElement('div');
         item.className = 'session-item' + (idx === activeSessionIndex ? ' active-session' : '');
         item.style.setProperty('--sc', LINE_COLOURS[(sessionColourIndex(idx) * 2) % LINE_COLOURS.length]);
-        item.innerHTML =
-            `<span class="session-dot"></span>` +
-            `<span class="session-name">${s.name}</span>` +
-            (s.imgElement
-                ? `<button class="btn-session-export" title="Export session"
-                       onclick="event.stopPropagation(); exportSession(${idx})">
-                       <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                           <line x1="5" y1="1" x2="5" y2="8"/><polyline points="2,5.5 5,8.5 8,5.5"/>
-                       </svg></button>`
-                : '') +
-            `<button class="btn-delete" title="Remove image"
-                 onclick="event.stopPropagation(); removeSession(${idx})">×</button>`;
+        const dot = document.createElement('span');
+        dot.className = 'session-dot';
+        const nameSpan = document.createElement('span');
+        nameSpan.className = 'session-name';
+        nameSpan.textContent = s.name;
+        item.appendChild(dot);
+        item.appendChild(nameSpan);
+        if (s.imgElement) {
+            item.insertAdjacentHTML('beforeend',
+                `<button class="btn-session-export" title="Export session" data-action="export-session" data-idx="${idx}">
+                     <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                         <line x1="5" y1="1" x2="5" y2="8"/><polyline points="2,5.5 5,8.5 8,5.5"/>
+                     </svg></button>`);
+        }
+        item.insertAdjacentHTML('beforeend',
+            `<button class="btn-delete" title="Remove image" data-action="remove-session" data-idx="${idx}">×</button>`);
         item.onclick = () => {
             switchToSession(idx);
             menu.style.display = 'none';
@@ -626,14 +681,10 @@ function updateDropOverlay() {
             `<span class="drop-restored-title">Session restored</span>` +
             `<span class="drop-restore">reload <strong>${s.pendingImageFilename}</strong> to continue</span>` +
             `<button id="btn-browse" type="button">Browse</button>`;
-        document.getElementById('btn-browse').addEventListener('click',
-            () => document.getElementById('file-picker').click());
     } else {
         overlay.innerHTML =
             `Drop image here` +
             `<button id="btn-browse" type="button">Browse</button>`;
-        document.getElementById('btn-browse').addEventListener('click',
-            () => document.getElementById('file-picker').click());
     }
 }
 
@@ -682,7 +733,9 @@ container.addEventListener('drop', (e) => {
 });
 
 const filePicker = document.getElementById('file-picker');
-document.getElementById('btn-browse').addEventListener('click', () => filePicker.click());
+overlay.addEventListener('click', (e) => {
+    if (e.target.id === 'btn-browse') filePicker.click();
+});
 filePicker.addEventListener('change', () => {
     const file = filePicker.files[0];
     if (file) { loadImage(file); filePicker.value = ''; }
@@ -691,6 +744,10 @@ filePicker.addEventListener('change', () => {
 /* ============================================================
    EXIF CARD
    ============================================================ */
+function escHtml(str) {
+    return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
 function formatExifDate(val) {
     if (!val) return null;
     if (val instanceof Date) {
@@ -844,12 +901,12 @@ function renderExifCard() {
             <line x1="11.5" y1="8" x2="15" y2="8"/>
         </svg>`;
         const gpsBtn = (lat != null && lng != null)
-            ? `<button class="exif-gps-btn" onclick="goToExifGps()">${crosshair}Show on map</button>`
+            ? `<button class="exif-gps-btn" data-action="exif-gps">${crosshair}Show on map</button>`
             : '';
         card.innerHTML =
             '<div class="exif-card-header">Image metadata</div>' +
             '<table class="exif-table">' +
-            rows.map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join('') +
+            rows.map(([k, v]) => `<tr><td>${escHtml(k)}</td><td>${escHtml(v)}</td></tr>`).join('') +
             '</table>' + gpsBtn;
     } catch (err) {
         card.innerHTML = '<p class="exif-empty">Could not read metadata</p>';
@@ -967,6 +1024,7 @@ window.exportSession = (idx) => {
         { json_version: 1, exported: new Date().toISOString(), sessions: [sessionToData(s)] },
         `tracepoint_${s.name}_${ts}.json`
     );
+    showToast('Session exported.', 'success');
 };
 
 function exportAllSessions() {
@@ -979,6 +1037,7 @@ function exportAllSessions() {
           sessions: sessions.filter(s => s.imgElement).map(sessionToData) },
         `tracepoint_all_${ts}.json`
     );
+    showToast('All sessions exported.', 'success');
 }
 
 function importSessions(file) {
@@ -987,7 +1046,7 @@ function importSessions(file) {
         try {
             const data = JSON.parse(e.target.result);
             const list = data.sessions;
-            if (!Array.isArray(list) || list.length === 0) return alert('No sessions found in file.');
+            if (!Array.isArray(list) || list.length === 0) return showToast('No sessions found in file.');
 
             list.forEach(sd => {
                 // Reuse the current session slot if it's completely empty
@@ -1005,11 +1064,24 @@ function importSessions(file) {
                 if ('exif' in sd) s.exif = sd.exif;
                 s.imageFilename        = sd.imageFilename || null;
                 s.pendingImageFilename = sd.imageFilename || null;
-                s.lines = (sd.lines || []).map(l => ({
-                    x:      l.x,
-                    points: (l.points || []).map(pt => ({ y: pt.y, geo: pt.geo || null }))
-                }));
-                if (sd.view) Object.assign(s.view, sd.view);
+                s.lines = (sd.lines || [])
+                    .filter(l => l && typeof l.x === 'number')
+                    .map(l => ({
+                        x:      l.x,
+                        points: (l.points || [])
+                            .filter(pt => pt && typeof pt.y === 'number')
+                            .map(pt => ({ y: pt.y, geo: pt.geo || null }))
+                    }));
+                if (sd.view && typeof sd.view === 'object') {
+                    const { scale, tx, ty, rotation } = sd.view;
+                    const validScale = typeof scale === 'number' && isFinite(scale);
+                    if (validScale) {
+                        s.view.scale = scale;
+                        if (typeof tx === 'number' && isFinite(tx)) s.view.tx = tx;
+                        if (typeof ty === 'number' && isFinite(ty)) s.view.ty = ty;
+                    }
+                    if (typeof rotation === 'number' && isFinite(rotation)) s.view.rotation = rotation;
+                }
 
                 // Switch first — switchToSession saves the outgoing session's live map
                 // position; setting s.mapView before the call would get overwritten when
@@ -1029,8 +1101,9 @@ function importSessions(file) {
             });
 
             renderSessionMenu();
+            showToast(`${list.length} session${list.length > 1 ? 's' : ''} imported.`, 'success');
         } catch (err) {
-            alert('Invalid TracePoint session file.');
+            showToast('Invalid TracePoint session file.');
         }
     };
     reader.readAsText(file);
@@ -1163,7 +1236,12 @@ function render() {
         ctx.globalAlpha = 1;
     });
 
-    if (needsRerender) requestAnimationFrame(render);
+    if (needsRerender) {
+        if (pulseFrameId === null)
+            pulseFrameId = requestAnimationFrame(() => { pulseFrameId = null; render(); });
+    } else {
+        if (pulseFrameId !== null) { cancelAnimationFrame(pulseFrameId); pulseFrameId = null; }
+    }
 
     if (state.mode === 'horizon' && s.horizonPoints.length > 0) {
         const p1 = s.horizonPoints[0];
@@ -1364,8 +1442,8 @@ function recomputeIntersection() {
     }
     if (hits.length === 0) return;
 
-    const avgLat = hits.reduce((s, p) => s + p.lat, 0) / hits.length;
-    const avgLng = hits.reduce((s, p) => s + p.lng, 0) / hits.length;
+    const avgLat = hits.reduce((acc, p) => acc + p.lat, 0) / hits.length;
+    const avgLng = hits.reduce((acc, p) => acc + p.lng, 0) / hits.length;
 
     const icon = L.divIcon({
         className: '',
@@ -1410,6 +1488,7 @@ function destinationPoint(origin, bearingDegrees, distKm) {
 
 /* Infinite-line intersection (treating lat/lng as flat 2-D – fine for <10 km) */
 function intersectLines(p1, p2, p3, p4) {
+    if (!p1 || !p2 || !p3 || !p4) return null;
     const x1 = p1.lng, y1 = p1.lat;
     const x2 = p2.lng, y2 = p2.lat;
     const x3 = p3.lng, y3 = p3.lat;

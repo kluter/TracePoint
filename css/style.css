@@ -447,3 +447,29 @@ button:disabled     { opacity: 0.3; cursor: not-allowed; }
     transition: color 0.2s; text-align: center;
 }
 .drop-restore strong { color: #bbb; }
+
+/* ---- TOAST ---- */
+#toast-container {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    display: flex; flex-direction: column;
+    z-index: 9999; pointer-events: none;
+}
+.toast-item {
+    background: #3d0808;
+    color: #ff9999; border-top: 1px solid #ff3333;
+    padding: 6px 20px;
+    display: flex; align-items: center; justify-content: space-between;
+    font-size: 13px; gap: 12px;
+    transform: translateY(100%);
+    transition: transform 0.25s ease, opacity 0.4s ease;
+    pointer-events: all;
+}
+.toast-item.toast-visible { transform: translateY(0); }
+.toast-item.toast-hiding { opacity: 0; }
+.toast-item.toast-success {
+    background: #0d2e1a; color: #a0dbb8; border-top-color: #4caf7d;
+}
+.toast-close {
+    background: none; border: none; color: inherit;
+    font-size: 16px; cursor: pointer; padding: 0 4px; flex-shrink: 0;
+}
