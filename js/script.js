@@ -443,18 +443,24 @@ function renderSessionMenu() {
         const item = document.createElement('div');
         item.className = 'session-item' + (idx === activeSessionIndex ? ' active-session' : '');
         item.style.setProperty('--sc', LINE_COLOURS[(sessionColourIndex(idx) * 2) % LINE_COLOURS.length]);
-        item.innerHTML =
-            `<span class="session-dot"></span>` +
-            `<span class="session-name">${s.name}</span>` +
-            (s.imgElement
-                ? `<button class="btn-session-export" title="Export session"
-                       onclick="event.stopPropagation(); exportSession(${idx})">
-                       <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                           <line x1="5" y1="1" x2="5" y2="8"/><polyline points="2,5.5 5,8.5 8,5.5"/>
-                       </svg></button>`
-                : '') +
+        const dot = document.createElement('span');
+        dot.className = 'session-dot';
+        const nameSpan = document.createElement('span');
+        nameSpan.className = 'session-name';
+        nameSpan.textContent = s.name;
+        item.appendChild(dot);
+        item.appendChild(nameSpan);
+        if (s.imgElement) {
+            item.insertAdjacentHTML('beforeend',
+                `<button class="btn-session-export" title="Export session"
+                     onclick="event.stopPropagation(); exportSession(${idx})">
+                     <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                         <line x1="5" y1="1" x2="5" y2="8"/><polyline points="2,5.5 5,8.5 8,5.5"/>
+                     </svg></button>`);
+        }
+        item.insertAdjacentHTML('beforeend',
             `<button class="btn-delete" title="Remove image"
-                 onclick="event.stopPropagation(); removeSession(${idx})">×</button>`;
+                 onclick="event.stopPropagation(); removeSession(${idx})">×</button>`);
         item.onclick = () => {
             switchToSession(idx);
             menu.style.display = 'none';
@@ -626,14 +632,10 @@ function updateDropOverlay() {
             `<span class="drop-restored-title">Session restored</span>` +
             `<span class="drop-restore">reload <strong>${s.pendingImageFilename}</strong> to continue</span>` +
             `<button id="btn-browse" type="button">Browse</button>`;
-        document.getElementById('btn-browse').addEventListener('click',
-            () => document.getElementById('file-picker').click());
     } else {
         overlay.innerHTML =
             `Drop image here` +
             `<button id="btn-browse" type="button">Browse</button>`;
-        document.getElementById('btn-browse').addEventListener('click',
-            () => document.getElementById('file-picker').click());
     }
 }
 
@@ -682,7 +684,9 @@ container.addEventListener('drop', (e) => {
 });
 
 const filePicker = document.getElementById('file-picker');
-document.getElementById('btn-browse').addEventListener('click', () => filePicker.click());
+overlay.addEventListener('click', (e) => {
+    if (e.target.id === 'btn-browse') filePicker.click();
+});
 filePicker.addEventListener('change', () => {
     const file = filePicker.files[0];
     if (file) { loadImage(file); filePicker.value = ''; }
@@ -691,6 +695,10 @@ filePicker.addEventListener('change', () => {
 /* ============================================================
    EXIF CARD
    ============================================================ */
+function escHtml(str) {
+    return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
 function formatExifDate(val) {
     if (!val) return null;
     if (val instanceof Date) {
@@ -849,7 +857,7 @@ function renderExifCard() {
         card.innerHTML =
             '<div class="exif-card-header">Image metadata</div>' +
             '<table class="exif-table">' +
-            rows.map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join('') +
+            rows.map(([k, v]) => `<tr><td>${escHtml(k)}</td><td>${escHtml(v)}</td></tr>`).join('') +
             '</table>' + gpsBtn;
     } catch (err) {
         card.innerHTML = '<p class="exif-empty">Could not read metadata</p>';
@@ -1005,10 +1013,14 @@ function importSessions(file) {
                 if ('exif' in sd) s.exif = sd.exif;
                 s.imageFilename        = sd.imageFilename || null;
                 s.pendingImageFilename = sd.imageFilename || null;
-                s.lines = (sd.lines || []).map(l => ({
-                    x:      l.x,
-                    points: (l.points || []).map(pt => ({ y: pt.y, geo: pt.geo || null }))
-                }));
+                s.lines = (sd.lines || [])
+                    .filter(l => l && typeof l.x === 'number')
+                    .map(l => ({
+                        x:      l.x,
+                        points: (l.points || [])
+                            .filter(pt => pt && typeof pt.y === 'number')
+                            .map(pt => ({ y: pt.y, geo: pt.geo || null }))
+                    }));
                 if (sd.view) Object.assign(s.view, sd.view);
 
                 // Switch first — switchToSession saves the outgoing session's live map
@@ -1364,8 +1376,8 @@ function recomputeIntersection() {
     }
     if (hits.length === 0) return;
 
-    const avgLat = hits.reduce((s, p) => s + p.lat, 0) / hits.length;
-    const avgLng = hits.reduce((s, p) => s + p.lng, 0) / hits.length;
+    const avgLat = hits.reduce((acc, p) => acc + p.lat, 0) / hits.length;
+    const avgLng = hits.reduce((acc, p) => acc + p.lng, 0) / hits.length;
 
     const icon = L.divIcon({
         className: '',
