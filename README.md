@@ -104,6 +104,7 @@ python3 -m http.server
 
 ## Changelog
 
+- **v1.4.1:** Security hardening, import validation, toast notifications.
 - **v1.4.0:** EXIF metadata viewer with GPS map marker.
 - **v1.3.0:** Session export / import, browse button, bearing display.
 - **v1.2.1:** Session naming, colour and map view fixes.
