@@ -88,6 +88,7 @@ The more lines you add, the more rays are generated and the more robustly the in
 | `E` | New line |
 | `R` | Delete active line |
 | `F` | Map next unmapped point of active line |
+| `W` | Toggle level tool / reset rotation |
 | `X` | Toggle help card |
 | `Tab` | Toggle Drag Line / Add Point mode |
 | `1` – `5` | Jump to line 1–5 |
