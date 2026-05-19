@@ -1184,7 +1184,6 @@ function importSessions(file) {
 
                 s.lines.forEach((_, lIdx) => rebuildMapForLine(lIdx));
                 recomputeIntersection();
-                if (sd.mapView) map.setZoom(sd.mapView.zoom);
                 updateUI();
             });
 
@@ -1220,7 +1219,8 @@ container.addEventListener('wheel', (e) => {
    ============================================================ */
 let spaceDown = false;
 document.addEventListener('keydown', (e) => {
-    if (e.code === 'Space' && document.activeElement === document.body) {
+    const tag = e.target.tagName;
+    if (e.code === 'Space' && tag !== 'INPUT' && tag !== 'TEXTAREA' && tag !== 'SELECT') {
         spaceDown = true; e.preventDefault();
     }
 });
