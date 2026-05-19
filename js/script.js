@@ -10,6 +10,7 @@ const btnAddLine    = document.getElementById("btn-add-line");
 const btnModeToggle = document.getElementById("btn-mode-toggle");
 const btnHorizon    = document.getElementById("btn-horizon");
 const toolbar       = document.getElementById("toolbar");
+const lineBar       = document.getElementById("line-bar");
 
 let pulseFrameId = null;
 const toastCounts = new Map();
@@ -43,7 +44,7 @@ function dismissToast(item, msg) {
     }, { once: true });
 }
 
-toolbar.addEventListener('click', e => {
+lineBar.addEventListener('click', e => {
     const btn = e.target.closest('[data-action]');
     if (!btn) return;
     e.stopPropagation();
@@ -79,7 +80,7 @@ function createSession(name) {
         view:             { scale: 1, tx: 0, ty: 0, rotation: 0 },
         mapView:          null,
         layerGroup,
-        mapObjects:       { rays: [], geoMarkers: [], intersectionMarker: null, intersectionLatLng: null },
+        mapObjects:       { rays: [], geoMarkers: [], intersectionMarker: null, intersectionLatLng: null, ellipsePolygon: null },
         exifGpsMarker:    null
     };
 }
@@ -310,7 +311,7 @@ function updateUI() {
 }
 
 function updateLineManager() {
-    toolbar.querySelectorAll('.line-item, .point-manager, .map-hint').forEach(el => el.remove());
+    lineBar.querySelectorAll('.line-item, .map-hint').forEach(el => el.remove());
 
     sess().lines.forEach((line, lIdx) => {
         const colour = lineColour(lIdx, activeSessionIndex);
@@ -383,7 +384,7 @@ function updateLineManager() {
             item.appendChild(ptBox);
         }
 
-        toolbar.appendChild(item);
+        lineBar.insertBefore(item, document.getElementById('session-manager-wrap'));
     });
 
     if (state.mode === 'map-point' && state.mapPointTarget) {
@@ -393,7 +394,7 @@ function updateLineManager() {
         hint.className = 'map-hint';
         hint.style.cssText = `color:${c}; border-color:${c}55; background:${c}18;`;
         hint.textContent = `Click map → L${lineIndex + 1} P${pointIndex + 1}`;
-        toolbar.appendChild(hint);
+        lineBar.insertBefore(hint, document.getElementById('session-manager-wrap'));
     }
 }
 
@@ -433,6 +434,7 @@ window.startMapPoint = (lIdx, pIdx) => {
 
 btnAddLine.onclick = () => {
     if (!sess().imgElement) return showToast("Drop an image first.");
+    if (sess().lines.length >= 5) return showToast("Maximum of 5 lines per image.");
     const v  = sess().view;
     const cr = container.getBoundingClientRect();
     // Place the line at the horizontal centre of the currently visible viewport
@@ -468,8 +470,13 @@ btnHorizon.onclick = () => {
     }
 };
 
-/* ESC to deselect / cancel */
+/* Keyboard shortcuts */
 document.addEventListener('keydown', (e) => {
+    // Ignore when typing in an actual text input
+    const tag = e.target.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
+    // Escape — cancel / deselect
     if (e.key === 'Escape') {
         if (state.mode === 'map-point') {
             state.mode = 'drag-line';
@@ -482,6 +489,66 @@ document.addEventListener('keydown', (e) => {
             state.mode = 'idle';
         }
         render(); updateUI();
+        return;
+    }
+
+    // F — activate map-point mode for the next unmapped point of the active line
+    if (e.key === 'f' || e.key === 'F') {
+        e.preventDefault();
+        const s = sess();
+        if (state.activeLineIndex === -1 || !s.lines[state.activeLineIndex]) return;
+        const line = s.lines[state.activeLineIndex];
+        const unmapped = line.points.findIndex(p => !p.geo);
+        if (unmapped !== -1) {
+            state.mode = 'map-point';
+            state.mapPointTarget = { lineIndex: state.activeLineIndex, pointIndex: unmapped };
+            render(); updateUI();
+        }
+        return;
+    }
+
+    // X — toggle help card
+    if (e.key === 'x' || e.key === 'X') {
+        e.preventDefault();
+        const card = document.getElementById('help-card');
+        if (card.style.display === 'none') showHelp(false); else hideHelp();
+        return;
+    }
+
+    // E — new line
+    if (e.key === 'e' || e.key === 'E') {
+        e.preventDefault();
+        btnAddLine.click();
+        return;
+    }
+
+    // R — remove active line
+    if (e.key === 'r' || e.key === 'R') {
+        e.preventDefault();
+        if (state.activeLineIndex !== -1) deleteLine(state.activeLineIndex);
+        return;
+    }
+
+    // Tab — toggle Drag Line / Add Point
+    if (e.key === 'Tab') {
+        e.preventDefault();
+        if (sess().imgElement && sess().lines.length > 0 &&
+            (state.mode === 'drag-line' || state.mode === 'add-point')) {
+            btnModeToggle.click();
+        }
+        return;
+    }
+
+    // 1–5 — jump to line
+    const lineNum = parseInt(e.key);
+    if (lineNum >= 1 && lineNum <= 5) {
+        e.preventDefault();
+        const idx = lineNum - 1;
+        if (idx < sess().lines.length) {
+            state.activeLineIndex = idx;
+            if (state.mode === 'map-point') { state.mode = 'drag-line'; state.mapPointTarget = null; }
+            render(); updateUI();
+        }
     }
 });
 
@@ -1444,6 +1511,10 @@ function recomputeIntersection() {
         mo.intersectionMarker = null;
         mo.intersectionLatLng = null;
     }
+    if (mo.ellipsePolygon) {
+        s.layerGroup.removeLayer(mo.ellipsePolygon);
+        mo.ellipsePolygon = null;
+    }
 
     const rays = [];
     sess().lines.forEach((line) => {
@@ -1479,7 +1550,37 @@ function recomputeIntersection() {
         .addTo(sess().layerGroup);
 
     mo.intersectionMarker.openPopup();
-    const allPointsMapped = sess().lines.every(l => l.points.every(p => p.geo));
+
+    if (hits.length >= 3) {
+        const center = { lat: avgLat, lng: avgLng };
+        const n = hits.length;
+        const diffs = hits.map(p => ({ dx: p.lng - center.lng, dy: p.lat - center.lat }));
+        const Cxx = diffs.reduce((acc, d) => acc + d.dx * d.dx, 0) / n;
+        const Cyy = diffs.reduce((acc, d) => acc + d.dy * d.dy, 0) / n;
+        const Cxy = diffs.reduce((acc, d) => acc + d.dx * d.dy, 0) / n;
+        const trace = Cxx + Cyy;
+        const disc  = Math.sqrt(Math.max(0, (trace / 2) ** 2 - (Cxx * Cyy - Cxy * Cxy)));
+        const l1 = trace / 2 + disc;
+        const l2 = trace / 2 - disc;
+        const angle = Math.abs(Cxy) < 1e-12 ? 0 : Math.atan2(l1 - Cxx, Cxy);
+        const a = Math.sqrt(Math.max(0, l1)) * 2;
+        const b = Math.sqrt(Math.max(0, l2)) * 2;
+        const steps = 64;
+        const pts = [];
+        for (let i = 0; i < steps; i++) {
+            const t  = (2 * Math.PI * i) / steps;
+            const rx = a * Math.cos(t) * Math.cos(angle) - b * Math.sin(t) * Math.sin(angle);
+            const ry = a * Math.cos(t) * Math.sin(angle) + b * Math.sin(t) * Math.cos(angle);
+            pts.push([center.lat + ry, center.lng + rx]);
+        }
+        mo.ellipsePolygon = L.polygon(pts, {
+            color: '#ffdc32', weight: 1.5,
+            fillColor: '#ffdc32', fillOpacity: 0.08,
+            dashArray: '4 4'
+        }).addTo(sess().layerGroup);
+    }
+
+    const allPointsMapped = sess().lines.every(l => l.points.length >= 2 && l.points.every(p => p.geo));
     if (allPointsMapped) map.setView([avgLat, avgLng], Math.max(map.getZoom(), 13));
 }
 

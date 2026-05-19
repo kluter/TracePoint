@@ -12,11 +12,11 @@
 
 ## The Method
 
-Draw a vertical line across a photograph and it passes through objects at different depths - foreground, midground, horizon. Each of those objects can be found on a map, and together they define a geographic bearing: a **ray**.
+Draw a vertical line across a photograph and it passes through objects at different depths: foreground, midground, horizon. Each of those objects can be found on a map, and together they define a geographic bearing: a **ray**.
 
 Repeat for a second line and you get a second ray. **Where the rays cross is where the photographer was standing.**
 
-The more lines you add, the more rays are generated and the more robustly the intersection is averaged. This is a photographic application of the surveying technique known as **[Resection by Intersection](https://en.wikipedia.org/wiki/Position_resection_and_intersection)** — the same principle used to triangulate a position from known landmarks. `TracePoint` turns that manual, tab-switching workflow into a single focused tool.
+The more lines you add, the more rays are generated and the more robustly the intersection is averaged. This is a photographic application of the surveying technique known as **[Resection by Intersection](https://en.wikipedia.org/wiki/Position_resection_and_intersection)**, the same principle used to triangulate a position from known landmarks. `TracePoint` turns that manual, tab-switching workflow into a single focused tool.
 
 ---
 
@@ -26,11 +26,13 @@ The more lines you add, the more rays are generated and the more robustly the in
 - Drop any image to load it, or click **Browse**
 - **Multi-image session manager:** all sessions visible on the map simultaneously, each with its own intersection result
 - **Bearing display:** each line shows its outward bearing once an intersection is found
-- **Session export and import:** save and restore lines, geo points, bearing and map view as JSON
-- **EXIF metadata viewer:** camera, lens, capture settings, GPS, altitude and camera direction read from the image. GPS can be placed on the map as a reference marker
+- **Confidence ellipse:** with 3 or more lines (up to 5 per image), a dashed ellipse around the intersection visualises the spread of ray crossings. A tighter ellipse means higher confidence. Computed via [covariance matrix eigendecomposition](https://en.wikipedia.org/wiki/Eigenvalues_and_eigenvectors)
+- **Session export and import:** save and restore lines, geo points, bearings, and map view as JSON
+- **EXIF metadata viewer:** camera, lens, capture settings, GPS, altitude, and camera direction read from the image. GPS can be placed on the map as a reference marker
 - Built-in Potsdam demo with step-by-step guide
 - Horizon correction for tilted images
 - Map layer switcher: Esri Satellite, OpenStreetMap, OSM Humanitarian, Esri Topo, Esri Streets
+- Full keyboard shortcut support
 - Fully client-side: no server, no uploads, no tracking
 
 ---
@@ -40,14 +42,14 @@ The more lines you add, the more rays are generated and the more robustly the in
 > Start with the **☰** menu on the image panel and select **Demo — Potsdam** for a guided walkthrough. If the photo is tilted, use the **Level** button first to compensate before adding lines.
 
 1. **Load a photo:** Drop an image onto the left panel, or click **Browse**. To work on multiple images at once, open the **☰** image menu and click **+ Add image**.
-2. **Add a line:** Click **+ New Line** and drag it over a recognisable object you can also find on the map: a building corner, tower, road junction.
-3. **Mark points:** Switch to **Add Point** mode and click on the line twice to place exactly two reference points.
-4. **Place points on the map:** Click the **🌐 P1** pill next to each point, then click its location on the map. The tool advances automatically.
-5. **Read the result:** Once two lines each have two geo points, rays appear and the intersection is calculated. The pulsing yellow marker shows the estimated origin.
+2. **Add a line:** Click **+ New Line** (or press `E`) and drag it over a recognisable object you can also find on the map: a building corner, tower, road junction.
+3. **Mark points:** Switch to **Add Point** mode (or press `Tab`) and click on the line twice to place exactly two reference points.
+4. **Place points on the map:** Click the **🌐 P1** pill next to each point (or press `F` to jump straight to the next unmapped point), then click its real-world location on the map.
+5. **Read the result:** Once two lines each have two geo points, rays appear and the intersection is calculated. The pulsing yellow marker shows the estimated camera origin. With 3 or more lines, a confidence ellipse appears around the intersection: the tighter the ellipse, the more consistent your bearings.
 6. **Add more images:** Use the **☰** image menu to add further sessions. Each session shows its own rays and intersection on the map simultaneously.
 7. **Save your work:** Click the **↓** button on any session row to export it as JSON, or use **↓ Export all sessions** to save everything at once. To restore, click **↑ Import session** and reload the image when prompted.
 
-> **Tips:** Use objects spread across different depths for a more accurate bearing. Three or more lines significantly improve accuracy when the first two rays are nearly parallel. Press **ESC** to deselect or cancel at any time.
+> **Tips:** Use objects spread across different depths for a more accurate bearing. Press `Esc` to deselect or cancel at any time. Press `X` to toggle the help card from anywhere on the page.
 
 ![TracePoint Result](assets/Potsdam_Result.jpg)
 
@@ -55,8 +57,7 @@ The more lines you add, the more rays are generated and the more robustly the in
 
 ## Controls
 
-<details>
-<summary>Click to expand the full controls reference</summary>
+### Mouse & UI
 
 | Action | How |
 |---|---|
@@ -66,27 +67,39 @@ The more lines you add, the more rays are generated and the more robustly the in
 | Reset level | Click Level button again when correction is active |
 | Add a line | + New Line button |
 | Drag a line | Click and drag the line |
-| Deselect / cancel | Click blank canvas, or ESC |
+| Deselect / cancel | Click blank canvas, or `Esc` |
 | Add a point | Add Point mode, click on the line |
 | Place point on map | Click the map pill, then click the map |
-| Delete a line or point | × button in the toolbar |
-| Switch map layer | ☰ button, top-right of map |
-| Manage image sessions | ☰ button, top-right of image panel |
+| Delete a line or point | × button in the line bar |
+| Switch map layer | ☰ button, top-right of map panel |
+| Manage image sessions | ☰ button, right of line bar |
 | Browse for image | Click the drop zone |
 | Export session | ↓ button on session row in ☰ menu |
 | Export all sessions | ↓ Export all sessions in ☰ menu |
 | Import session | ↑ Import session in ☰ menu |
 | Open help guide | ? button, top-right of map panel |
-| View image metadata | `</>` button, top-left of image panel |
-| Place EXIF GPS on map | Show on map button inside the metadata card |
+| View image metadata | `</>` button, left of line bar |
+| Place EXIF GPS on map | Show on map inside the metadata card |
 
-</details>
+### Keyboard shortcuts
+
+| Key | Action |
+|---|---|
+| `E` | New line |
+| `R` | Delete active line |
+| `F` | Map next unmapped point of active line |
+| `X` | Toggle help card |
+| `Tab` | Toggle Drag Line / Add Point mode |
+| `1` – `5` | Jump to line 1–5 |
+| `Esc` | Cancel / deselect |
 
 ---
 
 ## Technical Notes
 
-Rays are computed from the bearing between two geo-referenced points. Intersection uses flat-plane geometry on lat/lon coordinates — accurate to within a few metres for scenes under ~10 km, which covers virtually all real-world photography. Each ray extends 50 km in both directions, long enough to contain any realistic intersection while keeping the map readable.
+Rays are computed from the bearing between two geo-referenced points. Intersection uses flat-plane geometry on lat/lon coordinates. Accurate to within a few metres for scenes under ~10 km, which covers virtually all real-world photography. Each ray extends 50 km in both directions, long enough to contain any realistic intersection while keeping the map readable.
+
+When three or more lines are used, every pair of rays produces a crossing point. Those crossings form a small cloud around the estimated origin. The confidence ellipse is fitted to that cloud using [eigenvalue decomposition](https://en.wikipedia.org/wiki/Eigenvalues_and_eigenvectors). The ellipse stretches in the direction the crossings are most scattered and stays narrow where they agree. A tight ellipse means the lines converge cleanly; a wide one means at least one bearing is off.
 
 No data leaves your machine. Map imagery is served by public tile servers (Esri, OpenStreetMap). Dependencies are [Leaflet](https://leafletjs.com/) for maps and [exifr](https://github.com/MikeKovarik/exifr) by MikeKovarik for metadata parsing. Everything else is vanilla HTML, CSS, and JavaScript.
 
@@ -104,13 +117,26 @@ python3 -m http.server
 
 ## Changelog
 
-- **v1.4.1:** Security hardening, import validation, toast notifications.
-- **v1.4.0:** EXIF metadata viewer with GPS map marker.
-- **v1.3.0:** Session export / import, browse button, bearing display.
-- **v1.2.1:** Session naming, colour and map view fixes.
-- **v1.2.0:** Multi-image session manager.
-- **v1.1.0:** Horizon correction tool.
-- **v1.0.0:** Initial release.
+| Version | Changes |
+|---------|---------|
+| v1.5.0 | Keyboard shortcuts (`E` / `R` / `F` / `X` / `Tab` / `1–5` / `Esc`), global shortcut focus fix, confidence ellipse for 3+ lines, 5-line maximum per image. |
+| v1.4.3 | Line bar redesign: lines and points move to a dedicated bar below the toolbar. |
+| v1.4.2 | UX bug fixes: orphaned map rays on line delete, map-point mode not clearing on point delete, auto-zoom false trigger on empty lines. |
+
+<details>
+<summary>Older releases</summary>
+
+| Version | Changes |
+|---------|---------|
+| v1.4.1 | Security hardening, JSON import validation, toast notification system. |
+| v1.4.0 | EXIF metadata viewer with GPS map marker. |
+| v1.3.0 | Session export / import, browse button, bearing display. |
+| v1.2.1 | Session naming, colour and map view fixes. |
+| v1.2.0 | Multi-image session manager. |
+| v1.1.0 | Horizon correction tool. |
+| v1.0.0 | Initial release. |
+
+</details>
 
 ---
 
