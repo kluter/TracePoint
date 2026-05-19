@@ -119,9 +119,9 @@ python3 -m http.server
 
 | Version | Changes |
 |---------|---------|
-| v1.5.0 | Keyboard shortcuts (`E` / `R` / `F` / `X` / `Tab` / `1–5` / `Esc`), global shortcut focus fix, confidence ellipse for 3+ lines, 5-line maximum per image. |
+| v1.5.0 | Keyboard shortcuts, confidence ellipse for 3+ lines, 5-line maximum per image. |
 | v1.4.3 | Line bar redesign: lines and points move to a dedicated bar below the toolbar. |
-| v1.4.2 | UX bug fixes: orphaned map rays on line delete, map-point mode not clearing on point delete, auto-zoom false trigger on empty lines. |
+| v1.4.2 | UX bug fixes: orphaned map rays, map-point mode not clearing, auto-zoom false trigger. |
 
 <details>
 <summary>Older releases</summary>
