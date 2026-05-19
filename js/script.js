@@ -507,6 +507,13 @@ document.addEventListener('keydown', (e) => {
         return;
     }
 
+    // W — level tool (toggle / reset)
+    if (e.key === 'w' || e.key === 'W') {
+        e.preventDefault();
+        btnHorizon.click();
+        return;
+    }
+
     // X — toggle help card
     if (e.key === 'x' || e.key === 'X') {
         e.preventDefault();
