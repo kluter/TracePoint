@@ -693,7 +693,7 @@ function updateDropOverlay() {
     if (s.pendingImageFilename) {
         overlay.innerHTML =
             `<span class="drop-restored-title">Session restored</span>` +
-            `<span class="drop-restore">reload <strong>${s.pendingImageFilename}</strong> to continue</span>` +
+            `<span class="drop-restore">reload <strong>${escHtml(s.pendingImageFilename)}</strong> to continue</span>` +
             `<button id="btn-browse" type="button">Browse</button>`;
     } else {
         overlay.innerHTML =
@@ -1068,9 +1068,9 @@ function importSessions(file) {
                 let s;
                 if (!cur.imgElement && cur.lines.length === 0) {
                     s = cur;
-                    s.name = sd.name;
+                    s.name = typeof sd.name === 'string' ? sd.name : 'Imported session';
                 } else {
-                    s = createSession(sd.name);
+                    s = createSession(typeof sd.name === 'string' ? sd.name : 'Imported session');
                     sessions.push(s);
                 }
 
@@ -1084,7 +1084,11 @@ function importSessions(file) {
                         x:      l.x,
                         points: (l.points || [])
                             .filter(pt => pt && typeof pt.y === 'number')
-                            .map(pt => ({ y: pt.y, geo: pt.geo || null }))
+                            .map(pt => ({
+                                y:   pt.y,
+                                geo: (pt.geo && typeof pt.geo.lat === 'number' && typeof pt.geo.lng === 'number')
+                                     ? pt.geo : null
+                            }))
                     }));
                 if (sd.view && typeof sd.view === 'object') {
                     const { scale, tx, ty, rotation } = sd.view;
@@ -1103,7 +1107,10 @@ function importSessions(file) {
                 switchToSession(sessions.indexOf(s));
 
                 // Restore imported mapView after the switch so it can't be clobbered
-                if (sd.mapView) {
+                if (sd.mapView &&
+                    typeof sd.mapView.center?.lat === 'number' && isFinite(sd.mapView.center.lat) &&
+                    typeof sd.mapView.center?.lng === 'number' && isFinite(sd.mapView.center.lng) &&
+                    typeof sd.mapView.zoom === 'number' && isFinite(sd.mapView.zoom)) {
                     s.mapView = sd.mapView;
                     map.setView(sd.mapView.center, sd.mapView.zoom);
                 }
@@ -1195,6 +1202,7 @@ function render() {
     ctx.restore();
 
     let needsRerender = false;
+    ctx.font = 'bold 11px monospace';
 
     s.lines.forEach((line, idx) => {
         const active    = idx === state.activeLineIndex;
@@ -1241,7 +1249,6 @@ function render() {
             ctx.stroke();
 
             ctx.globalAlpha = 1;
-            ctx.font        = 'bold 11px monospace';
             ctx.fillStyle   = '#fff';
             ctx.fillText(`P${pIdx + 1}`, line.x + 10, pt.y + 4);
             ctx.globalAlpha = alpha;
