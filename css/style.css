@@ -70,23 +70,27 @@ button:disabled     { opacity: 0.3; cursor: not-allowed; }
     display: flex; align-items: center; gap: 6px;
     background: #1a1a1a; padding: 4px 10px;
     border-radius: 4px; font-size: 11px;
-    cursor: pointer; border: 1px solid #2a2a2a;
+    border: 1px solid #2a2a2a;
     transition: border-color 0.15s;
 }
 .line-item:hover    { background: #222; }
 .line-item.active-line { border-color: var(--lc, #00aaff); background: #181818; }
+.line-header {
+    display: flex; align-items: center; gap: 6px;
+    cursor: pointer;
+}
 
 .line-dot {
     width: 8px; height: 8px; border-radius: 50%;
     background: var(--lc, #00aaff); flex-shrink: 0;
 }
 .line-label { color: #aaa; }
+.line-item.active-line .line-label { color: var(--lc); }
 .line-bearing { color: #555; font-size: 10px; font-variant-numeric: tabular-nums; margin-left: 2px; }
 
 /* ---- POINT MANAGER ---- */
 .point-manager {
     display: flex; gap: 4px;
-    padding-left: 10px; border-left: 1px solid #2a2a2a;
     flex-wrap: nowrap;
 }
 .point-item {
@@ -96,15 +100,16 @@ button:disabled     { opacity: 0.3; cursor: not-allowed; }
     cursor: pointer; transition: background 0.15s, border-color 0.15s;
 }
 .point-item:hover         { background: #222; border-color: #444; }
-.point-item.has-geo       { border-color: #004d33; background: #0d1f18; }
-.point-item.has-geo:hover { background: #122b20; border-color: #006644; }
+.point-item.has-geo       { border-color: var(--lc); background: #0d1a14; }
+.point-item.has-geo:hover { background: #141f18; border-color: var(--lc); }
 
 .pt-geo-icon {
     width: 12px; height: 12px; flex-shrink: 0;
     color: #556;
 }
 .point-item:hover .pt-geo-icon  { color: #aaa; }
-.point-item.has-geo .pt-geo-icon { color: #00cc88; }
+.point-item.has-geo .pt-geo-icon { color: var(--lc); }
+.point-item.has-geo .pt-label { color: var(--lc); }
 .pt-geo-icon.geo-active {
     animation: pulse-btn 1s infinite;
 }

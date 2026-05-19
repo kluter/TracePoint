@@ -332,17 +332,20 @@ function updateLineManager() {
         const item = document.createElement('div');
         item.className = 'line-item' + (active ? ' active-line' : '');
         item.style.setProperty('--lc', colour);
-        item.innerHTML =
+
+        const header = document.createElement('div');
+        header.className = 'line-header';
+        header.innerHTML =
             `<span class="line-dot"></span>` +
             `<span class="line-label">L${lIdx + 1}</span>` +
             bearingLabel +
             `<button class="btn-delete" title="Delete line" data-action="delete-line" data-idx="${lIdx}">×</button>`;
-        item.onclick = () => {
+        header.onclick = () => {
             state.activeLineIndex = lIdx;
             if (state.mode === 'map-point') state.mode = 'drag-line';
             render(); updateUI();
         };
-        toolbar.appendChild(item);
+        item.appendChild(header);
 
         if (active && line.points.length > 0) {
             const ptBox = document.createElement('div');
@@ -377,8 +380,10 @@ function updateLineManager() {
                 ptBox.appendChild(ptItem);
             });
 
-            toolbar.appendChild(ptBox);
+            item.appendChild(ptBox);
         }
+
+        toolbar.appendChild(item);
     });
 
     if (state.mode === 'map-point' && state.mapPointTarget) {
@@ -398,14 +403,23 @@ function updateLineManager() {
 window.deleteLine = (idx) => {
     clearMapObjectsForLine(idx);
     sess().lines.splice(idx, 1);
+    const mo = sess().mapObjects;
+    mo.rays.splice(idx, 1);
+    mo.geoMarkers.splice(idx, 1);
     state.activeLineIndex = Math.min(state.activeLineIndex, sess().lines.length - 1);
     if (sess().lines.length === 0) { state.activeLineIndex = -1; state.mode = 'idle'; }
+    sess().lines.forEach((_, lIdx) => rebuildMapForLine(lIdx));
     recomputeIntersection();
     render(); updateUI();
 };
 
 window.deletePoint = (lIdx, pIdx) => {
     sess().lines[lIdx].points.splice(pIdx, 1);
+    if (state.mode === 'map-point' && state.mapPointTarget &&
+        state.mapPointTarget.lineIndex === lIdx) {
+        state.mode = 'add-point';
+        state.mapPointTarget = null;
+    }
     rebuildMapForLine(lIdx);
     recomputeIntersection();
     render(); updateUI();
@@ -1458,7 +1472,8 @@ function recomputeIntersection() {
         .addTo(sess().layerGroup);
 
     mo.intersectionMarker.openPopup();
-    map.setView([avgLat, avgLng], Math.max(map.getZoom(), 13));
+    const allPointsMapped = sess().lines.every(l => l.points.every(p => p.geo));
+    if (allPointsMapped) map.setView([avgLat, avgLng], Math.max(map.getZoom(), 13));
 }
 
 /* ============================================================
