@@ -43,15 +43,7 @@
                     </a>
                 </div>
             </div>
-            <div id="image-container">
-                <canvas id="image-canvas"></canvas>
-                <div id="drop-overlay">
-                    Drop image here
-                    <button id="btn-browse" type="button">Browse</button>
-                </div>
-                <input type="file" id="file-picker" accept="image/*" style="display:none">
-                <input type="file" id="json-picker" accept=".json" style="display:none">
-                <div id="zoom-hint">scroll to zoom · space+drag or middle-drag to pan</div>
+            <div id="line-bar">
                 <div class="exif-wrap" id="exif-wrap" style="display:none">
                     <button class="exif-burger" id="btn-exif" title="Image metadata">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
@@ -71,6 +63,16 @@
                     </button>
                     <div class="session-menu" id="session-menu" style="display:none"></div>
                 </div>
+            </div>
+            <div id="image-container">
+                <canvas id="image-canvas"></canvas>
+                <div id="drop-overlay">
+                    Drop image here
+                    <button id="btn-browse" type="button">Browse</button>
+                </div>
+                <input type="file" id="file-picker" accept="image/*" style="display:none">
+                <input type="file" id="json-picker" accept=".json" style="display:none">
+                <div id="zoom-hint">scroll to zoom · space+drag or middle-drag to pan</div>
             </div>
         </div>
 
@@ -92,8 +94,20 @@
                     <li><b>Level the image</b> (optional) — use the <span class="help-key">Level</span> tool to correct a tilted horizon before adding lines. Makes alignment more accurate</li>
                     <li><b>Add a line</b> — click <span class="help-key">+ New Line</span>, then drag it to align with a direction visible in the scene (road, shadow, building edge pointing away from the subject)</li>
                     <li><b>Place 2 reference points</b> — switch to <span class="help-key">Add Point</span> mode, click the line twice. Then click each point's <span class="help-key">🌐 P1</span> pill and mark its real-world location on the map</li>
-                    <li><b>Repeat</b> for a second line — once two rays are drawn their intersection marks the estimated camera position</li>
+                    <li><b>Repeat</b> for a second line — once two rays are drawn their intersection marks the estimated camera position. Add a third or more for a confidence ellipse around the result</li>
                 </ol>
+                <div class="help-shortcuts">
+                    <div class="help-shortcuts-title">Keyboard shortcuts</div>
+                    <div class="help-shortcuts-grid">
+                        <span class="help-key">E</span><span>New line</span>
+                        <span class="help-key">R</span><span>Delete active line</span>
+                        <span class="help-key">F</span><span>Map next unmapped point</span>
+                        <span class="help-key">X</span><span>Toggle this help card</span>
+                        <span class="help-key">Tab</span><span>Toggle Drag / Add Point mode</span>
+                        <span class="help-key">1–5</span><span>Jump to line</span>
+                        <span class="help-key">Esc</span><span>Cancel / deselect</span>
+                    </div>
+                </div>
                 <p class="help-demo-note" id="help-demo-note" style="display:none">
                     💡 You loaded the Potsdam demo. Try adding a line along the road or a building edge, then find that same feature on the map.
                 </p>
