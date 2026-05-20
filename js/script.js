@@ -1021,7 +1021,7 @@ window.goToExifGps = () => {
     });
 
     s.exifGpsMarker = L.marker([lat, lng], { icon })
-        .bindPopup(`<b>EXIF GPS</b><br>${lat.toFixed(5)}, ${lng.toFixed(5)}`)
+        .bindPopup(`<b>EXIF GPS</b><br>${lat.toFixed(5)}, ${lng.toFixed(5)}`, { className: 'tp-popup' })
         .addTo(s.layerGroup);
 
     s.exifGpsMarker.openPopup();
@@ -1553,7 +1553,11 @@ function recomputeIntersection() {
     mo.intersectionLatLng = { lat: avgLat, lng: avgLng };
 
     mo.intersectionMarker = L.marker([avgLat, avgLng], { icon })
-        .bindPopup(`<b>📍 Estimated origin</b><br>${avgLat.toFixed(6)}, ${avgLng.toFixed(6)}`)
+        .bindPopup(
+            `<div class="tp-popup-header">Estimated Origin</div>` +
+            `<div class="tp-popup-body">${avgLat.toFixed(6)}, ${avgLng.toFixed(6)}</div>`,
+            { className: 'tp-popup' }
+        )
         .addTo(sess().layerGroup);
 
     mo.intersectionMarker.openPopup();
