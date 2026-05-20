@@ -135,7 +135,7 @@ python3 -m http.server
 
 | Version | Changes |
 |---------|---------|
-| v1.6.1 | EXIF GPS popup restyled to match dark UI. Copy button added to GPS row in EXIF card. Duplicate EXIF ray guard fixed after session import. |
+| v1.6.1 | EXIF GPS popup restyled. Copy button added to GPS. EXIF ray fixed after session import. |
 | v1.6.0 | EXIF direction ray: ray from GPS position and camera bearing. Copy coordinates button. |
 | v1.5.0 | Keyboard shortcuts, confidence ellipse for 3+ lines, 5-line maximum per image. |
 
