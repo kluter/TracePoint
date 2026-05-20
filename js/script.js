@@ -62,6 +62,7 @@ document.getElementById('session-menu').addEventListener('click', e => {
 
 document.getElementById('exif-card').addEventListener('click', e => {
     if (e.target.closest('[data-action="exif-gps"]')) goToExifGps();
+    if (e.target.closest('[data-action="exif-ray"]')) addExifRay();
 });
 
 /* ============================================================
@@ -314,7 +315,7 @@ function updateLineManager() {
     lineBar.querySelectorAll('.line-item, .map-hint').forEach(el => el.remove());
 
     sess().lines.forEach((line, lIdx) => {
-        const colour = lineColour(lIdx, activeSessionIndex);
+        const colour = line.colour || lineColour(lIdx, activeSessionIndex);
         const active = lIdx === state.activeLineIndex;
 
         const placedPts = line.points.filter(p => p.geo);
@@ -991,11 +992,14 @@ function renderExifCard() {
         const gpsBtn = (lat != null && lng != null)
             ? `<button class="exif-gps-btn" data-action="exif-gps">${crosshair}Show on map</button>`
             : '';
+        const rayBtn = (lat != null && lng != null && dir != null)
+            ? `<button class="exif-gps-btn exif-ray-btn" data-action="exif-ray">${crosshair}Add direction ray</button>`
+            : '';
         card.innerHTML =
             '<div class="exif-card-header">Image metadata</div>' +
             '<table class="exif-table">' +
             rows.map(([k, v]) => `<tr><td>${escHtml(k)}</td><td>${escHtml(v)}</td></tr>`).join('') +
-            '</table>' + gpsBtn;
+            '</table>' + gpsBtn + rayBtn;
     } catch (err) {
         card.innerHTML = '<p class="exif-empty">Could not read metadata</p>';
     }
@@ -1026,6 +1030,42 @@ window.goToExifGps = () => {
 
     s.exifGpsMarker.openPopup();
     map.setView([lat, lng], Math.max(map.getZoom(), 16));
+};
+
+window.addExifRay = () => {
+    const s   = sess();
+    const lat = dmsToDecimal(s.exif?.GPSLatitude);
+    const lng = dmsToDecimal(s.exif?.GPSLongitude);
+    const dir = s.exif?.GPSImgDirection != null ? Number(s.exif.GPSImgDirection) : null;
+    if (lat == null || lng == null) return showToast('No GPS coordinates in image metadata.');
+    if (dir == null) return showToast('No camera direction in image metadata.');
+    if (!s.imgElement) return showToast('Load the image before adding a ray.');
+    if (s.lines.length >= 5) return showToast('Maximum of 5 lines per image.');
+
+    // Canvas line centred horizontally, points at top and bottom of image
+    const v  = sess().view;
+    const cr = container.getBoundingClientRect();
+    const viewCenterX = (cr.width / 2 - v.tx) / v.scale;
+    const clampedX    = Math.max(0, Math.min(canvas.width, viewCenterX));
+    const p2 = destinationPoint({ lat, lng }, dir, 1); // 1 km along bearing
+
+    s.lines.push({
+        x:      clampedX,
+        colour: '#e03c3c',
+        pristine: false,
+        points: [
+            { y: 0,             geo: { lat, lng } },
+            { y: canvas.height, geo: { lat: p2.lat, lng: p2.lng } }
+        ]
+    });
+
+    const lIdx = s.lines.length - 1;
+    state.activeLineIndex = lIdx;
+    state.mode = 'drag-line';
+    rebuildMapForLine(lIdx);
+    recomputeIntersection();
+    render(); updateUI();
+    showToast('EXIF direction ray added.', 'success');
 };
 
 /* Button toggle */
@@ -1078,6 +1118,7 @@ function sessionToData(s) {
             return {
                 label:   `L${lIdx + 1}`,
                 x:       l.x,
+                colour:  l.colour || null,
                 bearing: bearing,
                 points:  l.points.map((pt, pIdx) => ({
                     label: `L${lIdx + 1}P${pIdx + 1}`,
@@ -1156,6 +1197,7 @@ function importSessions(file) {
                     .filter(l => l && typeof l.x === 'number')
                     .map(l => ({
                         x:      l.x,
+                        colour: typeof l.colour === 'string' ? l.colour : null,
                         points: (l.points || [])
                             .filter(pt => pt && typeof pt.y === 'number')
                             .map(pt => ({
@@ -1280,7 +1322,7 @@ function render() {
 
     s.lines.forEach((line, idx) => {
         const active    = idx === state.activeLineIndex;
-        const colour    = lineColour(idx, activeSessionIndex);
+        const colour    = line.colour || lineColour(idx, activeSessionIndex);
         const alpha = (active || line.pristine) ? 1.0 : 0.5;
 
         if (line.pristine) needsRerender = true;
@@ -1432,6 +1474,15 @@ canvas.addEventListener('click', (e) => {
     render(); updateUI();
 });
 
+/* Copy coordinates button inside intersection popup */
+document.getElementById('map-container').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-action="copy-coords"]');
+    if (!btn) return;
+    navigator.clipboard.writeText(btn.dataset.coords)
+        .then(() => showToast('Coordinates copied.', 'success'))
+        .catch(() => showToast('Could not copy to clipboard.'));
+});
+
 /* ============================================================
    MAP INTERACTION – place geo points
    ============================================================ */
@@ -1477,7 +1528,7 @@ function rebuildMapForLine(lIdx) {
     clearMapObjectsForLine(lIdx);
     const s      = sess();
     const line   = s.lines[lIdx];
-    const colour = lineColour(lIdx, activeSessionIndex);
+    const colour = line.colour || lineColour(lIdx, activeSessionIndex);
     const mo     = s.mapObjects;
 
     if (!mo.geoMarkers[lIdx]) mo.geoMarkers[lIdx] = [];
@@ -1555,7 +1606,13 @@ function recomputeIntersection() {
     mo.intersectionMarker = L.marker([avgLat, avgLng], { icon })
         .bindPopup(
             `<div class="tp-popup-header">Estimated Origin</div>` +
-            `<div class="tp-popup-body">${avgLat.toFixed(6)}, ${avgLng.toFixed(6)}</div>`,
+            `<div class="tp-popup-body">` +
+            `<span>${avgLat.toFixed(6)}, ${avgLng.toFixed(6)}</span>` +
+            `<button class="tp-copy-btn" data-action="copy-coords" data-coords="${avgLat.toFixed(6)}, ${avgLng.toFixed(6)}" title="Copy coordinates">` +
+            `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">` +
+            `<rect x="5" y="5" width="9" height="9" rx="1"/><path d="M2 11V2h9"/>` +
+            `</svg></button>` +
+            `</div>`,
             { className: 'tp-popup' }
         )
         .addTo(sess().layerGroup);

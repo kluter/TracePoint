@@ -231,10 +231,20 @@ button:disabled     { opacity: 0.3; cursor: not-allowed; }
     font-size: 12px; font-weight: 600; color: #ffdc32;
 }
 .tp-popup-body {
-    padding: 8px 14px;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 10px 8px 14px;
     font-size: 11px; color: #888;
     font-variant-numeric: tabular-nums;
 }
+.tp-copy-btn {
+    background: none; border: none; cursor: pointer;
+    color: #555; padding: 2px 4px; border-radius: 3px;
+    display: flex; align-items: center;
+    transition: color 0.15s;
+    flex-shrink: 0;
+}
+.tp-copy-btn:hover { color: #ffdc32; }
+.tp-copy-btn svg { width: 13px; height: 13px; }
 .tp-popup .leaflet-popup-tip {
     background: #151515;
 }
@@ -420,6 +430,7 @@ button:disabled     { opacity: 0.3; cursor: not-allowed; }
 }
 .exif-gps-btn:hover { background: #3a2020; color: #f08080; }
 .exif-gps-btn svg { width: 13px; height: 13px; flex-shrink: 0; }
+.exif-ray-btn { margin-top: 0; }
 .exif-gps-marker {
     width: 20px; height: 20px;
     border-radius: 50%;
