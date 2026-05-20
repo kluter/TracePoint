@@ -1637,7 +1637,7 @@ function recomputeIntersection() {
             `<rect x="5" y="5" width="9" height="9" rx="1"/><path d="M2 11V2h9"/>` +
             `</svg></button>` +
             `</div>`,
-            { className: 'tp-popup' }
+            { className: 'tp-popup', autoPan: false }
         )
         .addTo(sess().layerGroup);
 
@@ -1672,8 +1672,13 @@ function recomputeIntersection() {
         }).addTo(sess().layerGroup);
     }
 
-    const allPointsMapped = sess().lines.every(l => l.points.length >= 2 && l.points.every(p => p.geo));
-    if (allPointsMapped) map.setView([avgLat, avgLng], Math.max(map.getZoom(), 13));
+    if (!s.hasAutoZoomed) {
+        const allPointsMapped = s.lines.every(l => l.points.length >= 2 && l.points.every(p => p.geo));
+        if (allPointsMapped) {
+            map.setView([avgLat, avgLng], Math.max(map.getZoom(), 13));
+            s.hasAutoZoomed = true;
+        }
+    }
 }
 
 /* ============================================================
