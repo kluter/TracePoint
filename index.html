@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="author" content="Pawel Kluter">
     <title>TracePoint</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -72,7 +73,11 @@
                 </div>
                 <input type="file" id="file-picker" accept="image/*" style="display:none">
                 <input type="file" id="json-picker" accept=".json" style="display:none">
-                <div id="zoom-hint">scroll to zoom · space+drag or middle-drag to pan</div>
+                <div id="zoom-hint">
+                    <span class="hint-pill">mouse: scroll to zoom · space+drag or middle-drag to pan</span>
+                    <span class="hint-pill">keys: W · E · R · F · X · Tab · 1–5 · Esc</span>
+                    <span class="hint-pill" style="margin-left:auto">v1.5.0</span>
+                </div>
             </div>
         </div>
 
