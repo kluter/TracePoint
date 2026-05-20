@@ -55,6 +55,21 @@ The more lines you add, the more rays are generated and the more robustly the in
 
 ---
 
+## Reading the Confidence Ellipse
+
+When three or more lines are used, a dashed ellipse appears around the estimated camera position. Its size and shape tell you how much to trust the result.
+
+| Ellipse shape | Meaning | Confidence |
+|-------|---------|------------|
+| Small and round | Rays converge tightly from all directions | High |
+| Small and elongated | Good estimate, but uncertain along one axis. Two lines may be nearly parallel | Moderate |
+| Large and round | General spread in all directions, recheck geo points or add more lines | Low |
+| Large and elongated | One bearing is likely off, or two lines run too close to parallel | Low |
+
+The ideal result is a small, round ellipse. If you see a large or elongated one, adding a line at a different angle usually improves it significantly.
+
+---
+
 ## Controls
 
 ### Mouse & UI
