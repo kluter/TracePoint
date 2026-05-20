@@ -236,6 +236,14 @@ button:disabled     { opacity: 0.3; cursor: not-allowed; }
     font-size: 11px; color: #888;
     font-variant-numeric: tabular-nums;
 }
+.exif-copy-btn {
+    background: none; border: none; cursor: pointer;
+    color: #555; padding: 0 0 0 5px; vertical-align: middle;
+    display: inline-flex; align-items: center;
+    transition: color 0.15s;
+}
+.exif-copy-btn:hover { color: #e06060; }
+.exif-copy-btn svg { width: 11px; height: 11px; }
 .tp-copy-btn {
     background: none; border: none; cursor: pointer;
     color: #555; padding: 2px 4px; border-radius: 3px;
@@ -245,6 +253,8 @@ button:disabled     { opacity: 0.3; cursor: not-allowed; }
 }
 .tp-copy-btn:hover { color: #ffdc32; }
 .tp-copy-btn svg { width: 13px; height: 13px; }
+.tp-popup-exif .leaflet-popup-content-wrapper { border-top-color: #e03c3c; }
+.tp-popup-exif .tp-popup-header { color: #e06060; }
 .tp-popup .leaflet-popup-tip {
     background: #151515;
 }
@@ -399,7 +409,7 @@ button:disabled     { opacity: 0.3; cursor: not-allowed; }
 .exif-card {
     position: absolute; top: 100%; left: 0;
     background: #151515; border: 1px solid #2a2a2a;
-    border-radius: 6px; min-width: 220px;
+    border-radius: 6px; min-width: 260px;
     box-shadow: 0 4px 16px #000a;
     overflow: hidden; z-index: 1000;
 }
@@ -416,7 +426,7 @@ button:disabled     { opacity: 0.3; cursor: not-allowed; }
     padding: 5px 14px; font-size: 11px; line-height: 1.4;
 }
 .exif-table tr td:first-child { color: #555; white-space: nowrap; padding-right: 8px; }
-.exif-table tr td:last-child  { color: #bbb; }
+.exif-table tr td:last-child  { color: #bbb; white-space: nowrap; }
 .exif-empty {
     padding: 12px 14px; font-size: 11px; color: #555; font-style: italic;
 }
