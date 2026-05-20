@@ -135,15 +135,16 @@ python3 -m http.server
 
 | Version | Changes |
 |---------|---------|
+| v1.6.1 | EXIF GPS popup restyled to match dark UI. Copy button added to GPS row in EXIF card. Duplicate EXIF ray guard fixed after session import. |
 | v1.6.0 | EXIF direction ray: ray from GPS position and camera bearing. Copy coordinates button. |
 | v1.5.0 | Keyboard shortcuts, confidence ellipse for 3+ lines, 5-line maximum per image. |
-| v1.4.3 | Line bar redesign: lines and points move to a dedicated bar below the toolbar. |
 
 <details>
 <summary>Older releases</summary>
 
 | Version | Changes |
 |---------|---------|
+| v1.4.3 | Line bar redesign: lines and points move to a dedicated bar below the toolbar. |
 | v1.4.2 | UX bug fixes: orphaned map rays, map-point mode not clearing, auto-zoom false trigger. |
 | v1.4.1 | Security hardening, JSON import validation, toast notification system. |
 | v1.4.0 | EXIF metadata viewer with GPS map marker. |

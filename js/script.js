@@ -63,6 +63,12 @@ document.getElementById('session-menu').addEventListener('click', e => {
 document.getElementById('exif-card').addEventListener('click', e => {
     if (e.target.closest('[data-action="exif-gps"]')) goToExifGps();
     if (e.target.closest('[data-action="exif-ray"]')) addExifRay();
+    const copyBtn = e.target.closest('[data-action="copy-coords"]');
+    if (copyBtn) {
+        navigator.clipboard.writeText(copyBtn.dataset.coords)
+            .then(() => showToast('Coordinates copied.', 'success'))
+            .catch(() => showToast('Could not copy to clipboard.'));
+    }
 });
 
 /* ============================================================
@@ -998,7 +1004,10 @@ function renderExifCard() {
         card.innerHTML =
             '<div class="exif-card-header">Image metadata</div>' +
             '<table class="exif-table">' +
-            rows.map(([k, v]) => `<tr><td>${escHtml(k)}</td><td>${escHtml(v)}</td></tr>`).join('') +
+            rows.map(([k, v]) => k === 'GPS'
+                ? `<tr><td>${escHtml(k)}</td><td>${escHtml(v)}<button class="exif-copy-btn" data-action="copy-coords" data-coords="${escHtml(v)}" title="Copy coordinates"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="9" height="9" rx="1"/><path d="M2 11V2h9"/></svg></button></td></tr>`
+                : `<tr><td>${escHtml(k)}</td><td>${escHtml(v)}</td></tr>`
+            ).join('') +
             '</table>' + gpsBtn + rayBtn;
     } catch (err) {
         card.innerHTML = '<p class="exif-empty">Could not read metadata</p>';
@@ -1024,8 +1033,19 @@ window.goToExifGps = () => {
         iconAnchor: [10, 10]
     });
 
+    const exifCoords = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
     s.exifGpsMarker = L.marker([lat, lng], { icon })
-        .bindPopup(`<b>EXIF GPS</b><br>${lat.toFixed(5)}, ${lng.toFixed(5)}`, { className: 'tp-popup' })
+        .bindPopup(
+            `<div class="tp-popup-header">EXIF GPS Position</div>` +
+            `<div class="tp-popup-body">` +
+            `<span>${exifCoords}</span>` +
+            `<button class="tp-copy-btn" data-action="copy-coords" data-coords="${exifCoords}" title="Copy coordinates">` +
+            `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">` +
+            `<rect x="5" y="5" width="9" height="9" rx="1"/><path d="M2 11V2h9"/>` +
+            `</svg></button>` +
+            `</div>`,
+            { className: 'tp-popup tp-popup-exif' }
+        )
         .addTo(s.layerGroup);
 
     s.exifGpsMarker.openPopup();
@@ -1040,6 +1060,7 @@ window.addExifRay = () => {
     if (lat == null || lng == null) return showToast('No GPS coordinates in image metadata.');
     if (dir == null) return showToast('No camera direction in image metadata.');
     if (!s.imgElement) return showToast('Load the image before adding a ray.');
+    if (s.lines.some(l => l.source === 'exif' || l.colour === '#e03c3c')) return showToast('EXIF direction ray already added.');
     if (s.lines.length >= 5) return showToast('Maximum of 5 lines per image.');
 
     // Canvas line centred horizontally, points at top and bottom of image
@@ -1052,6 +1073,7 @@ window.addExifRay = () => {
     s.lines.push({
         x:      clampedX,
         colour: '#e03c3c',
+        source: 'exif',
         pristine: false,
         points: [
             { y: 0,             geo: { lat, lng } },
@@ -1119,6 +1141,7 @@ function sessionToData(s) {
                 label:   `L${lIdx + 1}`,
                 x:       l.x,
                 colour:  l.colour || null,
+                source:  l.source || null,
                 bearing: bearing,
                 points:  l.points.map((pt, pIdx) => ({
                     label: `L${lIdx + 1}P${pIdx + 1}`,
@@ -1198,6 +1221,7 @@ function importSessions(file) {
                     .map(l => ({
                         x:      l.x,
                         colour: typeof l.colour === 'string' ? l.colour : null,
+                        source: typeof l.source === 'string' ? l.source : null,
                         points: (l.points || [])
                             .filter(pt => pt && typeof pt.y === 'number')
                             .map(pt => ({
