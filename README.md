@@ -135,15 +135,16 @@ python3 -m http.server
 
 | Version | Changes |
 |---------|---------|
+| v1.6.2 | Fixed map panning to intersection on every geo point placement. |
 | v1.6.1 | EXIF GPS popup restyled. Copy button added to GPS. EXIF ray fixed after session import. |
 | v1.6.0 | EXIF direction ray: ray from GPS position and camera bearing. Copy coordinates button. |
-| v1.5.0 | Keyboard shortcuts, confidence ellipse for 3+ lines, 5-line maximum per image. |
 
 <details>
 <summary>Older releases</summary>
 
 | Version | Changes |
 |---------|---------|
+| v1.5.0 | Keyboard shortcuts, confidence ellipse for 3+ lines, 5-line maximum per image. |
 | v1.4.3 | Line bar redesign: lines and points move to a dedicated bar below the toolbar. |
 | v1.4.2 | UX bug fixes: orphaned map rays, map-point mode not clearing, auto-zoom false trigger. |
 | v1.4.1 | Security hardening, JSON import validation, toast notification system. |
