@@ -1629,7 +1629,7 @@ function recomputeIntersection() {
 
     mo.intersectionMarker = L.marker([avgLat, avgLng], { icon })
         .bindPopup(
-            `<div class="tp-popup-header">Estimated Origin</div>` +
+            `<div class="tp-popup-header">Estimated Position</div>` +
             `<div class="tp-popup-body">` +
             `<span>${avgLat.toFixed(6)}, ${avgLng.toFixed(6)}</span>` +
             `<button class="tp-copy-btn" data-action="copy-coords" data-coords="${avgLat.toFixed(6)}, ${avgLng.toFixed(6)}" title="Copy coordinates">` +
