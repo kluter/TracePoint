@@ -1600,6 +1600,7 @@ function recomputeIntersection() {
 
     const rays = [];
     sess().lines.forEach((line) => {
+        if (line.source === 'exif') return;
         const placed = line.points.filter(p => p.geo);
         if (placed.length < 2) return;
         rays.push({ p1: placed[0].geo, p2: placed[1].geo });
