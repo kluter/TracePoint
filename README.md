@@ -166,8 +166,6 @@ python3 -m http.server
 
 ---
 
----
-
 ## License
 
 See `LICENSE`.
