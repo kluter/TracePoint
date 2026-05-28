@@ -100,10 +100,10 @@ The ideal result is a small, round ellipse. If you see a large or elongated one,
 
 | Key | Action |
 |---|---|
+| `W` | Toggle level tool / reset rotation |
 | `E` | New line |
 | `R` | Delete active line |
 | `F` | Map next unmapped point of active line |
-| `W` | Toggle level tool / reset rotation |
 | `X` | Toggle help card |
 | `Tab` | Toggle Drag Line / Add Point mode |
 | `1` – `5` | Jump to line 1–5 |
