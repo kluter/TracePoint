@@ -115,7 +115,7 @@ The ideal result is a small, round ellipse. If you see a large or elongated one,
 
 Rays are computed from the bearing between two geo-referenced points. Intersection uses flat-plane geometry on lat/lon coordinates. Accurate to within a few metres for scenes under ~10 km, which covers virtually all real-world photography. Each ray extends 50 km in both directions, long enough to contain any realistic intersection while keeping the map readable.
 
-When three or more lines are used, every pair of rays produces a crossing point. Those crossings form a small cloud around the estimated origin. The confidence ellipse is fitted to that cloud using [eigenvalue decomposition](https://en.wikipedia.org/wiki/Eigenvalues_and_eigenvectors). The ellipse stretches in the direction the crossings are most scattered and stays narrow where they agree. A tight ellipse means the lines converge cleanly; a wide one means at least one bearing is off.
+When three or more lines are used, every pair of rays produces a crossing point. Those crossings form a small cloud around the estimated origin. The confidence ellipse is fitted to that cloud using [Eigendecomposition](https://en.wikipedia.org/wiki/Eigendecomposition_of_a_matrix). The ellipse stretches in the direction the crossings are most scattered and stays narrow where they agree. A tight ellipse means the lines converge cleanly; a wide one means at least one bearing is off.
 
 No data leaves your machine. Map imagery is served by public tile servers (Esri, OpenStreetMap). Dependencies are [Leaflet](https://leafletjs.com/) for maps and [exifr](https://github.com/MikeKovarik/exifr) by MikeKovarik for metadata parsing. Everything else is vanilla HTML, CSS, and JavaScript.
 
