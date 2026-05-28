@@ -159,13 +159,10 @@ python3 -m http.server
 
 ---
 
-## Listed in
+## Listed In
 
-- [jivoi/awesome-osint](https://github.com/jivoi/awesome-osint) — 25,000+ stars
-- [The-Osint-Toolbox/Geolocation-OSINT](https://github.com/The-Osint-Toolbox/Geolocation-OSINT)
-
----
-
-## License
-
-See `LICENSE`.
+| List | Section | Stars |
+|---|---|---|
+| [jivoi/awesome-osint](https://github.com/jivoi/awesome-osint) | Image Analysis | 25k+ |
+| [Astrosp/Awesome-OSINT-List](https://github.com/Astrosp/Awesome-OSINT-List) | GEO | 3.3k |
+| [The-Osint-Toolbox/Geolocation-OSINT](https://github.com/The-Osint-Toolbox/Geolocation-OSINT) | Geolocation | 313 |
