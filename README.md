@@ -161,12 +161,16 @@ python3 -m http.server
 
 ## Recognition
 
+### Curated Lists
+
 | List | Section | Stars |
 |---|---|---|
 | [jivoi/awesome-osint](https://github.com/jivoi/awesome-osint) | Image Analysis | 25k+ |
 | [Astrosp/Awesome-OSINT-List](https://github.com/Astrosp/Awesome-OSINT-List) | GEO | 3.3k |
 | [The-Osint-Toolbox/Geolocation-OSINT](https://github.com/The-Osint-Toolbox/Geolocation-OSINT) | Geolocation | 313 |
 
-| Publication | Type | Publisher |
-|---|---|---|
-| [TracePoint: A Browser-Based Tool for Image Geolocation by Ray Intersection](https://remote-sensing.org/tracepoint-a-browser-based-tool-for-image-geolocation-by-ray-intersection/) | Featured article | Earth Observation Research Cluster, University of Würzburg |
+### Press
+
+| Publication | Publisher |
+|---|---|
+| [TracePoint: A Browser-Based Tool for Image Geolocation by Ray Intersection](https://remote-sensing.org/tracepoint-a-browser-based-tool-for-image-geolocation-by-ray-intersection/) | Earth Observation Research Cluster, University of Würzburg |
