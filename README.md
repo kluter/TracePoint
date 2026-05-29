@@ -55,21 +55,6 @@ The more lines you add, the more rays are generated and the more robustly the in
 
 ---
 
-## Reading the Confidence Ellipse
-
-When three or more lines are used, a dashed ellipse appears around the estimated camera position. Its size and shape tell you how much to trust the result.
-
-| Ellipse shape | Meaning | Confidence |
-|-------|---------|------------|
-| Small and round | Rays converge tightly from all directions | High |
-| Small and elongated | Good estimate, but uncertain along one axis. Two lines may be nearly parallel | Moderate |
-| Large and round | General spread in all directions, recheck geo points or add more lines | Low |
-| Large and elongated | One bearing is likely off, or two lines run too close to parallel | Low |
-
-The ideal result is a small, round ellipse. If you see a large or elongated one, adding a line at a different angle usually improves it significantly.
-
----
-
 ## Controls
 
 ### Mouse & UI
@@ -108,6 +93,21 @@ The ideal result is a small, round ellipse. If you see a large or elongated one,
 | `Tab` | Toggle Drag Line / Add Point mode |
 | `1` – `5` | Jump to line 1–5 |
 | `Esc` | Cancel / deselect |
+
+---
+
+## Reading the Confidence Ellipse
+
+When three or more lines are used, a dashed ellipse appears around the estimated camera position. Its size and shape tell you how much to trust the result.
+
+| Ellipse shape | Meaning | Confidence |
+|-------|---------|------------|
+| Small and round | Rays converge tightly from all directions | High |
+| Small and elongated | Good estimate, but uncertain along one axis. Two lines may be nearly parallel | Moderate |
+| Large and round | General spread in all directions, recheck geo points or add more lines | Low |
+| Large and elongated | One bearing is likely off, or two lines run too close to parallel | Low |
+
+The ideal result is a small, round ellipse. If you see a large or elongated one, adding a line at a different angle usually improves it significantly.
 
 ---
 
@@ -191,7 +191,7 @@ Photos are loaded directly into an HTML5 `<canvas>` element and processed entire
 
 The only outbound requests are map tile fetches from public CDN servers (Esri, OpenStreetMap). These are standard HTTP requests for map imagery. They contain no session data, no coordinates from your work, and no image content.
 
-```
+```javascript
 // The full extent of network activity in TracePoint:
 // GET https://server.arcgisonline.com/ArcGIS/rest/services/.../tile/z/y/x
 // GET https://tile.openstreetmap.org/z/x/y.png
@@ -262,7 +262,7 @@ Then serve locally with `npx serve .` or `python3 -m http.server`. No outbound r
 
 ### Honest limitations
 
-- **Map tiles reveal your target location.** Tile requests follow the format `tile/z/x/y`. The coordinates directly encode the area of the map you are viewing. A tile server operator can infer what location you are investigating. Use a VPN or Tor if that is a concern.
+- **Map tiles reveal your target location.** Tile requests follow the format `tile/z/x/y`. The coordinates directly encode the area of the map you are viewing. A tile server operator can infer what location you are investigating. Use a VPN or TOR if that is a concern.
 - **Browser and OS trust.** If your browser or operating system is compromised, no web application can protect you. TracePoint is only as secure as the environment it runs in.
 - **Session files on disk.** Exported JSON files are unencrypted plaintext. Treat them with the same care as any other sensitive investigation material.
 - **CDN dependency.** As noted above, Leaflet and exifr are loaded from unpkg by default. Self-hosting both files eliminates this assumption entirely.
