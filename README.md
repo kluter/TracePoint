@@ -107,6 +107,7 @@ When three or more lines are used, a dashed ellipse appears around the estimated
 | Large and round | General spread in all directions, recheck geo points or add more lines | Low |
 | Large and elongated | One bearing is likely off, or two lines run too close to parallel | Low |
 
+![Ellipse comparison](assets/ellipse_comparison.png)
 The ideal result is a small, round ellipse. If you see a large or elongated one, adding a line at a different angle usually improves it significantly.
 
 ---
