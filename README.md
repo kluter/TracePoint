@@ -174,3 +174,95 @@ python3 -m http.server
 | Publication | Publisher |
 |---|---|
 | [TracePoint: A Browser-Based Tool for Image Geolocation by Ray Intersection](https://remote-sensing.org/tracepoint-a-browser-based-tool-for-image-geolocation-by-ray-intersection/) | Earth Observation Research Cluster, University of Würzburg |
+
+---
+
+## Security & Privacy
+
+A polished interface is not the same as a safe one. This section explains exactly what TracePoint does and does not do with your data, so investigators can make an informed decision before using it on sensitive material.
+
+### Images never leave your machine
+
+Photos are loaded directly into an HTML5 `<canvas>` element and processed entirely in memory. No upload, no base64 POST, no fetch call carries image data anywhere. You can verify this yourself:
+
+1. Open **DevTools → Network tab** (`F12`)
+2. Load an image into TracePoint
+3. Filter by **Fetch/XHR** — no requests involving your image will appear
+
+The only outbound requests are map tile fetches from public CDN servers (Esri, OpenStreetMap). These are standard HTTP requests for map imagery. They contain no session data, no coordinates from your work, and no image content.
+
+```
+// The full extent of network activity in TracePoint:
+// GET https://server.arcgisonline.com/ArcGIS/rest/services/.../tile/z/y/x
+// GET https://tile.openstreetmap.org/z/x/y.png
+// No other requests.
+```
+
+### No persistent storage
+
+TracePoint writes nothing to `localStorage`, `IndexedDB`, `sessionStorage`, or cookies. Closing the tab leaves no trace in the browser.
+
+```javascript
+// Verify in DevTools → Application → Storage
+// localStorage:   empty
+// sessionStorage: empty
+// IndexedDB:      empty
+// Cookies:        none set by TracePoint
+```
+
+### Session files are plain JSON
+
+Exported sessions are standard `.json` files saved to your local disk. No cloud sync, no server involved. You control where they go and who can access them.
+
+### JSON import is validated and sanitised
+
+Importing a session does not execute any code. Every field is type-checked and validated on the way in. Unknown or unexpected keys are discarded. String values are sanitised before display. There is no `eval()`, no raw HTML injection, and no way for a crafted session file to run code or exfiltrate data.
+
+```javascript
+// Example of how imported values are handled:
+function escHtml(str) {
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+}
+```
+
+A manipulated session file cannot execute code, redirect the page, or exfiltrate data. The worst a malformed file can do is fail to import.
+
+### The code is fully auditable
+
+TracePoint is vanilla HTML, CSS, and JavaScript with no build step, no minification, and no obfuscation. What you see in the repository is exactly what runs in your browser. You can read `js/script.js` directly in the repo, in DevTools, or in any text editor.
+
+This tool was developed with AI assistance. That is disclosed here precisely because the [risks of opaque, AI-generated OSINT tools](https://www.dutchosintguy.com/post/vibe-coding-is-becoming-an-osint-risk) are real. The answer is not to hide the involvement. It is to make the code readable so anyone can verify what it does.
+
+### Dependencies
+
+TracePoint has two runtime dependencies:
+
+| Library | Version | Purpose | Touches your data? |
+|---|---|---|---|
+| [Leaflet](https://leafletjs.com/) | 1.9.4 | Map rendering | No. Renders tiles only |
+| [exifr](https://github.com/MikeKovarik/exifr) | latest | EXIF metadata parsing | Locally only. No network calls |
+
+Both are loaded from [unpkg.com](https://unpkg.com), a public CDN. This is a trust assumption: if unpkg were compromised, a malicious script could be served in place of either library. Investigators who require full control can clone the repository, replace the CDN links with local copies of both libraries, and run entirely offline:
+
+```html
+<!-- Replace in index.html: -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<!-- With local copies: -->
+<link rel="stylesheet" href="js/leaflet.css" />
+<script src="js/leaflet.js"></script>
+```
+
+Then serve locally with `npx serve .` or `python3 -m http.server`. No outbound requests except map tiles.
+
+### Honest limitations
+
+- **Map tiles reveal your target location.** Tile requests follow the format `tile/z/x/y`. The coordinates directly encode the area of the map you are viewing. A tile server operator can infer what location you are investigating. Use a VPN or Tor if that is a concern.
+- **Browser and OS trust.** If your browser or operating system is compromised, no web application can protect you. TracePoint is only as secure as the environment it runs in.
+- **Session files on disk.** Exported JSON files are unencrypted plaintext. Treat them with the same care as any other sensitive investigation material.
+- **CDN dependency.** As noted above, Leaflet and exifr are loaded from unpkg by default. Self-hosting both files eliminates this assumption entirely.
