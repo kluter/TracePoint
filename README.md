@@ -187,7 +187,7 @@ Photos are loaded directly into an HTML5 `<canvas>` element and processed entire
 
 1. Open **DevTools → Network tab** (`F12`)
 2. Load an image into TracePoint
-3. Filter by **Fetch/XHR** — no requests involving your image will appear
+3. Filter by **Fetch/XHR** → no requests involving your image will appear
 
 The only outbound requests are map tile fetches from public CDN servers (Esri, OpenStreetMap). These are standard HTTP requests for map imagery. They contain no session data, no coordinates from your work, and no image content.
 
