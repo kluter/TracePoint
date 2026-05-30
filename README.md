@@ -26,7 +26,7 @@ The more lines you add, the more rays are generated and the more robustly the in
 - Drop any image to load it, or click **Browse**
 - **Multi-image session manager:** all sessions visible on the map simultaneously, each with its own intersection result
 - **Bearing display:** each line shows its outward bearing once an intersection is found
-- **Confidence ellipse:** with 3 or more lines (up to 5 per image), a dashed ellipse around the intersection visualises the spread of ray crossings. A tighter ellipse means higher confidence. Computed via [covariance matrix eigendecomposition](https://en.wikipedia.org/wiki/Eigenvalues_and_eigenvectors)
+- **Confidence ellipse:** with 3 or more lines (up to 5 per image), a dashed ellipse around the intersection visualises the spread of ray crossings. A tighter ellipse means higher confidence. Computed via [Eigendecomposition](https://en.wikipedia.org/wiki/Eigendecomposition_of_a_matrix)
 - **Session export and import:** save and restore lines, geo points, bearings, and map view as JSON
 - **EXIF metadata viewer:** camera, lens, capture settings, GPS, altitude, and camera direction read from the image. GPS can be placed on the map as a reference marker
 - Built-in Potsdam demo with step-by-step guide
