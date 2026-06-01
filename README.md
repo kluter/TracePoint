@@ -31,7 +31,7 @@ The more lines you add, the more rays are generated and the more robustly the in
 - **EXIF metadata viewer:** camera, lens, capture settings, GPS, altitude, and camera direction read from the image. GPS can be placed on the map as a reference marker
 - Built-in Potsdam demo with step-by-step guide
 - Horizon correction for tilted images
-- Map layer switcher: Esri Satellite, OpenStreetMap, OSM Humanitarian, Esri Topo, Esri Streets
+- Map layer switcher: Esri Satellite, OpenStreetMap, Dark Matter, Esri Topo, Esri Streets
 - Full keyboard shortcut support
 - Fully client-side: no server, no uploads, no tracking
 
