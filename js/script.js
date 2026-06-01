@@ -156,11 +156,11 @@ const TILE_SETS = [
         ]
     },
     {
-        id: 'osm-hot',
-        label: '❤️ OSM Humanitarian',
+        id: 'carto-dark',
+        label: '🌑 Dark Matter',
         layers: [
-            { url: 'https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png',
-              opts: { attribution: '&copy; OpenStreetMap, HOT', maxZoom: 20 } }
+            { url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+              opts: { attribution: '&copy; OpenStreetMap, &copy; CARTO', maxZoom: 20, subdomains: 'abcd' } }
         ]
     },
     {
