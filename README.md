@@ -241,7 +241,7 @@ A manipulated session file cannot execute code, redirect the page, or exfiltrate
 
 ### The code is fully auditable
 
-TracePoint is vanilla HTML, CSS, and JavaScript with no build step, no minification, and no obfuscation. What you see in the repository is exactly what runs in your browser. You can read `js/script.js` directly in the repo, in DevTools, or in any text editor.
+TracePoint is vanilla HTML, CSS, and JavaScript with no build step and no obfuscation. Its own logic lives in `js/script.js`, unminified. What you read in the repo is what runs in your browser. The third-party libraries, Leaflet and exifr, are their standard minified builds loaded from CDN.
 
 This tool was developed with AI assistance. That is disclosed here precisely because the [risks of opaque, AI-generated OSINT tools](https://www.dutchosintguy.com/post/vibe-coding-is-becoming-an-osint-risk) are real. The answer is not to hide the involvement. It is to make the code readable so anyone can verify what it does.
 
