@@ -208,11 +208,11 @@ The only outbound requests are map tile fetches from public CDN servers (Esri, O
 
 ### No persistent storage
 
-TracePoint writes nothing to `localStorage`, `IndexedDB`, `sessionStorage`, or cookies. Closing the tab leaves no trace in the browser.
+TracePoint writes only your chosen map layer to `localStorage` so it persists between sessions. Nothing else is stored — no image data, no session content, no coordinates. `IndexedDB`, `sessionStorage`, and cookies are unused. Closing the tab leaves no investigation trace in the browser.
 
 ```javascript
 // Verify in DevTools → Application → Storage
-// localStorage:   empty
+// localStorage:   { "tp-tileset": "esri-sat" }  ← only your map layer choice
 // sessionStorage: empty
 // IndexedDB:      empty
 // Cookies:        none set by TracePoint
