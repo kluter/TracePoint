@@ -241,7 +241,7 @@ A manipulated session file cannot execute code, redirect the page, or exfiltrate
 
 ### The code is fully auditable
 
-TracePoint is vanilla HTML, CSS, and JavaScript with no build step and no obfuscation. Its own logic lives in `js/script.js`, unminified. What you read in the repo is what runs in your browser. The third-party libraries, Leaflet and exifr, are their standard minified builds loaded from CDN.
+TracePoint is vanilla HTML, CSS, and JavaScript with no build step and no obfuscation. Its own logic lives in `js/script.js`, unminified. What you read in the repo is what runs in your browser. The third-party libraries, Leaflet and exifr, are their standard minified builds (Leaflet from CDN, exifr bundled in the repo).
 
 This tool was developed with AI assistance. That is disclosed here precisely because the [risks of opaque, AI-generated OSINT tools](https://www.dutchosintguy.com/post/vibe-coding-is-becoming-an-osint-risk) are real. The answer is not to hide the involvement. It is to make the code readable so anyone can verify what it does.
 
@@ -249,12 +249,12 @@ This tool was developed with AI assistance. That is disclosed here precisely bec
 
 TracePoint has two runtime dependencies:
 
-| Library | Version | Purpose | Touches your data? |
+| Library | Purpose | Loaded from | Touches your data? |
 |---|---|---|---|
-| [Leaflet](https://leafletjs.com/) | 1.9.4 | Map rendering | No. Renders tiles only |
-| [exifr](https://github.com/MikeKovarik/exifr) | latest | EXIF metadata parsing | Locally only. No network calls |
+| [Leaflet](https://leafletjs.com/) | Map rendering | CDN (unpkg) | No. Renders tiles only |
+| [exifr](https://github.com/MikeKovarik/exifr) | EXIF metadata parsing | bundled in `js/` | Locally only. No network calls |
 
-Both are loaded from [unpkg.com](https://unpkg.com), a public CDN. This is a trust assumption: if unpkg were compromised, a malicious script could be served in place of either library. Investigators who require full control can clone the repository, replace the CDN links with local copies of both libraries, and run entirely offline:
+Only Leaflet is loaded from [unpkg.com](https://unpkg.com), a public CDN; exifr is bundled in the repo (`js/exifr.min.js`). The CDN is a trust assumption: if unpkg were compromised, a malicious Leaflet could be served. Investigators who require full control can clone the repository, replace the Leaflet CDN link with a local copy, and run entirely offline:
 
 ```html
 <!-- Replace in index.html: -->
@@ -268,9 +268,15 @@ Both are loaded from [unpkg.com](https://unpkg.com), a public CDN. This is a tru
 
 Then serve locally with `npx serve .` or `python3 -m http.server`. No outbound requests except map tiles.
 
-### Honest limitations
+### Security caveats
 
 - **Map tiles reveal your target location.** Tile requests follow the format `tile/z/x/y`. The coordinates directly encode the area of the map you are viewing. A tile server operator can infer what location you are investigating. Use a VPN or TOR if that is a concern.
 - **Browser and OS trust.** If your browser or operating system is compromised, no web application can protect you. TracePoint is only as secure as the environment it runs in.
 - **Session files on disk.** Exported JSON files are unencrypted plaintext. Treat them with the same care as any other sensitive investigation material.
-- **CDN dependency.** As noted above, Leaflet and exifr are loaded from unpkg by default. Self-hosting both files eliminates this assumption entirely.
+- **CDN dependency.** Only Leaflet is loaded from unpkg (exifr is already bundled locally). Self-hosting Leaflet too eliminates the assumption entirely.
+
+---
+
+## Related
+
+You may also like <img src="assets/logo_shadowfinder.svg" alt="" width="16" height="16" style="vertical-align:middle;"> **[ShadowFinder Web](https://github.com/kluter/ShadowFinder-Web)**, another browser geolocation tool of mine, this one from the length of a shadow, with the same dark, no-friction design.
