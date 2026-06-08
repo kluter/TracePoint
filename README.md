@@ -279,4 +279,4 @@ Then serve locally with `npx serve .` or `python3 -m http.server`. No outbound r
 
 ## Related
 
-You may also like <img src="assets/logo_shadowfinder.svg" alt="" width="16" height="16" style="vertical-align:middle;"> **[ShadowFinder Web](https://github.com/kluter/ShadowFinder-Web)**, another browser geolocation tool of mine, this one from the length of a shadow, with the same dark, no-friction design.
+You may also like <img src="assets/logo_shadowfinder.svg" alt="" width="16" height="16" style="vertical-align:middle;"> **[ShadowFinder Web](https://github.com/kluter/ShadowFinder-Web)**, my other browser geolocation tool. It finds where a photo was taken from the length of a shadow.
