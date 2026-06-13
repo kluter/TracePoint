@@ -142,8 +142,6 @@ const TILE_SETS = [
             { url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
               opts: { attribution: 'Tiles &copy; Esri', maxZoom: 21, maxNativeZoom: 19 } },
             { url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
-              opts: { attribution: '', opacity: 0.7, maxZoom: 21, maxNativeZoom: 19 } },
-            { url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}',
               opts: { attribution: '', opacity: 0.7, maxZoom: 21, maxNativeZoom: 19 } }
         ]
     },
