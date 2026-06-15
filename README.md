@@ -279,4 +279,6 @@ Then serve locally with `npx serve .` or `python3 -m http.server`. No outbound r
 
 ## Related
 
-You may also like <img src="assets/logo_shadowfinder.svg" alt="" width="16" height="16" style="vertical-align:middle;"> **[ShadowFinder Web](https://github.com/kluter/ShadowFinder-Web)**, my other browser geolocation tool. It finds where a photo was taken from the length of a shadow.
+<img src="assets/logo_shadowfinder.svg" alt="" width="14" height="14" style="vertical-align:middle;"> **[ShadowFinder Web](https://github.com/kluter/ShadowFinder-Web)** — geolocate a photo by the length of a shadow.
+
+<img src="assets/logo_siliconaperture.svg" alt="" width="14" height="14" style="vertical-align:middle;"> **[SiliconAperture](https://github.com/kluter/SiliconAperture)** — measure the real-world size of an object from a single photograph.
