@@ -334,6 +334,8 @@ button:disabled     { opacity: 0.3; cursor: not-allowed; }
 }
 #btn-help:hover { background: #2a2a2a; color: #fff; border-color: #555; }
 
+.header-actions { display: flex; align-items: center; gap: 10px; }
+
 /* ---- HELP CARD ---- */
 #help-card {
     position: absolute; top: 70px; right: 10px;
