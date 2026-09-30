@@ -154,11 +154,13 @@ const TILE_SETS = [
         ]
     },
     {
-        id: 'carto-dark',
-        label: '🌑 Dark Matter',
+        id: 'esri-dark',
+        label: '🌑 Esri Dark Gray',
         layers: [
-            { url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-              opts: { attribution: '&copy; OpenStreetMap, &copy; CARTO', maxZoom: 20, subdomains: 'abcd' } }
+            { url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+              opts: { attribution: 'Tiles &copy; Esri', maxZoom: 21, maxNativeZoom: 16 } },
+            { url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}',
+              opts: { attribution: '', maxZoom: 21, maxNativeZoom: 16 } }
         ]
     },
     {
