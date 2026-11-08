@@ -115,7 +115,7 @@ Copy a URL into the **Tile URL** field as-is. Every server has its own terms of 
 
 **Google (at your own risk)**
 
-Google does not permit direct tile access outside its official APIs. These URLs are widely used in QGIS tutorials, but using them may break Google's terms and can stop working at any time:
+Google does not permit direct tile access outside its official APIs. These URLs are widely used in [QGIS tutorials](https://mapscaping.com/google-satellite-imagery-and-google-maps-in-qgis/), but using them may break Google's terms and can stop working at any time:
 
 | Layer | URL |
 |---|---|
