@@ -113,6 +113,17 @@ You can add as many layers as you like and switch between them like the built-in
 
 Copy a URL into the **Tile URL** field as-is. Every server has its own terms of use. Which servers you add, and whether you are allowed to use them, is up to you.
 
+**Google (at your own risk)**
+
+Google does not permit direct tile access outside its official APIs. These URLs are widely used in QGIS tutorials, but using them may break Google's terms and can stop working at any time:
+
+| Layer | URL |
+|---|---|
+| Google Satellite | `https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}` |
+| Google Hybrid | `https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}` |
+| Google Roadmap | `https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}` |
+| Google Terrain | `https://mt1.google.com/vt/lyrs=p&x={x}&y={y}&z={z}` |
+
 **Imagery**
 
 | Layer | URL | Notes |
@@ -135,17 +146,6 @@ Esri has published the World Imagery basemap as a dated snapshot roughly every f
 | 2020-01-08 | `23001` | 2026-10-29 | `43291` |
 
 All ~200 releases are listed in Esri's [Wayback config](https://s3-us-west-2.amazonaws.com/config.maptiles.arcgis.com/waybackconfig.json): search for a date, and the number after `tile/` in that entry's `itemURL` is the release. To find which releases actually changed the imagery at a given place, use Esri's [Wayback app](https://livingatlas.arcgis.com/wayback/). A snapshot date is when Esri published the release, not when the imagery was captured. Where nothing changed between releases, they show the same imagery.
-
-**Google (at your own risk)**
-
-Google does not permit direct tile access outside its official APIs. These URLs are widely used in QGIS tutorials, but using them may break Google's terms and can stop working at any time:
-
-| Layer | URL |
-|---|---|
-| Google Satellite | `https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}` |
-| Google Hybrid | `https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}` |
-| Google Roadmap | `https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}` |
-| Google Terrain | `https://mt1.google.com/vt/lyrs=p&x={x}&y={y}&z={z}` |
 
 Providers whose tiles use a different numbering scheme, such as Bing (quadkeys), cannot be added this way.
 
