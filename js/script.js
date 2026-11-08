@@ -146,6 +146,15 @@ const TILE_SETS = [
         ]
     },
     {
+        id: 's2-2024',
+        label: '🌍 Sentinel-2 2024',
+        layers: [
+            { url: 'https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2024_3857/default/g/{z}/{y}/{x}.jpg',
+              opts: { attribution: '<a href="https://s2maps.eu" target="_blank" rel="noopener">Sentinel-2 cloudless</a> by EOX IT Services GmbH (contains modified Copernicus Sentinel data 2024)',
+                      maxZoom: 21, maxNativeZoom: 14 } }
+        ]
+    },
+    {
         id: 'osm',
         label: '🗺 OpenStreetMap',
         layers: [
@@ -181,17 +190,59 @@ const TILE_SETS = [
     }
 ];
 
+/* ---- CUSTOM TILE LAYERS (user-supplied XYZ URLs, stored in this browser only) ---- */
+const CUSTOM_LAYERS_KEY = 'tp-custom-layers';
+
+function loadCustomLayers() {
+    try {
+        const list = JSON.parse(localStorage.getItem(CUSTOM_LAYERS_KEY));
+        if (!Array.isArray(list)) return [];
+        return list.filter(c => c && typeof c.id === 'string' && typeof c.name === 'string' && isValidTileUrl(c.url));
+    } catch { return []; }
+}
+
+function saveCustomLayers() {
+    localStorage.setItem(CUSTOM_LAYERS_KEY, JSON.stringify(customLayers));
+}
+
+function isValidTileUrl(url) {
+    if (typeof url !== 'string' || !/^https:\/\//i.test(url)) return false;
+    if (!['{x}', '{y}', '{z}'].every(p => url.includes(p))) return false;
+    try { new URL(url.replace(/\{[a-z]+\}/gi, '0')); return true; } catch { return false; }
+}
+
+let customLayers = loadCustomLayers();
+
+function allTileSets() {
+    return TILE_SETS.concat(customLayers.map(c => ({
+        id: c.id,
+        label: '🔗 ' + c.name,
+        custom: true,
+        layers: [{ url: c.url, opts: { attribution: 'Custom layer', maxZoom: 21 } }]
+    })));
+}
+
 let activeTileLayers = [];
+let activeTileSetId  = null;
 
 function setTileSet(id) {
     activeTileLayers.forEach(l => map.removeLayer(l));
     activeTileLayers = [];
-    const set = TILE_SETS.find(s => s.id === id) || TILE_SETS[0];
+    const set = allTileSets().find(s => s.id === id) || TILE_SETS[0];
+    let errorShown = false;
     set.layers.forEach(l => {
         const layer = L.tileLayer(l.url, l.opts).addTo(map);
+        if (set.custom) {
+            layer.on('tileerror', () => {
+                if (errorShown) return;
+                errorShown = true;
+                showToast('Custom layer failed to load — check the URL.');
+            });
+        }
         activeTileLayers.push(layer);
     });
-    localStorage.setItem('tp-tileset', id);
+    activeTileSetId = set.id;
+    localStorage.setItem('tp-tileset', set.id);
 }
 
 setTileSet(localStorage.getItem('tp-tileset') || 'esri-sat');
@@ -213,21 +264,8 @@ const LayerSwitcher = L.Control.extend({
 
         const menu = L.DomUtil.create('div', 'layer-menu', wrap);
         menu.style.display = 'none';
-
-        TILE_SETS.forEach(set => {
-            const item = L.DomUtil.create('div', 'layer-item', menu);
-            item.textContent = set.label;
-            item.dataset.id  = set.id;
-            item.onclick = () => {
-                setTileSet(set.id);
-                menu.querySelectorAll('.layer-item').forEach(i => i.classList.remove('active'));
-                item.classList.add('active');
-                menu.style.display = 'none';
-            };
-        });
-
-        const savedId = localStorage.getItem('tp-tileset') || 'esri-sat';
-        menu.querySelector(`[data-id="${savedId}"]`)?.classList.add('active');
+        layerMenu = menu;
+        renderLayerMenu();
 
         btn.onclick = () => {
             menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
@@ -238,7 +276,121 @@ const LayerSwitcher = L.Control.extend({
         return wrap;
     }
 });
+
+let layerMenu = null;
+
+function renderLayerMenu() {
+    const menu = layerMenu;
+    menu.innerHTML = '';
+
+    const addItem = (set) => {
+        const item = L.DomUtil.create('div', 'layer-item', menu);
+        item.dataset.id = set.id;
+        if (set.id === activeTileSetId) item.classList.add('active');
+        item.onclick = () => {
+            setTileSet(set.id);
+            renderLayerMenu();
+            menu.style.display = 'none';
+        };
+        if (!set.custom) { item.textContent = set.label; return; }
+
+        item.classList.add('layer-item-custom');
+        const label = L.DomUtil.create('span', 'layer-label', item);
+        label.textContent = set.label;
+        const edit = L.DomUtil.create('button', 'layer-action', item);
+        edit.title = 'Edit layer';
+        edit.textContent = '✎';
+        edit.onclick = (e) => { e.stopPropagation(); menu.style.display = 'none'; openLayerModal(set.id); };
+        const del = L.DomUtil.create('button', 'layer-action layer-action-delete', item);
+        del.title = 'Remove layer';
+        del.textContent = '×';
+        del.onclick = (e) => { e.stopPropagation(); removeCustomLayer(set.id); };
+    };
+
+    TILE_SETS.forEach(addItem);
+
+    L.DomUtil.create('div', 'layer-divider', menu);
+    allTileSets().filter(s => s.custom).forEach(addItem);
+    if (customLayers.length) L.DomUtil.create('div', 'layer-divider', menu);
+
+    const add = L.DomUtil.create('div', 'layer-item layer-add', menu);
+    add.textContent = '＋ Add custom layer…';
+    add.onclick = () => { menu.style.display = 'none'; openLayerModal(null); };
+}
+
+function removeCustomLayer(id) {
+    customLayers = customLayers.filter(c => c.id !== id);
+    saveCustomLayers();
+    if (activeTileSetId === id) setTileSet('esri-sat');
+    renderLayerMenu();
+}
+
 new LayerSwitcher().addTo(map);
+
+/* ---- CUSTOM LAYER POPUP ---- */
+const layerModal      = document.getElementById('layer-modal');
+const layerForm       = document.getElementById('layer-form');
+const layerNameInput  = document.getElementById('layer-name');
+const layerUrlInput   = document.getElementById('layer-url');
+const layerUrlHint    = document.getElementById('layer-url-hint');
+const btnLayerSave    = document.getElementById('btn-layer-save');
+let editingLayerId    = null;
+
+function openLayerModal(id) {
+    editingLayerId = id;
+    const existing = customLayers.find(c => c.id === id);
+    document.getElementById('layer-modal-title').textContent = existing ? 'Edit custom layer' : 'Add custom layer';
+    btnLayerSave.textContent = existing ? 'Save' : 'Add';
+    layerNameInput.value = existing ? existing.name : '';
+    layerUrlInput.value  = existing ? existing.url  : '';
+    validateLayerForm();
+    layerModal.style.display = 'flex';
+    layerNameInput.focus();
+}
+
+function closeLayerModal() {
+    layerModal.style.display = 'none';
+    editingLayerId = null;
+}
+
+function validateLayerForm() {
+    const url = layerUrlInput.value.trim();
+    const urlOk = isValidTileUrl(url);
+    layerUrlHint.classList.toggle('field-error', url !== '' && !urlOk);
+    btnLayerSave.disabled = !(urlOk && layerNameInput.value.trim());
+}
+
+layerNameInput.addEventListener('input', validateLayerForm);
+layerUrlInput.addEventListener('input', validateLayerForm);
+
+layerForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    if (btnLayerSave.disabled) return;
+    const name = layerNameInput.value.trim();
+    const url  = layerUrlInput.value.trim();
+    const existing = customLayers.find(c => c.id === editingLayerId);
+    let id;
+    if (existing) {
+        existing.name = name;
+        existing.url  = url;
+        id = existing.id;
+    } else {
+        id = 'custom-' + Date.now().toString(36);
+        customLayers.push({ id, name, url });
+    }
+    saveCustomLayers();
+    if (!existing || activeTileSetId === id) setTileSet(id);
+    renderLayerMenu();
+    closeLayerModal();
+});
+
+document.getElementById('btn-layer-cancel').onclick = closeLayerModal;
+document.getElementById('btn-layer-modal-close').onclick = closeLayerModal;
+layerModal.addEventListener('mousedown', (e) => { if (e.target === layerModal) closeLayerModal(); });
+layerModal.addEventListener('keydown', (e) => {
+    e.stopPropagation();   // keep app shortcuts (E, R, Space, …) from firing behind the popup
+    if (e.key === 'Escape') closeLayerModal();
+});
 
 /* ============================================================
    COLOUR PALETTE
