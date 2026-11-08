@@ -71,7 +71,7 @@
                 <div id="zoom-hint">
                     <span class="hint-pill">mouse: scroll to zoom · space+drag or middle-drag to pan</span>
                     <span class="hint-pill">keys: W · E · R · F · X · Tab · 1–5 · Esc</span>
-                    <span class="hint-pill" style="margin-left:auto">v1.6.2</span>
+                    <span class="hint-pill" style="margin-left:auto">v1.7.0</span>
                 </div>
             </div>
         </div>
@@ -120,6 +120,26 @@
                     💡 You loaded the Potsdam demo. Try adding a line along the road or a building edge, then find that same feature on the map.
                 </p>
             </div>
+        </div>
+    </div>
+    <div id="layer-modal" class="modal-backdrop" style="display:none">
+        <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="layer-modal-title">
+            <div class="help-header">
+                <span id="layer-modal-title">Add custom layer</span>
+                <button class="help-close" id="btn-layer-modal-close" type="button">×</button>
+            </div>
+            <form id="layer-form" class="modal-body" autocomplete="off">
+                <label class="modal-label" for="layer-name">Name</label>
+                <input class="modal-input" id="layer-name" type="text" maxlength="40" placeholder="e.g. My satellite">
+                <label class="modal-label" for="layer-url">Tile URL</label>
+                <input class="modal-input" id="layer-url" type="text" spellcheck="false" placeholder="https://example.com/tiles/{z}/{x}/{y}.png">
+                <div class="modal-field-hint" id="layer-url-hint">Must start with https:// and contain {x}, {y} and {z}.</div>
+                <p class="modal-note">ⓘ Tiles for this layer are loaded from the server in the URL, not from Esri or OpenStreetMap. That server can see which map area you are viewing. The layer is saved in this browser only.</p>
+                <div class="modal-actions">
+                    <button type="button" id="btn-layer-cancel">Cancel</button>
+                    <button type="submit" id="btn-layer-save" class="btn-primary" disabled>Add</button>
+                </div>
+            </form>
         </div>
     </div>
     <div id="toast-container" aria-live="polite"></div>
