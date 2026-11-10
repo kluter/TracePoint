@@ -129,7 +129,8 @@ function clientToImage(e) {
 }
 
 /* ---- MAP LAYERS ---- */
-const map = L.map('map-container', { maxZoom: 21 }).setView([20, 0], 2);
+const map = L.map('map-container', { maxZoom: 21, zoomControl: false }).setView([20, 0], 2);
+L.control.zoom({ position: 'bottomleft' }).addTo(map);   // top-left holds the coordinate search
 
 /* sessions initialised after LINE_COLOURS and map are both defined (see below) */
 
@@ -430,6 +431,177 @@ layerModal.addEventListener('mousedown', (e) => { if (e.target === layerModal) c
 layerModal.addEventListener('keydown', (e) => {
     e.stopPropagation();   // keep app shortcuts (E, R, Space, …) from firing behind the popup
     if (e.key === 'Escape') closeLayerModal();
+});
+
+/* ============================================================
+   COORDINATE SEARCH – paste or type coordinates → numbered pin
+   Pins live only in memory: not saved, not part of any session.
+   ============================================================ */
+
+/* Parse "52.40, 13.06", "52.4012° N, 13.0645° E", "52°24'04.4"N 13°03'52.4"E"
+   and Google Maps links. Returns { lat, lng } or null. */
+function parseCoordinates(text) {
+    const s = String(text || '').trim();
+    if (!s || s.length > 500) return null;
+
+    if (/^https?:\/\//i.test(s)) {
+        const m = s.match(/@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/) ||
+                  s.match(/[?&](?:q|ll|query|center)=(-?\d+(?:\.\d+)?)(?:,|%2C)\s*(-?\d+(?:\.\d+)?)/i);
+        return m ? validLatLng(+m[1], +m[2]) : null;
+    }
+
+    const norm = s.replace(/[″“”]|''/g, '"').replace(/[′‘’]/g, "'");
+    const PART = /(?<![A-Za-z])([NSEW])?\s*([-+]?\d+(?:\.\d+)?)\s*°?\s*(?:(\d+(?:\.\d+)?)\s*'\s*)?(?:(\d+(?:\.\d+)?)\s*"\s*)?([NSEW](?![A-Za-z]))?/gi;
+    const parts = [];
+    for (const m of norm.matchAll(PART)) {
+        const [, pre, deg, min, sec, post] = m;
+        if ((min && +min >= 60) || (sec && +sec >= 60)) return null;
+        const hemi = (pre || post || '').toUpperCase();
+        let v = Math.abs(+deg) + (min ? +min / 60 : 0) + (sec ? +sec / 3600 : 0);
+        if (deg.startsWith('-') || hemi === 'S' || hemi === 'W') v = -v;
+        parts.push({ v, hemi });
+    }
+    if (parts.length !== 2) return null;
+
+    let [a, b] = parts;
+    if (/[EW]/.test(a.hemi) || /[NS]/.test(b.hemi)) [a, b] = [b, a];           // hemisphere letters decide
+    else if (!a.hemi && !b.hemi && Math.abs(a.v) > 90 && Math.abs(b.v) <= 90) [a, b] = [b, a]; // lng first
+    return validLatLng(a.v, b.v);
+}
+
+function validLatLng(lat, lng) {
+    if (!isFinite(lat) || !isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) return null;
+    return { lat, lng };
+}
+
+const fmtCoords = (p) => `${p.lat.toFixed(6)}, ${p.lng.toFixed(6)}`;
+
+const searchPinLayer = L.layerGroup().addTo(map);
+let searchPins = [];          // { lat, lng, marker }
+let searchList = null;
+let searchInput = null;
+let searchHint = null;
+
+/* Gentle flight: keep the user's zoom unless they are zoomed out further than town level */
+function flyToPin(p) {
+    const z = map.getZoom() >= 12 ? map.getZoom() : 14;
+    const size = map.getSize();
+    if (!size.x || !size.y) return map.setView([p.lat, p.lng], z);   // flyTo can't animate a hidden map
+    map.flyTo([p.lat, p.lng], z, { duration: 1.2 });
+}
+
+function addSearchPin(coords) {
+    const key = fmtCoords(coords);
+    const existing = searchPins.find(p => fmtCoords(p) === key);
+    if (existing) { flyToPin(existing); return; }
+
+    const pin = { lat: coords.lat, lng: coords.lng, marker: null };
+    pin.marker = L.marker([pin.lat, pin.lng], { icon: pinIcon(searchPins.length + 1), keyboard: false })
+        .addTo(searchPinLayer);
+    pin.marker.on('click', () => flyToPin(pin));
+    searchPins.push(pin);
+    renderSearchList();
+    flyToPin(pin);
+}
+
+function removeSearchPin(i) {
+    searchPinLayer.removeLayer(searchPins[i].marker);
+    searchPins.splice(i, 1);
+    searchPins.forEach((p, n) => p.marker.setIcon(pinIcon(n + 1)));   // keep numbers in step with the list
+    renderSearchList();
+}
+
+function pinIcon(n) {
+    return L.divIcon({
+        className: '',
+        html: `<div class="search-pin">${n}</div>`,
+        iconSize: [24, 24], iconAnchor: [12, 12]   // centred, like the intersection marker
+    });
+}
+
+function renderSearchList() {
+    searchList.innerHTML = '';
+    searchPins.forEach((p, i) => {
+        const row = L.DomUtil.create('div', 'search-row', searchList);
+        row.title = 'Go to this location';
+        row.innerHTML = `<span class="search-num">${i + 1}</span><span class="search-coords">${fmtCoords(p)}</span>`;
+        row.onclick = () => flyToPin(p);
+        const del = L.DomUtil.create('button', 'search-del', row);
+        del.title = 'Remove pin';
+        del.textContent = '×';
+        del.onclick = (e) => { e.stopPropagation(); removeSearchPin(i); };
+    });
+    if (searchPins.length > 1) {
+        const clear = L.DomUtil.create('div', 'search-clear', searchList);
+        clear.textContent = 'Clear all';
+        clear.onclick = () => { searchPinLayer.clearLayers(); searchPins = []; renderSearchList(); };
+    }
+    searchList.style.display = searchPins.length ? 'block' : 'none';
+}
+
+function setSearchError(on) {
+    searchInput.classList.toggle('search-input-error', on);
+    searchHint.style.display = on ? 'block' : 'none';
+}
+
+const CoordSearch = L.Control.extend({
+    options: { position: 'topleft' },
+    onAdd() {
+        const wrap = L.DomUtil.create('div', 'coord-search');
+        L.DomEvent.disableClickPropagation(wrap);
+        L.DomEvent.disableScrollPropagation(wrap);
+
+        searchInput = L.DomUtil.create('input', 'coord-search-input', wrap);
+        searchInput.type = 'text';
+        searchInput.placeholder = 'Paste coordinates…';
+        searchInput.spellcheck = false;
+        searchInput.autocomplete = 'off';
+        searchInput.title = 'Paste or type coordinates, then press Enter. Ctrl+V anywhere works too.';
+
+        searchHint = L.DomUtil.create('div', 'coord-search-hint', wrap);
+        searchHint.textContent = 'Not recognised — try 52.40, 13.06';
+        searchHint.style.display = 'none';
+
+        searchList = L.DomUtil.create('div', 'search-list', wrap);
+        searchList.style.display = 'none';
+
+        const submit = (text) => {
+            const c = parseCoordinates(text);
+            if (!c) { setSearchError(true); return false; }
+            setSearchError(false);
+            searchInput.value = '';
+            searchInput.blur();
+            addSearchPin(c);
+            return true;
+        };
+
+        searchInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter')  { e.preventDefault(); submit(searchInput.value); }
+            if (e.key === 'Escape') { searchInput.value = ''; setSearchError(false); searchInput.blur(); }
+        });
+        searchInput.addEventListener('input', () => setSearchError(false));
+        searchInput.addEventListener('paste', (e) => {
+            // a clean paste into an empty box jumps straight away; otherwise let it paste for editing
+            const text = e.clipboardData && e.clipboardData.getData('text');
+            if (searchInput.value === '' && parseCoordinates(text)) { e.preventDefault(); submit(text); }
+        });
+        return wrap;
+    }
+});
+new CoordSearch().addTo(map);
+
+/* Ctrl+V anywhere on the page (outside text fields) does the same as the search box.
+   Only the pasted text is read, on the paste itself — the page never reads the clipboard on its own. */
+document.addEventListener('paste', (e) => {
+    const t = e.target;
+    if (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable) return;
+    const text = e.clipboardData && e.clipboardData.getData('text');
+    if (!text || !text.trim()) return;
+    const c = parseCoordinates(text);
+    if (!c) return showToast('No coordinates found in clipboard.');
+    e.preventDefault();
+    setSearchError(false);
+    addSearchPin(c);
 });
 
 /* ============================================================

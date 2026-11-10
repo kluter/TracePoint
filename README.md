@@ -33,6 +33,7 @@ The more lines you add, the more rays are generated and the more robustly the in
 - Horizon correction for tilted images
 - Map layer switcher: Esri Satellite, Sentinel-2 2024, OpenStreetMap, Esri Dark Gray, Esri Topo, Esri Streets
 - **Custom map layers:** add any XYZ tile source by URL (same format as QGIS), saved in your browser
+- **[Coordinate search](#coordinate-search):** paste coordinates (decimal, degrees-minutes-seconds or a Google Maps link) to drop numbered pins on the map
 - Full keyboard shortcut support
 - Fully client-side: no server, no uploads, no tracking
 
@@ -73,6 +74,10 @@ The more lines you add, the more rays are generated and the more robustly the in
 | Place point on map | Click the map pill, then click the map |
 | Delete a line or point | × button in the line bar |
 | Switch map layer | ☰ button, top-right of map panel |
+| Jump to coordinates | Paste into the search box, top-left of map panel (or `Ctrl+V` anywhere) |
+| Go back to a pin | Click its row in the list below the search box |
+| Remove a pin | × on its row, or **Clear all** |
+| Zoom map | Scroll wheel, or + / − bottom-left of map panel |
 | Add custom map layer | ☰ map menu → + Add custom layer… |
 | Edit / remove custom layer | ✎ / × next to the layer in the ☰ map menu |
 | Manage image sessions | ☰ button, right of line bar |
@@ -96,6 +101,31 @@ The more lines you add, the more rays are generated and the more robustly the in
 | `Tab` | Toggle Drag Line / Add Point mode |
 | `1` – `5` | Jump to line 1–5 |
 | `Esc` | Cancel / deselect |
+| `Ctrl+V` | Paste coordinates → pin on map |
+
+---
+
+## Coordinate Search
+
+Paste coordinates into the search box at the top-left of the map, or press `Ctrl+V` anywhere outside a text field. Each location gets a numbered pin and a row in the list below the box. The map keeps your zoom if you are already at town level or closer, otherwise it flies to zoom 14.
+
+### Accepted formats
+
+| Format | Example |
+|---|---|
+| Decimal, comma | `52.401234, 13.064567` |
+| Decimal, space | `52.401234 13.064567` |
+| Negative values (S / W) | `-33.8568, 151.2153` |
+| Decimal with hemisphere | `52.4012° N, 13.0645° E` |
+| Hemisphere letter first | `N 52.4012 E 13.0645` |
+| Degrees, minutes, seconds | `52°24'04.4"N 13°03'52.4"E` |
+| Degrees, decimal minutes | `52°24.073'N 13°03.874'E` |
+| Longitude first | `13.0645° E, 52.4012° N`, or `151.2153, -33.8568` |
+| Labelled | `lat 52.4012 lon 13.0645` |
+| Google Maps link (map view) | `https://www.google.com/maps/@52.4012,13.0645,15z` |
+| Google Maps link (query) | `https://maps.google.com/?q=52.4012,13.0645` |
+
+Longitude first only works when the order is unambiguous: hemisphere letters say which is which, or the first number is above 90 and so cannot be a latitude. Otherwise the first number is read as latitude. Text with more or fewer than two numbers, out-of-range values or minutes and seconds of 60 or more is rejected.
 
 ---
 
@@ -200,6 +230,8 @@ python3 -m http.server
 
 | Version | Changes |
 |---------|---------|
+| v1.8.0 | Coordinate search: paste decimal, DMS or Google Maps links to drop numbered pins, listed under the search box. `Ctrl+V` anywhere on the page. Map zoom buttons moved to bottom-left. |
+| v1.7.1 | Custom layers fall back to lower-zoom tiles when a server has no tiles at the current zoom (no more black tiles on older Wayback releases). |
 | v1.7.0 | Custom XYZ map layers (add, edit, remove, saved in browser). Sentinel-2 2024 layer. Esri Dark Gray replaces CARTO Dark Matter. |
 | v1.6.2 | Fixed map panning to intersection on every geo point placement. |
 | v1.6.1 | EXIF GPS popup restyled. Copy button added to GPS. EXIF ray fixed after session import. |
@@ -265,6 +297,10 @@ The only outbound requests are map tile fetches from public CDN servers (Esri, O
 // GET <your custom layer URL>   ← only if you add one and select it
 // No other requests.
 ```
+
+### Pasted coordinates stay local
+
+TracePoint never reads your clipboard on its own and never asks for clipboard permission. It only receives text at the moment you paste, into the search box or with `Ctrl+V` on the page. That text is parsed in the browser, no lookup service or geocoder is contacted, and the resulting pins live in memory only: they are not saved and disappear when you close the tab.
 
 ### No persistent storage
 
