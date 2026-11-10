@@ -222,6 +222,46 @@ function allTileSets() {
     })));
 }
 
+/* Tile layer that falls back to an upscaled lower-zoom tile when a tile is missing.
+   Custom sources often stop short of the map's max zoom (e.g. older Esri Wayback
+   releases end at z16–18 depending on the area), which would otherwise leave black gaps. */
+const MAX_FALLBACK_LEVELS = 5;
+
+const FallbackTileLayer = L.TileLayer.extend({
+    createTile(coords, done) {
+        const wrap = document.createElement('div');
+        wrap.style.overflow = 'hidden';
+        const img = document.createElement('img');
+        img.alt = '';
+        img.setAttribute('role', 'presentation');
+        img.style.position = 'absolute';
+        wrap.appendChild(img);
+
+        const size = this.getTileSize();
+        let level = 0;
+
+        const load = () => {
+            const f = 1 << level;
+            const c = { x: Math.floor(coords.x / f), y: Math.floor(coords.y / f), z: coords.z - level };
+            img.style.width  = size.x * f + 'px';
+            img.style.height = size.y * f + 'px';
+            img.style.left   = -(coords.x - c.x * f) * size.x + 'px';
+            img.style.top    = -(coords.y - c.y * f) * size.y + 'px';
+            img.src = L.Util.template(this._url, L.extend({ s: this._getSubdomain(c), x: c.x, y: c.y, z: c.z }, this.options));
+        };
+
+        // `complete` mirrors <img>.complete: Leaflet checks it before discarding tiles while zooming
+        img.onload  = () => { wrap.complete = true; done(null, wrap); };
+        img.onerror = (e) => {
+            if (level < MAX_FALLBACK_LEVELS && coords.z - level > 0) { level++; load(); }
+            else { wrap.complete = true; done(e, wrap); }
+        };
+
+        load();
+        return wrap;
+    }
+});
+
 let activeTileLayers = [];
 let activeTileSetId  = null;
 
@@ -231,7 +271,7 @@ function setTileSet(id) {
     const set = allTileSets().find(s => s.id === id) || TILE_SETS[0];
     let errorShown = false;
     set.layers.forEach(l => {
-        const layer = L.tileLayer(l.url, l.opts).addTo(map);
+        const layer = (set.custom ? new FallbackTileLayer(l.url, l.opts) : L.tileLayer(l.url, l.opts)).addTo(map);
         if (set.custom) {
             layer.on('tileerror', () => {
                 if (errorShown) return;
