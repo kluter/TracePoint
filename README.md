@@ -125,7 +125,7 @@ Paste coordinates into the search box at the top-left of the map, or press `Ctrl
 | Google Maps link (map view) | `https://www.google.com/maps/@52.4012,13.0645,15z` |
 | Google Maps link (query) | `https://maps.google.com/?q=52.4012,13.0645` |
 
-Longitude first only works when the order is unambiguous: hemisphere letters say which is which, or the first number is above 90 and so cannot be a latitude. Otherwise the first number is read as latitude. Text with more or fewer than two numbers, out-of-range values or minutes and seconds of 60 or more is rejected.
+The first number is read as latitude, unless N/S/E/W letters or a value above 90 say otherwise.
 
 ---
 
