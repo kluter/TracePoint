@@ -78,6 +78,8 @@ The more lines you add, the more rays are generated and the more robustly the in
 | Go back to a pin | Click its row in the list below the search box |
 | Remove a pin | × on its row, or **Clear all** |
 | Zoom map | Scroll wheel, or + / − bottom-left of map panel |
+| Pan map | Drag, or middle-button drag |
+| Rotate / tilt map | Ctrl + drag, or right-click drag. Click the compass (bottom-right) or press `N` to reset north and tilt |
 | Add custom map layer | ☰ map menu → + Add custom layer… |
 | Edit / remove custom layer | ✎ / × next to the layer in the ☰ map menu |
 | Manage image sessions | ☰ button, right of line bar |
@@ -102,6 +104,7 @@ The more lines you add, the more rays are generated and the more robustly the in
 | `1` – `5` | Jump to line 1–5 |
 | `Esc` | Cancel / deselect |
 | `Ctrl+V` | Paste coordinates → pin on map |
+| `N` | Reset map to north |
 
 ---
 
@@ -212,7 +215,7 @@ Intersection uses flat-plane geometry on lat/lon coordinates. For most photograp
 
 When three or more lines are used, every pair of rays produces a crossing point. Those crossings form a small cloud around the estimated origin. The confidence ellipse is fitted to that cloud using [Eigendecomposition](https://en.wikipedia.org/wiki/Eigendecomposition_of_a_matrix). The ellipse stretches in the direction the crossings are most scattered and stays narrow where they agree. A tight ellipse means the lines converge cleanly; a wide one means at least one bearing is off.
 
-No data leaves your machine. Map imagery is served by public tile servers (Esri, OpenStreetMap, EOX). Dependencies are [Leaflet](https://leafletjs.com/) for maps and [exifr](https://github.com/MikeKovarik/exifr) by MikeKovarik for metadata parsing. Everything else is vanilla HTML, CSS, and JavaScript.
+No data leaves your machine. Map imagery is served by public tile servers (Esri, OpenStreetMap, EOX). Dependencies are [MapLibre GL JS](https://maplibre.org/) for maps and [exifr](https://github.com/MikeKovarik/exifr) by MikeKovarik for metadata parsing, both bundled in the repo. Everything else is vanilla HTML, CSS, and JavaScript. The map is rendered with WebGL, which every current browser supports.
 
 ---
 
@@ -230,6 +233,7 @@ python3 -m http.server
 
 | Version | Changes |
 |---------|---------|
+| v2.0.0 | Map engine switched from Leaflet to [MapLibre GL JS](https://maplibre.org/): rotate and tilt the map (Ctrl + drag or right-drag, compass or `N` resets north), middle-drag pans, smoother zooming. Compass button bottom-right. Both libraries are now bundled in the repo, no CDN. Session files are json_version 2: map zoom is stored in MapLibre terms (one less than before) and the saved view includes bearing and pitch. Files from v1.x are not converted. |
 | v1.8.0 | Coordinate search: paste decimal, DMS or Google Maps links to drop numbered pins, listed under the search box. `Ctrl+V` anywhere on the page. Map zoom buttons moved to bottom-left. |
 | v1.7.1 | Custom layers fall back to lower-zoom tiles when a server has no tiles at the current zoom (no more black tiles on older Wayback releases). |
 | v1.7.0 | Custom XYZ map layers (add, edit, remove, saved in browser). Sentinel-2 2024 layer. Esri Dark Gray replaces CARTO Dark Matter. |
@@ -338,7 +342,7 @@ A manipulated session file cannot execute code, redirect the page, or exfiltrate
 
 ### The code is fully auditable
 
-TracePoint is vanilla HTML, CSS, and JavaScript with no build step and no obfuscation. Its own logic lives in `js/script.js`, unminified. What you read in the repo is what runs in your browser. The third-party libraries, Leaflet and exifr, are their standard minified builds (Leaflet from CDN, exifr bundled in the repo).
+TracePoint is vanilla HTML, CSS, and JavaScript with no build step and no obfuscation. Its own logic lives in `js/script.js`, unminified. What you read in the repo is what runs in your browser. The third-party libraries, MapLibre GL JS and exifr, are their standard minified builds, bundled in the repo.
 
 This tool was developed with AI assistance. That is disclosed here precisely because the [risks of opaque, AI-generated OSINT tools](https://www.dutchosintguy.com/post/vibe-coding-is-becoming-an-osint-risk) are real. The answer is not to hide the involvement. It is to make the code readable so anyone can verify what it does.
 
@@ -348,22 +352,12 @@ TracePoint has two runtime dependencies:
 
 | Library | Purpose | Loaded from | Touches your data? |
 |---|---|---|---|
-| [Leaflet](https://leafletjs.com/) | Map rendering | CDN (unpkg) | No. Renders tiles only |
+| [MapLibre GL JS](https://maplibre.org/) | Map rendering (WebGL) | bundled in `js/` and `css/` | No. Renders tiles only |
 | [exifr](https://github.com/MikeKovarik/exifr) | EXIF metadata parsing | bundled in `js/` | Locally only. No network calls |
 
-Only Leaflet is loaded from [unpkg.com](https://unpkg.com), a public CDN; exifr is bundled in the repo (`js/exifr.min.js`). The CDN is a trust assumption: if unpkg were compromised, a malicious Leaflet could be served. Investigators who require full control can clone the repository, replace the Leaflet CDN link with a local copy, and run entirely offline:
+Both are bundled in the repository (js/maplibre-gl.js, css/maplibre-gl.css, js/exifr.min.js), pinned to a known version. Nothing is loaded from a CDN, so no third-party host can swap the code that runs in your browser. MapLibre's licence is in js/maplibre-gl.LICENSE.txt. To verify the bundled copy, compare it with the official release of the same version.
 
-```html
-<!-- Replace in index.html: -->
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
-<!-- With local copies: -->
-<link rel="stylesheet" href="js/leaflet.css" />
-<script src="js/leaflet.js"></script>
-```
-
-Then serve locally with `npx serve .` or `python3 -m http.server`. No outbound requests except map tiles.
+Clone the repository and serve it locally with `npx serve .` or `python3 -m http.server`. No outbound requests except map tiles.
 
 ### Security caveats
 
@@ -371,7 +365,6 @@ Then serve locally with `npx serve .` or `python3 -m http.server`. No outbound r
 - **Custom layers add another party.** A custom layer's server sees the same tile coordinates. If its URL carries an API key or token, that key is also tied to every request, and it is stored in plain text in your browser.
 - **Browser and OS trust.** If your browser or operating system is compromised, no web application can protect you. TracePoint is only as secure as the environment it runs in.
 - **Session files on disk.** Exported JSON files are unencrypted plaintext. Treat them with the same care as any other sensitive investigation material.
-- **CDN dependency.** Only Leaflet is loaded from unpkg (exifr is already bundled locally). Self-hosting Leaflet too eliminates the assumption entirely.
 
 ---
 
