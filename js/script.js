@@ -388,6 +388,19 @@ map.on('error', (e) => {
 
 setTileSet(localStorage.getItem('tp-tileset') || 'esri-sat');
 
+/* ---- 3D TERRAIN ---- */
+/* Mapzen Terrarium DEM tiles from AWS (keyless, CORS ok). The source is registered at map load but
+   no tile is requested until terrain is switched on. Independent of the chosen imagery. */
+const TERRAIN_TILES = 'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png';
+let terrainOn = localStorage.getItem('tp-terrain') === '1';
+
+function setTerrain(on) {
+    terrainOn = on;
+    localStorage.setItem('tp-terrain', on ? '1' : '0');
+    if (!mapReady) return;   // applied again from the map's load handler
+    map.setTerrain(on ? { source: 'dem', exaggeration: 1 } : null);
+}
+
 /* ---- LAYER SWITCHER CONTROL ---- */
 class LayerSwitcher {
     onAdd() {
@@ -449,6 +462,17 @@ function renderLayerMenu() {
     };
 
     TILE_SETS.forEach(addItem);
+
+    el('div', 'layer-divider', menu);
+    const terrain = el('div', 'layer-item layer-terrain', menu);
+    terrain.textContent = '⛰ Terrain';
+    terrain.title = 'Elevation tiles from AWS. Tilt the map (Ctrl+drag) to see the relief.';
+    if (terrainOn) terrain.classList.add('active');
+    terrain.onclick = () => {
+        setTerrain(!terrainOn);
+        renderLayerMenu();
+        menu.style.display = 'none';
+    };
 
     el('div', 'layer-divider', menu);
     allTileSets().filter(s => s.custom).forEach(addItem);
@@ -2022,8 +2046,13 @@ map.on('load', () => {
         id: 'rays', type: 'line', source: 'work', filter: ['==', ['get', 'kind'], 'ray'],
         paint: { 'line-color': ['get', 'colour'], 'line-width': 2, 'line-opacity': 0.85, 'line-dasharray': [3, 2] }
     });
+    map.addSource('dem', {
+        type: 'raster-dem', tiles: [TERRAIN_TILES], encoding: 'terrarium', tileSize: 256, maxzoom: 15,
+        attribution: 'Terrain: <a href="https://github.com/tilezen/joerd/blob/master/docs/attribution.md" target="_blank" rel="noopener">Mapzen Terrarium</a> via AWS'
+    });
     mapReady = true;
     setTileSet(activeTileSetId);
+    setTerrain(terrainOn);
     rebuildWorkSource();
 });
 
