@@ -1934,6 +1934,7 @@ canvas.addEventListener('mousedown', (e) => {
         let hit = -1;
         sess().lines.forEach((line, idx) => { if (Math.abs(line.x - mx) < THRESH) hit = idx; });
         if (hit === -1) { state.activeLineIndex = -1; state.mode = 'idle'; render(); updateUI(); }
+        else sess().lines[hit].pristine = false;   // used without ever being dragged: the "grab me" glow is done
         return;
     }
 
@@ -1989,6 +1990,7 @@ canvas.addEventListener('click', (e) => {
     }
     if (line.points.length >= 2) return;
     line.points.push({ y: my, geo: null });
+    line.pristine = false;
     if (line.points.length === 2) state.mode = 'drag-line';
     render(); updateUI();
 });
