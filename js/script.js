@@ -76,7 +76,6 @@ document.getElementById('exif-card').addEventListener('click', e => {
    Each session owns one image and all work done on it.
    ============================================================ */
 function createSession(name) {
-    const layerGroup = L.layerGroup().addTo(map);
     return {
         name,
         colourIndex:      nextFreeColourIndex(),
@@ -85,9 +84,10 @@ function createSession(name) {
         lines:            [],
         horizonPoints:    [],
         view:             { scale: 1, tx: 0, ty: 0, rotation: 0 },
-        mapView:          null,
-        layerGroup,
-        mapObjects:       { rays: [], geoMarkers: [], intersectionMarker: null, intersectionLatLng: null, ellipsePolygon: null },
+        mapView:          null,   // { center: {lat, lng}, zoom, bearing, pitch }
+        /* Rays and the ellipse of every session live in one shared GeoJSON source (see rebuildWorkSource);
+           markers are DOM elements owned here. */
+        mapObjects:       { geoMarkers: [], intersectionMarker: null, intersectionLatLng: null, ellipseRing: null },
         exifGpsMarker:    null
     };
 }
@@ -128,9 +128,77 @@ function clientToImage(e) {
     };
 }
 
-/* ---- MAP LAYERS ---- */
-const map = L.map('map-container', { maxZoom: 21, zoomControl: false }).setView([20, 0], 2);
-L.control.zoom({ position: 'bottomleft' }).addTo(map);   // top-left holds the coordinate search
+/* ---- MAP ----
+   MapLibre zoom levels are one less than Leaflet's for the same view (its zoom 0 is a
+   single 512 px tile). Saved session files use MapLibre zooms since json_version 2. */
+const WORLD_VIEW = { center: { lat: 20, lng: 0 }, zoom: 1, bearing: 0, pitch: 0 };
+
+/* Mouse rotation sensitivity: MapLibre's default 0.8°/px is twitchy; half of it feels right. */
+const ROTATE_DEG_PER_PX = 0.4;
+
+const map = new maplibregl.Map({
+    container: 'map-container',
+    style: { version: 8, sources: {}, layers: [] },   // empty style; raster sources are added below
+    center: [WORLD_VIEW.center.lng, WORLD_VIEW.center.lat],
+    zoom: WORLD_VIEW.zoom,
+    minZoom: 0, maxZoom: 20,
+    maxPitch: 70,
+    attributionControl: { compact: false },
+    /* Ctrl+drag or right-drag rotates and tilts. aroundCenter: false = plain horizontal
+       drag → bearing; the default hybrid mode wobbles when dragging slowly near the centre line. */
+    aroundCenter: false,
+    rotateDegreesPerPixelMoved: ROTATE_DEG_PER_PX
+});
+// top-left holds the coordinate search, top-right the layer switcher
+map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-left');
+map.addControl(new maplibregl.NavigationControl({ showZoom: false, visualizePitch: true }), 'bottom-right');
+
+let mapReady = false;   // sources and layers can only be added once the style has loaded
+
+/* Middle-button drag pans the map (MapLibre ignores button 1; without this the browser autoscrolls).
+   Mirrors the image panel, which also pans with middle-drag. */
+(() => {
+    const canvas = map.getCanvasContainer();
+    let last = null;
+    canvas.addEventListener('mousedown', (e) => {
+        if (e.button !== 1) return;
+        e.preventDefault();
+        last = { x: e.clientX, y: e.clientY };
+        canvas.style.cursor = 'grabbing';
+    });
+    window.addEventListener('mousemove', (e) => {
+        if (!last) return;
+        map.panBy([last.x - e.clientX, last.y - e.clientY], { duration: 0 });
+        last = { x: e.clientX, y: e.clientY };
+    });
+    window.addEventListener('mouseup', (e) => {
+        if (e.button !== 1 || !last) return;
+        last = null;
+        canvas.style.cursor = '';
+    });
+})();
+
+function getMapView() {
+    const c = map.getCenter();
+    return { center: { lat: c.lat, lng: c.lng }, zoom: map.getZoom(), bearing: map.getBearing(), pitch: map.getPitch() };
+}
+
+function applyMapView(v) {
+    map.jumpTo({ center: [v.center.lng, v.center.lat], zoom: v.zoom, bearing: v.bearing ?? 0, pitch: v.pitch ?? 0 });
+}
+
+/* Centre on a point at a zoom, keeping the current bearing and pitch */
+function jumpTo(p, zoom) {
+    map.jumpTo({ center: [p.lng, p.lat], zoom });
+}
+
+/* Small DOM helper for the map controls (replaces L.DomUtil.create) */
+function el(tag, className, parent) {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (parent) parent.appendChild(node);
+    return node;
+}
 
 /* sessions initialised after LINE_COLOURS and map are both defined (see below) */
 
@@ -223,79 +291,109 @@ function allTileSets() {
     })));
 }
 
-/* Tile layer that falls back to an upscaled lower-zoom tile when a tile is missing.
+/* Custom layers fall back to an upscaled lower-zoom tile when a tile is missing.
    Custom sources often stop short of the map's max zoom (e.g. older Esri Wayback
-   releases end at z16–18 depending on the area), which would otherwise leave black gaps. */
+   releases end at z16–18 depending on the area), which would otherwise render black.
+   MapLibre has no per-tile hook, so this is a custom "fallback://" protocol: fetch the
+   tile; on failure fetch the parent tile and crop the matching quarter onto a canvas. */
 const MAX_FALLBACK_LEVELS = 5;
 
-const FallbackTileLayer = L.TileLayer.extend({
-    createTile(coords, done) {
-        const wrap = document.createElement('div');
-        wrap.style.overflow = 'hidden';
-        const img = document.createElement('img');
-        img.alt = '';
-        img.setAttribute('role', 'presentation');
-        img.style.position = 'absolute';
-        wrap.appendChild(img);
+function fallbackUrl(template) {
+    return `fallback://t/{z}/{x}/{y}?u=${encodeURIComponent(template)}`;
+}
 
-        const size = this.getTileSize();
-        let level = 0;
+function expandSubdomains(url) {
+    return url.includes('{s}') ? ['a', 'b', 'c'].map(s => url.replace('{s}', s)) : [url];
+}
 
-        const load = () => {
-            const f = 1 << level;
-            const c = { x: Math.floor(coords.x / f), y: Math.floor(coords.y / f), z: coords.z - level };
-            img.style.width  = size.x * f + 'px';
-            img.style.height = size.y * f + 'px';
-            img.style.left   = -(coords.x - c.x * f) * size.x + 'px';
-            img.style.top    = -(coords.y - c.y * f) * size.y + 'px';
-            img.src = L.Util.template(this._url, L.extend({ s: this._getSubdomain(c), x: c.x, y: c.y, z: c.z }, this.options));
-        };
+async function fetchBitmap(url, signal) {
+    const res = await fetch(url, { signal });
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    try { return { blob, bmp: await createImageBitmap(blob) }; }
+    catch { return null; }   // 200 but not an image
+}
 
-        // `complete` mirrors <img>.complete: Leaflet checks it before discarding tiles while zooming
-        img.onload  = () => { wrap.complete = true; done(null, wrap); };
-        img.onerror = (e) => {
-            if (level < MAX_FALLBACK_LEVELS && coords.z - level > 0) { level++; load(); }
-            else { wrap.complete = true; done(e, wrap); }
-        };
+maplibregl.addProtocol('fallback', async (params, abort) => {
+    const m = params.url.match(/^fallback:\/\/t\/(\d+)\/(\d+)\/(\d+)\?u=(.*)$/);
+    if (!m) throw new Error('bad fallback url');
+    const z = +m[1], x = +m[2], y = +m[3], tpl = decodeURIComponent(m[4]);
+    const size = 256;
 
-        load();
-        return wrap;
+    for (let level = 0; level <= MAX_FALLBACK_LEVELS && z - level >= 0; level++) {
+        const f = 1 << level;
+        const cx = Math.floor(x / f), cy = Math.floor(y / f), cz = z - level;
+        const url = tpl.replace('{z}', cz).replace('{x}', cx).replace('{y}', cy).replace('{s}', 'a');
+
+        let got;
+        try { got = await fetchBitmap(url, abort.signal); }
+        catch (e) { if (abort.signal.aborted) throw e; got = null; }
+        if (!got) continue;
+
+        if (level === 0) return { data: await got.blob.arrayBuffer() };
+
+        // Crop the part of the parent tile that covers this tile
+        const part = size / f;
+        const sx = (x - cx * f) * part, sy = (y - cy * f) * part;
+        const canvas = new OffscreenCanvas(size, size);
+        canvas.getContext('2d').drawImage(got.bmp, sx, sy, part, part, 0, 0, size, size);
+        return { data: await (await canvas.convertToBlob({ type: 'image/png' })).arrayBuffer() };
     }
+    throw new Error('tile missing at all fallback levels');
 });
 
-let activeTileLayers = [];
-let activeTileSetId  = null;
+let activeTileLayerIds = [];
+let activeTileSetId    = null;
+let tileErrorShown     = false;
 
+/* Leaflet TileLayer → raster source + raster layer: maxNativeZoom → source maxzoom
+   (MapLibre overzooms past it on its own), {s} → one URL per subdomain, opacity → paint. */
 function setTileSet(id) {
-    activeTileLayers.forEach(l => map.removeLayer(l));
-    activeTileLayers = [];
     const set = allTileSets().find(s => s.id === id) || TILE_SETS[0];
-    let errorShown = false;
-    set.layers.forEach(l => {
-        const layer = (set.custom ? new FallbackTileLayer(l.url, l.opts) : L.tileLayer(l.url, l.opts)).addTo(map);
-        if (set.custom) {
-            layer.on('tileerror', () => {
-                if (errorShown) return;
-                errorShown = true;
-                showToast('Custom layer failed to load — check the URL.');
-            });
-        }
-        activeTileLayers.push(layer);
-    });
     activeTileSetId = set.id;
     localStorage.setItem('tp-tileset', set.id);
+    if (!mapReady) return;   // applied again from the map's load handler
+
+    activeTileLayerIds.forEach(lid => {
+        if (map.getLayer(lid))  map.removeLayer(lid);
+        if (map.getSource(lid)) map.removeSource(lid);
+    });
+    activeTileLayerIds = [];
+    tileErrorShown = false;
+
+    set.layers.forEach((l, i) => {
+        const lid = `base-${i}`;
+        map.addSource(lid, {
+            type: 'raster', tileSize: 256,
+            tiles: set.custom ? [fallbackUrl(l.url)] : expandSubdomains(l.url),
+            maxzoom: l.opts.maxNativeZoom ?? l.opts.maxZoom ?? 19,
+            attribution: l.opts.attribution || ''
+        });
+        map.addLayer({
+            id: lid, type: 'raster', source: lid,
+            paint: { 'raster-opacity': l.opts.opacity ?? 1, 'raster-fade-duration': 0 }
+        }, map.getLayer('ellipse') ? 'ellipse' : undefined);   // base imagery stays below the work layers (ellipse is the lowest)
+        activeTileLayerIds.push(lid);
+    });
 }
+
+/* Mirrors Leaflet's 'tileerror' toast: shown once per custom layer */
+map.on('error', (e) => {
+    if (tileErrorShown || !e.sourceId || !activeTileLayerIds.includes(e.sourceId)) return;
+    const set = allTileSets().find(s => s.id === activeTileSetId);
+    if (!set || !set.custom) return;
+    tileErrorShown = true;
+    showToast('Custom layer failed to load — check the URL.');
+});
 
 setTileSet(localStorage.getItem('tp-tileset') || 'esri-sat');
 
 /* ---- LAYER SWITCHER CONTROL ---- */
-const LayerSwitcher = L.Control.extend({
-    options: { position: 'topright' },
+class LayerSwitcher {
     onAdd() {
-        const wrap = L.DomUtil.create('div', 'layer-switcher-wrap');
-        L.DomEvent.disableClickPropagation(wrap);
+        const wrap = el('div', 'maplibregl-ctrl layer-switcher-wrap');
 
-        const btn = L.DomUtil.create('button', 'layer-burger', wrap);
+        const btn = el('button', 'layer-burger', wrap);
         btn.title = 'Switch map layer';
         btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
             <rect y="2"  width="16" height="2" rx="1"/>
@@ -303,7 +401,7 @@ const LayerSwitcher = L.Control.extend({
             <rect y="12" width="16" height="2" rx="1"/>
         </svg>`;
 
-        const menu = L.DomUtil.create('div', 'layer-menu', wrap);
+        const menu = el('div', 'layer-menu', wrap);
         menu.style.display = 'none';
         layerMenu = menu;
         renderLayerMenu();
@@ -314,9 +412,11 @@ const LayerSwitcher = L.Control.extend({
 
         map.on('click', () => { menu.style.display = 'none'; });
 
+        this._el = wrap;
         return wrap;
     }
-});
+    onRemove() { this._el.remove(); }
+}
 
 let layerMenu = null;
 
@@ -325,7 +425,7 @@ function renderLayerMenu() {
     menu.innerHTML = '';
 
     const addItem = (set) => {
-        const item = L.DomUtil.create('div', 'layer-item', menu);
+        const item = el('div', 'layer-item', menu);
         item.dataset.id = set.id;
         if (set.id === activeTileSetId) item.classList.add('active');
         item.onclick = () => {
@@ -336,13 +436,13 @@ function renderLayerMenu() {
         if (!set.custom) { item.textContent = set.label; return; }
 
         item.classList.add('layer-item-custom');
-        const label = L.DomUtil.create('span', 'layer-label', item);
+        const label = el('span', 'layer-label', item);
         label.textContent = set.label;
-        const edit = L.DomUtil.create('button', 'layer-action', item);
+        const edit = el('button', 'layer-action', item);
         edit.title = 'Edit layer';
         edit.textContent = '✎';
         edit.onclick = (e) => { e.stopPropagation(); menu.style.display = 'none'; openLayerModal(set.id); };
-        const del = L.DomUtil.create('button', 'layer-action layer-action-delete', item);
+        const del = el('button', 'layer-action layer-action-delete', item);
         del.title = 'Remove layer';
         del.textContent = '×';
         del.onclick = (e) => { e.stopPropagation(); removeCustomLayer(set.id); };
@@ -350,11 +450,11 @@ function renderLayerMenu() {
 
     TILE_SETS.forEach(addItem);
 
-    L.DomUtil.create('div', 'layer-divider', menu);
+    el('div', 'layer-divider', menu);
     allTileSets().filter(s => s.custom).forEach(addItem);
-    if (customLayers.length) L.DomUtil.create('div', 'layer-divider', menu);
+    if (customLayers.length) el('div', 'layer-divider', menu);
 
-    const add = L.DomUtil.create('div', 'layer-item layer-add', menu);
+    const add = el('div', 'layer-item layer-add', menu);
     add.textContent = '＋ Add custom layer…';
     add.onclick = () => { menu.style.display = 'none'; openLayerModal(null); };
 }
@@ -366,7 +466,7 @@ function removeCustomLayer(id) {
     renderLayerMenu();
 }
 
-new LayerSwitcher().addTo(map);
+map.addControl(new LayerSwitcher(), 'top-right');
 
 /* ---- CUSTOM LAYER POPUP ---- */
 const layerModal      = document.getElementById('layer-modal');
@@ -476,7 +576,6 @@ function validLatLng(lat, lng) {
 
 const fmtCoords = (p) => `${p.lat.toFixed(6)}, ${p.lng.toFixed(6)}`;
 
-const searchPinLayer = L.layerGroup().addTo(map);
 let searchPins = [];          // { lat, lng, marker }
 let searchList = null;
 let searchInput = null;
@@ -484,10 +583,10 @@ let searchHint = null;
 
 /* Gentle flight: keep the user's zoom unless they are zoomed out further than town level */
 function flyToPin(p) {
-    const z = map.getZoom() >= 12 ? map.getZoom() : 14;
-    const size = map.getSize();
-    if (!size.x || !size.y) return map.setView([p.lat, p.lng], z);   // flyTo can't animate a hidden map
-    map.flyTo([p.lat, p.lng], z, { duration: 1.2 });
+    const z = map.getZoom() >= 11 ? map.getZoom() : 13;
+    const c = map.getContainer();
+    if (!c.clientWidth || !c.clientHeight) return jumpTo(p, z);   // flyTo can't animate a hidden map
+    map.flyTo({ center: [p.lng, p.lat], zoom: z, duration: 1200 });
 }
 
 function addSearchPin(coords) {
@@ -496,45 +595,38 @@ function addSearchPin(coords) {
     if (existing) { flyToPin(existing); return; }
 
     const pin = { lat: coords.lat, lng: coords.lng, marker: null };
-    pin.marker = L.marker([pin.lat, pin.lng], { icon: pinIcon(searchPins.length + 1), keyboard: false })
-        .addTo(searchPinLayer);
-    pin.marker.on('click', () => flyToPin(pin));
+    const node = el('div', 'search-pin');
+    node.textContent = searchPins.length + 1;
+    node.onclick = () => flyToPin(pin);
+    pin.marker = new maplibregl.Marker({ element: node }).setLngLat([pin.lng, pin.lat]).addTo(map);
     searchPins.push(pin);
     renderSearchList();
     flyToPin(pin);
 }
 
 function removeSearchPin(i) {
-    searchPinLayer.removeLayer(searchPins[i].marker);
+    searchPins[i].marker.remove();
     searchPins.splice(i, 1);
-    searchPins.forEach((p, n) => p.marker.setIcon(pinIcon(n + 1)));   // keep numbers in step with the list
+    searchPins.forEach((p, n) => { p.marker.getElement().textContent = n + 1; });   // keep numbers in step with the list
     renderSearchList();
-}
-
-function pinIcon(n) {
-    return L.divIcon({
-        className: '',
-        html: `<div class="search-pin">${n}</div>`,
-        iconSize: [24, 24], iconAnchor: [12, 12]   // centred, like the intersection marker
-    });
 }
 
 function renderSearchList() {
     searchList.innerHTML = '';
     searchPins.forEach((p, i) => {
-        const row = L.DomUtil.create('div', 'search-row', searchList);
+        const row = el('div', 'search-row', searchList);
         row.title = 'Go to this location';
         row.innerHTML = `<span class="search-num">${i + 1}</span><span class="search-coords">${fmtCoords(p)}</span>`;
         row.onclick = () => flyToPin(p);
-        const del = L.DomUtil.create('button', 'search-del', row);
+        const del = el('button', 'search-del', row);
         del.title = 'Remove pin';
         del.textContent = '×';
         del.onclick = (e) => { e.stopPropagation(); removeSearchPin(i); };
     });
     if (searchPins.length > 1) {
-        const clear = L.DomUtil.create('div', 'search-clear', searchList);
+        const clear = el('div', 'search-clear', searchList);
         clear.textContent = 'Clear all';
-        clear.onclick = () => { searchPinLayer.clearLayers(); searchPins = []; renderSearchList(); };
+        clear.onclick = () => { searchPins.forEach(p => p.marker.remove()); searchPins = []; renderSearchList(); };
     }
     searchList.style.display = searchPins.length ? 'block' : 'none';
 }
@@ -544,25 +636,22 @@ function setSearchError(on) {
     searchHint.style.display = on ? 'block' : 'none';
 }
 
-const CoordSearch = L.Control.extend({
-    options: { position: 'topleft' },
+class CoordSearch {
     onAdd() {
-        const wrap = L.DomUtil.create('div', 'coord-search');
-        L.DomEvent.disableClickPropagation(wrap);
-        L.DomEvent.disableScrollPropagation(wrap);
+        const wrap = el('div', 'maplibregl-ctrl coord-search');
 
-        searchInput = L.DomUtil.create('input', 'coord-search-input', wrap);
+        searchInput = el('input', 'coord-search-input', wrap);
         searchInput.type = 'text';
         searchInput.placeholder = 'Paste coordinates…';
         searchInput.spellcheck = false;
         searchInput.autocomplete = 'off';
         searchInput.title = 'Paste or type coordinates, then press Enter. Ctrl+V anywhere works too.';
 
-        searchHint = L.DomUtil.create('div', 'coord-search-hint', wrap);
+        searchHint = el('div', 'coord-search-hint', wrap);
         searchHint.textContent = 'Not recognised — try 52.40, 13.06';
         searchHint.style.display = 'none';
 
-        searchList = L.DomUtil.create('div', 'search-list', wrap);
+        searchList = el('div', 'search-list', wrap);
         searchList.style.display = 'none';
 
         const submit = (text) => {
@@ -585,10 +674,12 @@ const CoordSearch = L.Control.extend({
             const text = e.clipboardData && e.clipboardData.getData('text');
             if (searchInput.value === '' && parseCoordinates(text)) { e.preventDefault(); submit(text); }
         });
+        this._el = wrap;
         return wrap;
     }
-});
-new CoordSearch().addTo(map);
+    onRemove() { this._el.remove(); }
+}
+map.addControl(new CoordSearch(), 'top-left');
 
 /* Ctrl+V anywhere on the page (outside text fields) does the same as the search box.
    Only the pasted text is read, on the paste itself — the page never reads the clipboard on its own. */
@@ -664,7 +755,7 @@ function updateUI() {
         btnModeToggle.className = '';
     }
 
-    map.getContainer().style.cursor = (state.mode === 'map-point') ? 'crosshair' : '';
+    map.getCanvas().style.cursor = (state.mode === 'map-point') ? 'crosshair' : '';
 
     if (state.mode === 'horizon') {
         btnHorizon.classList.add('active-mode');
@@ -775,9 +866,7 @@ function updateLineManager() {
 window.deleteLine = (idx) => {
     clearMapObjectsForLine(idx);
     sess().lines.splice(idx, 1);
-    const mo = sess().mapObjects;
-    mo.rays.splice(idx, 1);
-    mo.geoMarkers.splice(idx, 1);
+    sess().mapObjects.geoMarkers.splice(idx, 1);
     state.activeLineIndex = Math.min(state.activeLineIndex, sess().lines.length - 1);
     if (sess().lines.length === 0) { state.activeLineIndex = -1; state.mode = 'idle'; }
     sess().lines.forEach((_, lIdx) => rebuildMapForLine(lIdx));
@@ -907,6 +996,13 @@ document.addEventListener('keydown', (e) => {
         return;
     }
 
+    // N — same as clicking the compass: reset bearing and tilt
+    if (e.key === 'n' || e.key === 'N') {
+        e.preventDefault();
+        map.resetNorthPitch();
+        return;
+    }
+
     // Tab — toggle Drag Line / Add Point
     if (e.key === 'Tab') {
         e.preventDefault();
@@ -1017,17 +1113,17 @@ function switchToSession(idx) {
 
     // Save outgoing session's map position (guard: session may already be gone if called from removeSession)
     if (sessions[activeSessionIndex]) {
-        sessions[activeSessionIndex].mapView = { center: map.getCenter(), zoom: map.getZoom() };
+        sessions[activeSessionIndex].mapView = getMapView();
     }
 
     activeSessionIndex = idx;
     const s = sess();
 
     if (s.mapView) {
-        map.setView(s.mapView.center, s.mapView.zoom);
+        applyMapView(s.mapView);
     } else {
         const hasGeoWork = s.lines.some(l => l.points.some(p => p.geo));
-        if (!hasGeoWork) map.setView([20, 0], 2);
+        if (!hasGeoWork) applyMapView(WORLD_VIEW);
     }
 
     const exifWrap = document.getElementById('exif-wrap');
@@ -1066,19 +1162,20 @@ function addSession() {
 }
 
 window.removeSession = (idx) => {
-    map.removeLayer(sessions[idx].layerGroup);
+    removeSessionMarkers(sessions[idx]);
     if (sessions[idx].currentObjectURL) URL.revokeObjectURL(sessions[idx].currentObjectURL);
     hideHelp();
     // Save active session's map view before splice shifts indices
     if (activeSessionIndex !== idx && sessions[activeSessionIndex]) {
-        sessions[activeSessionIndex].mapView = { center: map.getCenter(), zoom: map.getZoom() };
+        sessions[activeSessionIndex].mapView = getMapView();
     }
     sessions.splice(idx, 1);
+    rebuildWorkSource();   // drops the removed session's rays and ellipse
     const wasLast = sessions.length === 0;
     if (wasLast) sessions.push(createSession('Image 1'));
     activeSessionIndex = sessions.length; // out of range → switchToSession skips its save step
     switchToSession(Math.min(idx, sessions.length - 1));
-    if (wasLast) map.setView([20, 0], 2);
+    if (wasLast) applyMapView(WORLD_VIEW);
 };
 
 /* ============================================================
@@ -1109,7 +1206,7 @@ function loadDemoImage() {
             const file = new File([blob], 'Potsdam_Germany.jpg', { type: 'image/jpeg' });
             if (sess().imgElement) addSession();
             loadImage(file);
-            map.setView([52.3899735750511, 13.060147762298586], 16);
+            jumpTo({ lat: 52.3899735750511, lng: 13.060147762298586 }, 15);
             showHelp(true);
         });
 }
@@ -1386,35 +1483,34 @@ window.goToExifGps = () => {
 
     // Remove previous EXIF GPS marker for this session
     if (s.exifGpsMarker) {
-        s.layerGroup.removeLayer(s.exifGpsMarker);
+        s.exifGpsMarker.remove();
         s.exifGpsMarker = null;
     }
 
-    const icon = L.divIcon({
-        className: '',
-        html: '<div class="exif-gps-marker"></div>',
-        iconSize:   [20, 20],
-        iconAnchor: [10, 10]
-    });
-
     const exifCoords = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
-    s.exifGpsMarker = L.marker([lat, lng], { icon })
-        .bindPopup(
-            `<div class="tp-popup-header">EXIF GPS Position</div>` +
+    s.exifGpsMarker = new maplibregl.Marker({ element: el('div', 'exif-gps-marker') })
+        .setLngLat([lng, lat])
+        .setPopup(coordPopup('EXIF GPS Position', exifCoords, 'tp-popup tp-popup-exif', 12))
+        .addTo(map);
+
+    jumpTo({ lat, lng }, Math.max(map.getZoom(), 15));
+    s.exifGpsMarker.togglePopup();
+};
+
+/* Popup with a header, the coordinates and a copy button (intersection + EXIF markers) */
+function coordPopup(title, coords, className, offset) {
+    return new maplibregl.Popup({ className, offset, closeOnClick: false })
+        .setHTML(
+            `<div class="tp-popup-header">${title}</div>` +
             `<div class="tp-popup-body">` +
-            `<span>${exifCoords}</span>` +
-            `<button class="tp-copy-btn" data-action="copy-coords" data-coords="${exifCoords}" title="Copy coordinates">` +
+            `<span>${coords}</span>` +
+            `<button class="tp-copy-btn" data-action="copy-coords" data-coords="${coords}" title="Copy coordinates">` +
             `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">` +
             `<rect x="5" y="5" width="9" height="9" rx="1"/><path d="M2 11V2h9"/>` +
             `</svg></button>` +
-            `</div>`,
-            { className: 'tp-popup tp-popup-exif' }
-        )
-        .addTo(s.layerGroup);
-
-    s.exifGpsMarker.openPopup();
-    map.setView([lat, lng], Math.max(map.getZoom(), 16));
-};
+            `</div>`
+        );
+}
 
 window.addExifRay = () => {
     const s   = sess();
@@ -1485,7 +1581,11 @@ jsonPicker.addEventListener('change', () => {
 
 /* ============================================================
    EXPORT / IMPORT
+   json_version 2: mapView.zoom is a MapLibre zoom (one less than the
+   Leaflet zoom of v1 files) and mapView carries bearing and pitch.
    ============================================================ */
+const JSON_VERSION = 2;
+
 function sessionToData(s) {
     return {
         name:              s.name,
@@ -1516,7 +1616,8 @@ function sessionToData(s) {
         }),
         view:              { ...s.view },
         mapView:           s.mapView
-            ? { center: { lat: s.mapView.center.lat, lng: s.mapView.center.lng }, zoom: s.mapView.zoom }
+            ? { center: { lat: s.mapView.center.lat, lng: s.mapView.center.lng }, zoom: s.mapView.zoom,
+                bearing: s.mapView.bearing ?? 0, pitch: s.mapView.pitch ?? 0 }
             : null,
         intersection:      s.mapObjects.intersectionLatLng || null,
         exif:              s.exif || null,
@@ -1534,10 +1635,10 @@ function downloadJSON(data, filename) {
 
 window.exportSession = (idx) => {
     const s  = sessions[idx];
-    if (idx === activeSessionIndex) s.mapView = { center: map.getCenter(), zoom: map.getZoom() };
+    if (idx === activeSessionIndex) s.mapView = getMapView();
     const ts = new Date().toISOString().slice(0, 16).replace('T', '_').replace(/:/g, '-');
     downloadJSON(
-        { json_version: 1, exported: new Date().toISOString(), sessions: [sessionToData(s)] },
+        { json_version: JSON_VERSION, exported: new Date().toISOString(), sessions: [sessionToData(s)] },
         `tracepoint_${s.name}_${ts}.json`
     );
     showToast('Session exported.', 'success');
@@ -1545,11 +1646,11 @@ window.exportSession = (idx) => {
 
 function exportAllSessions() {
     if (sessions[activeSessionIndex]) {
-        sessions[activeSessionIndex].mapView = { center: map.getCenter(), zoom: map.getZoom() };
+        sessions[activeSessionIndex].mapView = getMapView();
     }
     const ts = new Date().toISOString().slice(0, 16).replace('T', '_').replace(/:/g, '-');
     downloadJSON(
-        { json_version: 1, exported: new Date().toISOString(),
+        { json_version: JSON_VERSION, exported: new Date().toISOString(),
           sessions: sessions.filter(s => s.imgElement).map(sessionToData) },
         `tracepoint_all_${ts}.json`
     );
@@ -1615,8 +1716,14 @@ function importSessions(file) {
                     typeof sd.mapView.center?.lat === 'number' && isFinite(sd.mapView.center.lat) &&
                     typeof sd.mapView.center?.lng === 'number' && isFinite(sd.mapView.center.lng) &&
                     typeof sd.mapView.zoom === 'number' && isFinite(sd.mapView.zoom)) {
-                    s.mapView = sd.mapView;
-                    map.setView(sd.mapView.center, sd.mapView.zoom);
+                    const num = (v) => (typeof v === 'number' && isFinite(v)) ? v : 0;
+                    s.mapView = {
+                        center:  { lat: sd.mapView.center.lat, lng: sd.mapView.center.lng },
+                        zoom:    sd.mapView.zoom,
+                        bearing: num(sd.mapView.bearing),
+                        pitch:   num(sd.mapView.pitch)
+                    };
+                    applyMapView(s.mapView);
                 }
 
                 s.lines.forEach((_, lIdx) => rebuildMapForLine(lIdx));
@@ -1880,7 +1987,7 @@ map.on('click', (e) => {
     const line = sess().lines[lineIndex];
     if (!line || !line.points[pointIndex]) return;
 
-    line.points[pointIndex].geo = { lat: e.latlng.lat, lng: e.latlng.lng };
+    line.points[pointIndex].geo = { lat: e.lngLat.lat, lng: e.lngLat.lng };
 
     rebuildMapForLine(lineIndex);
     recomputeIntersection();
@@ -1899,16 +2006,71 @@ map.on('click', (e) => {
 /* ============================================================
    MAP OBJECTS – markers & rays
    ============================================================ */
-function clearMapObjectsForLine(lIdx) {
-    const s  = sess();
+/* Rays and ellipses of all sessions share one GeoJSON source; markers are DOM elements.
+   Everything is visible at once, as before (sessions used to each have a layer group on the map). */
+map.on('load', () => {
+    map.addSource('work', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+    map.addLayer({
+        id: 'ellipse', type: 'fill', source: 'work', filter: ['==', ['get', 'kind'], 'ellipse'],
+        paint: { 'fill-color': '#ffdc32', 'fill-opacity': 0.08 }
+    });
+    map.addLayer({
+        id: 'ellipse-line', type: 'line', source: 'work', filter: ['==', ['get', 'kind'], 'ellipse'],
+        paint: { 'line-color': '#ffdc32', 'line-width': 1.5, 'line-dasharray': [2, 2] }
+    });
+    map.addLayer({
+        id: 'rays', type: 'line', source: 'work', filter: ['==', ['get', 'kind'], 'ray'],
+        paint: { 'line-color': ['get', 'colour'], 'line-width': 2, 'line-opacity': 0.85, 'line-dasharray': [3, 2] }
+    });
+    mapReady = true;
+    setTileSet(activeTileSetId);
+    rebuildWorkSource();
+});
+
+function rayFeature(line, colour) {
+    const placed = line.points.filter(p => p.geo);
+    if (placed.length < 2) return null;
+    const p1 = placed[0].geo;
+    const p2 = placed[1].geo;
+    const bearing = bearingDeg(p1, p2);
+    const RAY_KM  = 50;
+    const fwd     = destinationPoint(p1, bearing,       RAY_KM);
+    const bwd     = destinationPoint(p1, bearing + 180, RAY_KM);
+    return {
+        type: 'Feature', properties: { kind: 'ray', colour },
+        geometry: { type: 'LineString', coordinates: [[bwd.lng, bwd.lat], [p1.lng, p1.lat], [p2.lng, p2.lat], [fwd.lng, fwd.lat]] }
+    };
+}
+
+function rebuildWorkSource() {
+    if (!mapReady) return;   // run again from the map's load handler
+    const features = [];
+    sessions.forEach((s, sIdx) => {
+        s.lines.forEach((line, lIdx) => {
+            const f = rayFeature(line, line.colour || lineColour(lIdx, sIdx));
+            if (f) features.push(f);
+        });
+        if (s.mapObjects.ellipseRing) {
+            features.push({ type: 'Feature', properties: { kind: 'ellipse' },
+                            geometry: { type: 'Polygon', coordinates: [s.mapObjects.ellipseRing] } });
+        }
+    });
+    map.getSource('work').setData({ type: 'FeatureCollection', features });
+}
+
+function removeSessionMarkers(s) {
     const mo = s.mapObjects;
+    mo.geoMarkers.forEach(list => (list || []).forEach(m => m.remove()));
+    mo.geoMarkers = [];
+    if (mo.intersectionMarker) { mo.intersectionMarker.remove(); mo.intersectionMarker = null; }
+    if (s.exifGpsMarker)       { s.exifGpsMarker.remove();       s.exifGpsMarker = null; }
+}
+
+function clearMapObjectsForLine(lIdx) {
+    const mo = sess().mapObjects;
     if (mo.geoMarkers[lIdx]) {
-        mo.geoMarkers[lIdx].forEach(m => s.layerGroup.removeLayer(m));
+        mo.geoMarkers[lIdx].forEach(m => m.remove());
         mo.geoMarkers[lIdx] = [];
-    }
-    if (mo.rays[lIdx]) {
-        s.layerGroup.removeLayer(mo.rays[lIdx]);
-        mo.rays[lIdx] = null;
     }
 }
 
@@ -1923,27 +2085,15 @@ function rebuildMapForLine(lIdx) {
 
     line.points.forEach((pt, pIdx) => {
         if (!pt.geo) return;
-        const marker = L.circleMarker([pt.geo.lat, pt.geo.lng], {
-            radius: 6, color: colour, fillColor: colour,
-            fillOpacity: 0.9, weight: 2
-        }).bindTooltip(`L${lIdx + 1} P${pIdx + 1}`, { permanent: false }).addTo(s.layerGroup);
+        const node = el('div', 'geo-point');
+        node.style.background   = colour;
+        node.style.borderColor  = colour;
+        node.title = `L${lIdx + 1} P${pIdx + 1}`;
+        const marker = new maplibregl.Marker({ element: node }).setLngLat([pt.geo.lng, pt.geo.lat]).addTo(map);
         mo.geoMarkers[lIdx].push(marker);
     });
 
-    const placed = line.points.filter(p => p.geo);
-    if (placed.length < 2) return;
-
-    const p1 = placed[0].geo;
-    const p2 = placed[1].geo;
-    const bearing = bearingDeg(p1, p2);
-    const RAY_KM  = 50;
-    const fwd     = destinationPoint(p1, bearing,       RAY_KM);
-    const bwd     = destinationPoint(p1, bearing + 180, RAY_KM);
-
-    mo.rays[lIdx] = L.polyline(
-        [[bwd.lat, bwd.lng], [p1.lat, p1.lng], [p2.lat, p2.lng], [fwd.lat, fwd.lng]],
-        { color: colour, weight: 2, opacity: 0.85, dashArray: '6 4' }
-    ).addTo(s.layerGroup);
+    rebuildWorkSource();   // the ray for this line (if both points are placed)
 }
 
 /* ============================================================
@@ -1953,14 +2103,11 @@ function recomputeIntersection() {
     const s  = sess();
     const mo = s.mapObjects;
     if (mo.intersectionMarker) {
-        s.layerGroup.removeLayer(mo.intersectionMarker);
+        mo.intersectionMarker.remove();
         mo.intersectionMarker = null;
         mo.intersectionLatLng = null;
     }
-    if (mo.ellipsePolygon) {
-        s.layerGroup.removeLayer(mo.ellipsePolygon);
-        mo.ellipsePolygon = null;
-    }
+    mo.ellipseRing = null;
 
     const rays = [];
     sess().lines.forEach((line) => {
@@ -1970,7 +2117,7 @@ function recomputeIntersection() {
         rays.push({ p1: placed[0].geo, p2: placed[1].geo });
     });
 
-    if (rays.length < 2) return;
+    if (rays.length < 2) { rebuildWorkSource(); return; }
 
     const hits = [];
     for (let i = 0; i < rays.length; i++) {
@@ -1979,34 +2126,19 @@ function recomputeIntersection() {
             if (pt) hits.push(pt);
         }
     }
-    if (hits.length === 0) return;
+    if (hits.length === 0) { rebuildWorkSource(); return; }
 
     const avgLat = hits.reduce((acc, p) => acc + p.lat, 0) / hits.length;
     const avgLng = hits.reduce((acc, p) => acc + p.lng, 0) / hits.length;
 
-    const icon = L.divIcon({
-        className: '',
-        html: `<div class="intersection-marker"></div>`,
-        iconSize: [24, 24], iconAnchor: [12, 12]
-    });
-
     mo.intersectionLatLng = { lat: avgLat, lng: avgLng };
 
-    mo.intersectionMarker = L.marker([avgLat, avgLng], { icon })
-        .bindPopup(
-            `<div class="tp-popup-header">Estimated Position</div>` +
-            `<div class="tp-popup-body">` +
-            `<span>${avgLat.toFixed(6)}, ${avgLng.toFixed(6)}</span>` +
-            `<button class="tp-copy-btn" data-action="copy-coords" data-coords="${avgLat.toFixed(6)}, ${avgLng.toFixed(6)}" title="Copy coordinates">` +
-            `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">` +
-            `<rect x="5" y="5" width="9" height="9" rx="1"/><path d="M2 11V2h9"/>` +
-            `</svg></button>` +
-            `</div>`,
-            { className: 'tp-popup', autoPan: false }
-        )
-        .addTo(sess().layerGroup);
+    mo.intersectionMarker = new maplibregl.Marker({ element: el('div', 'intersection-marker') })
+        .setLngLat([avgLng, avgLat])
+        .setPopup(coordPopup('Estimated Position', `${avgLat.toFixed(6)}, ${avgLng.toFixed(6)}`, 'tp-popup', 14))
+        .addTo(map);
 
-    mo.intersectionMarker.openPopup();
+    mo.intersectionMarker.togglePopup();
 
     if (hits.length >= 3) {
         const center = { lat: avgLat, lng: avgLng };
@@ -2023,24 +2155,21 @@ function recomputeIntersection() {
         const a = Math.sqrt(Math.max(0, l1)) * 2;
         const b = Math.sqrt(Math.max(0, l2)) * 2;
         const steps = 64;
-        const pts = [];
-        for (let i = 0; i < steps; i++) {
+        const ring = [];
+        for (let i = 0; i <= steps; i++) {   // closed ring: last point repeats the first
             const t  = (2 * Math.PI * i) / steps;
             const rx = a * Math.cos(t) * Math.cos(angle) - b * Math.sin(t) * Math.sin(angle);
             const ry = a * Math.cos(t) * Math.sin(angle) + b * Math.sin(t) * Math.cos(angle);
-            pts.push([center.lat + ry, center.lng + rx]);
+            ring.push([center.lng + rx, center.lat + ry]);
         }
-        mo.ellipsePolygon = L.polygon(pts, {
-            color: '#ffdc32', weight: 1.5,
-            fillColor: '#ffdc32', fillOpacity: 0.08,
-            dashArray: '4 4'
-        }).addTo(sess().layerGroup);
+        mo.ellipseRing = ring;
     }
+    rebuildWorkSource();
 
     if (!s.hasAutoZoomed) {
         const allPointsMapped = s.lines.every(l => l.points.length >= 2 && l.points.every(p => p.geo));
         if (allPointsMapped) {
-            map.setView([avgLat, avgLng], Math.max(map.getZoom(), 13));
+            jumpTo({ lat: avgLat, lng: avgLng }, Math.max(map.getZoom(), 12));
             s.hasAutoZoomed = true;
         }
     }
