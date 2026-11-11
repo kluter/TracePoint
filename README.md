@@ -32,6 +32,7 @@ The more lines you add, the more rays are generated and the more robustly the in
 - Built-in Potsdam demo with step-by-step guide
 - Horizon correction for tilted images
 - Map layer switcher: Esri Satellite, Sentinel-2 2024, OpenStreetMap, Esri Dark Gray, Esri Topo, Esri Streets
+- 3D terrain (off by default): tilt the map to see the relief, clicks land on the slope
 - **Custom map layers:** add any XYZ tile source by URL (same format as QGIS), saved in your browser
 - **[Coordinate search](#coordinate-search):** paste coordinates (decimal, degrees-minutes-seconds or a Google Maps link) to drop numbered pins on the map
 - Full keyboard shortcut support
@@ -74,6 +75,7 @@ The more lines you add, the more rays are generated and the more robustly the in
 | Place point on map | Click the map pill, then click the map |
 | Delete a line or point | × button in the line bar |
 | Switch map layer | ☰ button, top-right of map panel |
+| Toggle 3D terrain | ⛰ Terrain in the ☰ map menu. Tilt the map (Ctrl + drag) to see it |
 | Jump to coordinates | Paste into the search box, top-left of map panel (or `Ctrl+V` anywhere) |
 | Go back to a pin | Click its row in the list below the search box |
 | Remove a pin | × on its row, or **Clear all** |
@@ -233,6 +235,7 @@ python3 -m http.server
 
 | Version | Changes |
 |---------|---------|
+| v2.1.0 | 3D terrain toggle in the map menu (Mapzen Terrarium elevation tiles via AWS, off by default); clicks land on the slope. |
 | v2.0.0 | Map engine switched from Leaflet to [MapLibre GL JS](https://maplibre.org/): rotate and tilt the map (Ctrl + drag or right-drag, compass or `N` resets north), middle-drag pans, smoother zooming. Compass button bottom-right. Both libraries are now bundled in the repo, no CDN. Session files are json_version 2: map zoom is stored in MapLibre terms (one less than before) and the saved view includes bearing and pitch. Files from v1.x are not converted. |
 | v1.8.0 | Coordinate search: paste decimal, DMS or Google Maps links to drop numbered pins, listed under the search box. `Ctrl+V` anywhere on the page. Map zoom buttons moved to bottom-left. |
 | v1.7.1 | Custom layers fall back to lower-zoom tiles when a server has no tiles at the current zoom (no more black tiles on older Wayback releases). |
@@ -291,7 +294,7 @@ Photos are loaded directly into an HTML5 `<canvas>` element and processed entire
 2. Load an image into TracePoint
 3. Filter by **Fetch/XHR** → no requests involving your image will appear
 
-The only outbound requests are map tile fetches from public CDN servers (Esri, OpenStreetMap, EOX), plus the servers of any [custom map layer](#custom-map-layers) you add yourself. These are standard HTTP requests for map imagery. They contain no session data, no coordinates from your work, and no image content.
+The only outbound requests are map tile fetches from public CDN servers (Esri, OpenStreetMap, EOX), elevation tiles from AWS while 3D terrain is switched on, plus the servers of any [custom map layer](#custom-map-layers) you add yourself. These are standard HTTP requests for map imagery. They contain no session data, no coordinates from your work, and no image content. Like any tile server, the elevation host can see which map area you are viewing while terrain is on.
 
 ```javascript
 // The full extent of network activity in TracePoint:
@@ -299,6 +302,7 @@ The only outbound requests are map tile fetches from public CDN servers (Esri, O
 // GET https://tile.openstreetmap.org/z/x/y.png
 // GET https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2024_3857/default/g/z/y/x.jpg
 // GET <your custom layer URL>   ← only if you add one and select it
+// GET https://s3.amazonaws.com/elevation-tiles-prod/terrarium/z/x/y.png   ← only while terrain is on
 // No other requests.
 ```
 
@@ -308,11 +312,12 @@ TracePoint never reads your clipboard on its own and never asks for clipboard pe
 
 ### No persistent storage
 
-TracePoint writes only your chosen map layer, and any custom layers you added, to `localStorage` so they persist between sessions. Nothing else is stored — no image data, no session content, no coordinates. `IndexedDB`, `sessionStorage`, and cookies are unused. Closing the tab leaves no investigation trace in the browser.
+TracePoint writes only your chosen map layer, the terrain switch, and any custom layers you added, to `localStorage` so they persist between sessions. Nothing else is stored — no image data, no session content, no coordinates. `IndexedDB`, `sessionStorage`, and cookies are unused. Closing the tab leaves no investigation trace in the browser.
 
 ```javascript
 // Verify in DevTools → Application → Storage
 // localStorage:   { "tp-tileset": "esri-sat" }  ← your map layer choice
+//                 { "tp-terrain": "0" }         ← 3D terrain on/off
 //                 { "tp-custom-layers": [...] } ← name + URL of custom layers, if you added any
 // sessionStorage: empty
 // IndexedDB:      empty

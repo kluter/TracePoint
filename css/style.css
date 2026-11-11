@@ -338,6 +338,8 @@ button:disabled     { opacity: 0.3; cursor: not-allowed; }
 .layer-action:hover:not(:disabled)        { color: #fff; }
 .layer-action-delete:hover:not(:disabled) { color: #ff4444; }
 .layer-divider { height: 1px; background: #2a2a2a; margin: 2px 0; }
+.layer-terrain::after        { content: '  off'; color: #555; font-size: 11px; }
+.layer-terrain.active::after { content: '  on';  color: #00aaff; }
 .layer-add       { color: #777; }
 .layer-add:hover { color: #fff; }
 
