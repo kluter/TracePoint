@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>TracePoint · MapLibre prototype</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.24.1/dist/maplibre-gl.css">
+    <script src="https://unpkg.com/maplibre-gl@5.24.1/dist/maplibre-gl.js"></script>
+    <style>
+        * { box-sizing: border-box; }
+        html, body { margin: 0; height: 100%; background: #111; color: #ddd;
+                     font: 13px/1.4 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+        body { display: flex; }
+        #panel { width: 300px; flex: none; padding: 14px; overflow-y: auto; background: #1a1a1a;
+                 border-right: 1px solid #2a2a2a; }
+        #map { flex: 1; position: relative; }
+        h1 { font-size: 15px; margin: 0 0 2px; }
+        .sub { color: #888; font-size: 12px; margin-bottom: 12px; }
+        section { border-top: 1px solid #2a2a2a; padding: 10px 0; }
+        h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: #aaa; margin: 0 0 8px; }
+        .row { display: flex; gap: 6px; margin-bottom: 6px; flex-wrap: wrap; }
+        button, select, input[type=text] {
+            font: inherit; color: #eee; background: #262626; border: 1px solid #3a3a3a;
+            border-radius: 4px; padding: 5px 8px; }
+        button { cursor: pointer; }
+        button:hover { background: #333; }
+        button.on { background: #2b5a9e; border-color: #3b7ad0; }
+        select, input[type=text] { width: 100%; }
+        label.chk { display: flex; gap: 6px; align-items: center; cursor: pointer; }
+        .out { font-family: ui-monospace, Consolas, monospace; font-size: 12px; color: #9fd; white-space: pre-wrap; }
+        .hint { color: #777; font-size: 12px; }
+
+        /* Map overlays */
+        #status { position: absolute; left: 50%; bottom: 36px; transform: translateX(-50%);
+                  background: rgba(20,20,20,.9); color: #fff; padding: 6px 12px; border-radius: 6px;
+                  border: 1px solid #444; pointer-events: none; }
+        #ctx { position: absolute; z-index: 10; background: #1e1e1e; border: 1px solid #444; border-radius: 6px;
+               padding: 4px; min-width: 180px; box-shadow: 0 4px 16px rgba(0,0,0,.5); }
+        #ctx div { padding: 6px 10px; cursor: pointer; border-radius: 4px; }
+        #ctx div:hover { background: #333; }
+        #ctx .coords { color: #9fd; font-family: ui-monospace, Consolas, monospace; cursor: default; }
+        #ctx .coords:hover { background: none; }
+
+        /* Markers (DOM elements, like Leaflet divIcons) */
+        .pt { width: 14px; height: 14px; border-radius: 50%; border: 2px solid #fff; cursor: grab;
+              box-shadow: 0 0 0 1px rgba(0,0,0,.6); }
+        .pt:active { cursor: grabbing; }
+        .intersection { width: 24px; height: 24px; border-radius: 50%; border: 3px solid #ffdc32;
+                        box-shadow: 0 0 0 2px rgba(0,0,0,.6), inset 0 0 0 2px rgba(0,0,0,.6); }
+        .maplibregl-popup-content { background: #1e1e1e; color: #eee; border-top: 3px solid #ffdc32;
+                                    font-family: ui-monospace, Consolas, monospace; }
+        .maplibregl-popup-anchor-bottom .maplibregl-popup-tip { border-top-color: #1e1e1e; }
+        .maplibregl-popup-close-button { color: #aaa; }
+    </style>
+</head>
+<body>
+<aside id="panel">
+    <h1>MapLibre prototype</h1>
+    <div class="sub">Standalone page. The app itself is untouched.</div>
+
+    <section>
+        <h2>1 · Base layers</h2>
+        <select id="tileset"></select>
+        <div class="out" id="tileOut"></div>
+        <div class="hint">Zoom past the source's native max zoom and check that tiles upscale instead of vanishing.</div>
+    </section>
+
+    <section>
+        <h2>2 · Custom layer with gaps</h2>
+        <input type="text" id="customUrl" spellcheck="false">
+        <div class="row" style="margin-top:6px">
+            <label class="chk"><input type="checkbox" id="fallback" checked> Lower-zoom fallback</label>
+        </div>
+        <div class="row">
+            <button id="applyCustom">Apply custom layer</button>
+            <button id="backBuiltin">Back to built-in</button>
+        </div>
+        <div class="out" id="fbOut">fallback: not active</div>
+        <div class="hint">Esri Wayback release 10 (2014) runs out of tiles around z16–18. Zoom in with fallback off to see the holes, then on.</div>
+    </section>
+
+    <section>
+        <h2>3 · Points, rays, intersection</h2>
+        <div class="row">
+            <button id="newLine">New line</button>
+            <button id="clear">Clear</button>
+        </div>
+        <div class="out" id="workOut">0 lines</div>
+        <div class="hint">Click twice to place a line. Drag a dot to move it (#12). Two or more lines give an intersection.</div>
+    </section>
+
+    <section>
+        <h2>4 · Rotation</h2>
+        <div class="out" id="rotOut"></div>
+        <div class="row" style="margin-top:6px"><button id="north">Reset north</button></div>
+        <div class="out" id="ctxOut">last right-click: –</div>
+        <div class="hint">Right-drag or Ctrl+drag rotates and tilts. A plain right-click should open the menu; a right-drag should not (#15).<br>Rotation uses MapLibre's linear mode (<code>aroundCenter: false</code>). Add <code>?aroundCenter</code> to the URL to feel the default hybrid mode again.</div>
+    </section>
+
+    <section>
+        <h2>5 · Terrain</h2>
+        <div class="row"><button id="terrain">Terrain: off</button></div>
+        <div class="hint">Free Terrarium elevation tiles (AWS, no key). Place a point on a slope with terrain on, then switch terrain off: the dot should stay on the same imagery feature.</div>
+    </section>
+
+    <section>
+        <h2>6 · Zoom offset</h2>
+        <div class="row"><button id="potsdam">Potsdam demo view (Leaflet z16)</button></div>
+        <div class="out" id="zoomOut"></div>
+        <div class="hint">The URL hash is MapLibre's built-in one (zoom/lat/lng/bearing/pitch), relevant for #14.</div>
+    </section>
+
+    <section>
+        <div class="out" id="cursorOut">cursor: –</div>
+    </section>
+</aside>
+
+<div id="map">
+    <div id="status" hidden></div>
+    <div id="ctx" hidden></div>
+</div>
+
+<script src="maplibre.js"></script>
+</body>
+</html>
