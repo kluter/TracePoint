@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="author" content="Pawel Kluter">
     <title>TracePoint</title>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <link rel="stylesheet" href="css/maplibre-gl.css">
+    <script src="js/maplibre-gl.js"></script>
     <link rel="stylesheet" href="css/style.css">
     <!-- Favicons -->
     <link rel="icon" href="assets/favicon.ico" sizes="48x48">
@@ -71,7 +71,7 @@
                 <div id="zoom-hint">
                     <span class="hint-pill">mouse: scroll to zoom · space+drag or middle-drag to pan</span>
                     <span class="hint-pill">keys: W · E · R · F · X · Tab · 1–5 · Esc</span>
-                    <span class="hint-pill" style="margin-left:auto">v1.8.0</span>
+                    <span class="hint-pill" style="margin-left:auto">v2.0.0</span>
                 </div>
             </div>
         </div>
@@ -115,6 +115,8 @@
                         <span class="help-key">1–5</span><span>Jump to line</span>
                         <span class="help-key">Esc</span><span>Cancel / deselect</span>
                         <span class="help-key">Ctrl+V</span><span>Paste coordinates → pin on map</span>
+                        <span class="help-key">Ctrl+drag</span><span>Rotate and tilt the map (right-drag works too); middle-drag pans</span>
+                        <span class="help-key">N</span><span>Reset map to north and flat (same as the compass)</span>
                     </div>
                 </div>
                 <p class="help-demo-note" id="help-demo-note" style="display:none">
