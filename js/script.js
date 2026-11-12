@@ -150,7 +150,7 @@ const map = new maplibregl.Map({
     aroundCenter: false,
     rotateDegreesPerPixelMoved: ROTATE_DEG_PER_PX
 });
-// top-left holds the coordinate search, top-right the layer switcher
+// zoom bottom-left, compass bottom-right; search box and layer menu live in the map bar under the header
 map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-left');
 map.addControl(new maplibregl.NavigationControl({ showZoom: false, visualizePitch: true }), 'bottom-right');
 
@@ -433,33 +433,29 @@ function setTerrain(on) {
 }
 
 /* ---- LAYER SWITCHER CONTROL ---- */
-class LayerSwitcher {
-    onAdd() {
-        const wrap = el('div', 'maplibregl-ctrl layer-switcher-wrap');
+/* Lives in the map bar under the map header, not on the map itself */
+function buildLayerSwitcher() {
+    const wrap = document.getElementById('layer-switcher-wrap');
 
-        const btn = el('button', 'layer-burger', wrap);
-        btn.title = 'Switch map layer';
-        btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-            <rect y="2"  width="16" height="2" rx="1"/>
-            <rect y="7"  width="16" height="2" rx="1"/>
-            <rect y="12" width="16" height="2" rx="1"/>
-        </svg>`;
+    const btn = el('button', 'layer-burger', wrap);
+    btn.type = 'button';
+    btn.title = 'Switch map layer';
+    btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+        <rect y="2"  width="16" height="2" rx="1"/>
+        <rect y="7"  width="16" height="2" rx="1"/>
+        <rect y="12" width="16" height="2" rx="1"/>
+    </svg>`;
 
-        const menu = el('div', 'layer-menu', wrap);
-        menu.style.display = 'none';
-        layerMenu = menu;
-        renderLayerMenu();
+    const menu = el('div', 'layer-menu', wrap);
+    menu.style.display = 'none';
+    layerMenu = menu;
+    renderLayerMenu();
 
-        btn.onclick = () => {
-            menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
-        };
+    btn.onclick = () => {
+        menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+    };
 
-        map.on('click', () => { menu.style.display = 'none'; });
-
-        this._el = wrap;
-        return wrap;
-    }
-    onRemove() { this._el.remove(); }
+    map.on('click', () => { menu.style.display = 'none'; });
 }
 
 let layerMenu = null;
@@ -521,7 +517,7 @@ function removeCustomLayer(id) {
     renderLayerMenu();
 }
 
-map.addControl(new LayerSwitcher(), 'top-right');
+buildLayerSwitcher();
 
 /* ---- CUSTOM LAYER POPUP ---- */
 const layerModal      = document.getElementById('layer-modal');
@@ -691,50 +687,46 @@ function setSearchError(on) {
     searchHint.style.display = on ? 'block' : 'none';
 }
 
-class CoordSearch {
-    onAdd() {
-        const wrap = el('div', 'maplibregl-ctrl coord-search');
+/* Lives in the map bar; the error line drops down under the box, the pin list floats top-left on the map */
+function buildCoordSearch() {
+    const wrap = document.getElementById('coord-search');
 
-        searchInput = el('input', 'coord-search-input', wrap);
-        searchInput.type = 'text';
-        searchInput.placeholder = 'Paste coordinates…';
-        searchInput.spellcheck = false;
-        searchInput.autocomplete = 'off';
-        searchInput.title = 'Paste or type coordinates, then press Enter. Ctrl+V anywhere works too.';
+    searchInput = el('input', 'coord-search-input', wrap);
+    searchInput.type = 'text';
+    searchInput.placeholder = 'Paste coordinates…';
+    searchInput.spellcheck = false;
+    searchInput.autocomplete = 'off';
+    searchInput.title = 'Paste or type coordinates, then press Enter. Ctrl+V anywhere works too.';
 
-        searchHint = el('div', 'coord-search-hint', wrap);
-        searchHint.textContent = 'Not recognised — try 52.40, 13.06';
-        searchHint.style.display = 'none';
+    searchHint = el('div', 'coord-search-hint', wrap);
+    searchHint.textContent = 'Not recognised — try 52.40, 13.06';
+    searchHint.style.display = 'none';
 
-        searchList = el('div', 'search-list', wrap);
-        searchList.style.display = 'none';
+    searchList = el('div', 'search-list', document.getElementById('map-container'));
+    searchList.style.display = 'none';
 
-        const submit = (text) => {
-            const c = parseCoordinates(text);
-            if (!c) { setSearchError(true); return false; }
-            setSearchError(false);
-            searchInput.value = '';
-            searchInput.blur();
-            addSearchPin(c);
-            return true;
-        };
+    const submit = (text) => {
+        const c = parseCoordinates(text);
+        if (!c) { setSearchError(true); return false; }
+        setSearchError(false);
+        searchInput.value = '';
+        searchInput.blur();
+        addSearchPin(c);
+        return true;
+    };
 
-        searchInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter')  { e.preventDefault(); submit(searchInput.value); }
-            if (e.key === 'Escape') { searchInput.value = ''; setSearchError(false); searchInput.blur(); }
-        });
-        searchInput.addEventListener('input', () => setSearchError(false));
-        searchInput.addEventListener('paste', (e) => {
-            // a clean paste into an empty box jumps straight away; otherwise let it paste for editing
-            const text = e.clipboardData && e.clipboardData.getData('text');
-            if (searchInput.value === '' && parseCoordinates(text)) { e.preventDefault(); submit(text); }
-        });
-        this._el = wrap;
-        return wrap;
-    }
-    onRemove() { this._el.remove(); }
+    searchInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter')  { e.preventDefault(); submit(searchInput.value); }
+        if (e.key === 'Escape') { searchInput.value = ''; setSearchError(false); searchInput.blur(); }
+    });
+    searchInput.addEventListener('input', () => setSearchError(false));
+    searchInput.addEventListener('paste', (e) => {
+        // a clean paste into an empty box jumps straight away; otherwise let it paste for editing
+        const text = e.clipboardData && e.clipboardData.getData('text');
+        if (searchInput.value === '' && parseCoordinates(text)) { e.preventDefault(); submit(text); }
+    });
 }
-map.addControl(new CoordSearch(), 'top-left');
+buildCoordSearch();
 
 /* Ctrl+V anywhere on the page (outside text fields) does the same as the search box.
    Only the pasted text is read, on the paste itself — the page never reads the clipboard on its own. */
