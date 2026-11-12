@@ -687,7 +687,7 @@ function setSearchError(on) {
     searchHint.style.display = on ? 'block' : 'none';
 }
 
-/* Lives in the map bar; the error line drops down under the box, the pin list floats top-left on the map */
+/* Lives in the map bar; the error line shows inside the box under the input, the pin list floats top-left on the map */
 function buildCoordSearch() {
     const wrap = document.getElementById('coord-search');
 
