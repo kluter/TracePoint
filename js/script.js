@@ -192,6 +192,36 @@ function jumpTo(p, zoom) {
     map.jumpTo({ center: [p.lng, p.lat], zoom });
 }
 
+/* ---- MAP VIEW IN THE URL HASH ----
+   #lat,lon,zoom with ,bearing,pitch appended only when either is non-zero. The hash is never sent
+   to the server and holds only the view: no lines, points or image data. replaceState keeps the
+   back button clean. Zoom is the MapLibre zoom, the same number the session files store. */
+function parseViewHash(hash) {
+    const parts = hash.replace(/^#/, '').split(',').map(Number);
+    if (parts.length < 3 || parts.length > 5 || parts.some(n => !Number.isFinite(n))) return null;
+    const [lat, lng, zoom, bearing = 0, pitch = 0] = parts;
+    if (Math.abs(lat) > 90 || Math.abs(lng) > 180 || zoom < 0 || zoom > 20 || Math.abs(pitch) > 70) return null;
+    return { center: { lat, lng }, zoom, bearing, pitch };
+}
+
+function writeViewHash() {
+    const v = getMapView();
+    let hash = `#${v.center.lat.toFixed(5)},${v.center.lng.toFixed(5)},${v.zoom.toFixed(2)}`;
+    const bearing = Math.round(((v.bearing % 360) + 360) % 360) % 360, pitch = Math.round(v.pitch);   // compass style, 0–359
+    if (bearing || pitch) hash += `,${bearing},${pitch}`;
+    if (hash !== location.hash) history.replaceState(null, '', hash);
+}
+
+{
+    const initial = parseViewHash(location.hash);
+    if (initial) applyMapView(initial);
+}
+map.on('moveend', writeViewHash);
+window.addEventListener('hashchange', () => {
+    const v = parseViewHash(location.hash);
+    if (v) applyMapView(v);
+});
+
 /* Small DOM helper for the map controls (replaces L.DomUtil.create) */
 function el(tag, className, parent) {
     const node = document.createElement(tag);

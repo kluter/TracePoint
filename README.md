@@ -76,6 +76,7 @@ The more lines you add, the more rays are generated and the more robustly the in
 | Delete a line or point | × button in the line bar |
 | Switch map layer | ☰ button, top-right of map panel |
 | Toggle 3D terrain | ⛰ Terrain in the ☰ map menu. Tilt the map (Ctrl + drag) to see it |
+| Share or bookmark a view | Copy the URL: the map view is in the `#` part, nothing else |
 | Copy a spot / open it elsewhere | Right-click the map: copy coordinates, or open the spot in Google Maps, Street View, Google Earth, Apple, Bing or Yandex Maps |
 | Jump to coordinates | Paste into the search box, top-left of map panel (or `Ctrl+V` anywhere) |
 | Go back to a pin | Click its row in the list below the search box |
@@ -114,6 +115,10 @@ The more lines you add, the more rays are generated and the more robustly the in
 ## Coordinate Search
 
 Paste coordinates into the search box at the top-left of the map, or press `Ctrl+V` anywhere outside a text field. Each location gets a numbered pin and a row in the list below the box. The map keeps your zoom if you are already at town level or closer, otherwise it flies to zoom 14.
+
+### Map view in the URL
+
+The address bar follows the map: `#lat,lon,zoom`, plus `,bearing,pitch` when the map is rotated or tilted, e.g. `#45.94060,7.71737,15.00`. Copy the URL to come back to the same view or send it to someone; a session file or an image is never part of it. The hash never leaves your browser, see [Security & Privacy](#security--privacy). Zoom is the same number the session files use.
 
 ### Accepted formats
 
@@ -236,7 +241,7 @@ python3 -m http.server
 
 | Version | Changes |
 |---------|---------|
-| v2.1.0 | 3D terrain toggle in the map menu (Mapzen Terrarium elevation tiles via AWS, off by default); clicks land on the slope. Right-click menu on the map: copy coordinates or open the spot in Google Maps, Street View, Google Earth, Apple, Bing or Yandex Maps. |
+| v2.1.0 | 3D terrain toggle in the map menu (Mapzen Terrarium elevation tiles via AWS, off by default); clicks land on the slope. Right-click menu on the map: copy coordinates or open the spot in Google Maps, Street View, Google Earth, Apple, Bing or Yandex Maps. Map view in the URL hash (`#lat,lon,zoom`), restored on load. |
 | v2.0.0 | Map engine switched from Leaflet to [MapLibre GL JS](https://maplibre.org/): rotate and tilt the map (Ctrl + drag or right-drag, compass or `N` resets north), middle-drag pans, smoother zooming. Compass button bottom-right. Both libraries are now bundled in the repo, no CDN. Session files are json_version 2: map zoom is stored in MapLibre terms (one less than before) and the saved view includes bearing and pitch. Files from v1.x are not converted. |
 | v1.8.0 | Coordinate search: paste decimal, DMS or Google Maps links to drop numbered pins, listed under the search box. `Ctrl+V` anywhere on the page. Map zoom buttons moved to bottom-left. |
 | v1.7.1 | Custom layers fall back to lower-zoom tiles when a server has no tiles at the current zoom (no more black tiles on older Wayback releases). |
@@ -310,6 +315,10 @@ The only outbound requests are map tile fetches from public CDN servers (Esri, O
 ### Pasted coordinates stay local
 
 TracePoint never reads your clipboard on its own and never asks for clipboard permission. It only receives text at the moment you paste, into the search box or with `Ctrl+V` on the page. That text is parsed in the browser, no lookup service or geocoder is contacted, and the resulting pins live in memory only: they are not saved and disappear when you close the tab.
+
+### The URL hash stays in the browser
+
+The map view is mirrored into the URL after the `#`. Browsers never send the hash part of a URL to the server, so GitHub Pages, or whoever hosts your copy, does not see which places you look at. The hash holds only latitude, longitude, zoom, bearing and pitch. Lines, points, pins and images are not in it, so a shared link shows the place, not your work.
 
 ### The right-click menu only builds links
 
