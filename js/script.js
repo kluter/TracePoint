@@ -630,7 +630,6 @@ const fmtCoords = (p) => `${p.lat.toFixed(6)}, ${p.lng.toFixed(6)}`;
 let searchPins = [];          // { lat, lng, marker }
 let searchList = null;
 let searchInput = null;
-let searchHint = null;
 
 /* Gentle flight: keep the user's zoom unless they are zoomed out further than town level */
 function flyToPin(p) {
@@ -682,25 +681,25 @@ function renderSearchList() {
     searchList.style.display = searchPins.length ? 'block' : 'none';
 }
 
+/* A bad entry is cleared and the message takes the placeholder's place, in red, until the next keystroke */
+const SEARCH_PLACEHOLDER = 'Paste coordinates…';
+const SEARCH_ERROR       = 'Not recognised — try 52.40, 13.06';
 function setSearchError(on) {
     searchInput.classList.toggle('search-input-error', on);
-    searchHint.style.display = on ? 'block' : 'none';
+    if (on) searchInput.value = '';
+    searchInput.placeholder = on ? SEARCH_ERROR : SEARCH_PLACEHOLDER;
 }
 
-/* Lives in the map bar; the error line shows inside the box under the input, the pin list floats top-left on the map */
+/* Lives in the map bar; the pin list floats top-left on the map */
 function buildCoordSearch() {
     const wrap = document.getElementById('coord-search');
 
     searchInput = el('input', 'coord-search-input', wrap);
     searchInput.type = 'text';
-    searchInput.placeholder = 'Paste coordinates…';
+    searchInput.placeholder = SEARCH_PLACEHOLDER;
     searchInput.spellcheck = false;
     searchInput.autocomplete = 'off';
     searchInput.title = 'Paste or type coordinates, then press Enter. Ctrl+V anywhere works too.';
-
-    searchHint = el('div', 'coord-search-hint', wrap);
-    searchHint.textContent = 'Not recognised — try 52.40, 13.06';
-    searchHint.style.display = 'none';
 
     searchList = el('div', 'search-list', document.getElementById('map-container'));
     searchList.style.display = 'none';
