@@ -2005,6 +2005,71 @@ document.getElementById('map-container').addEventListener('click', (e) => {
 });
 
 /* ============================================================
+   MAP CONTEXT MENU – right-click: copy coordinates, open in other maps
+   MapLibre fires 'contextmenu' only for a right-click without drag (right-drag rotates).
+   Links are plain hrefs: nothing is requested until one is clicked.
+   ============================================================ */
+const ctxMenu = el('div', 'map-ctx-menu', document.getElementById('map-container'));
+ctxMenu.style.display = 'none';
+
+/* The other services count zoom in 256px tiles, MapLibre in 512px: one level apart */
+const CTX_LINKS = [
+    ['Google Maps',  (la, ln, z) => `https://www.google.com/maps/search/?api=1&query=${la},${ln}`],
+    ['Street View',  (la, ln, z) => `https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${la},${ln}`],
+    ['Google Earth', (la, ln, z) => `https://earth.google.com/web/@${la},${ln},0a,2000d,35y,0h,0t,0r`],
+    ['Apple Maps',   (la, ln, z) => `https://maps.apple.com/?ll=${la},${ln}&q=${la},${ln}&z=${z}`],
+    ['Bing Maps',    (la, ln, z) => `https://www.bing.com/maps?cp=${la}~${ln}&lvl=${z}&sp=point.${la}_${ln}_Pin`],
+    ['Yandex Maps',  (la, ln, z) => `https://yandex.com/maps/?ll=${ln},${la}&z=${z}&pt=${ln},${la}`]
+];
+
+function hideCtxMenu() { ctxMenu.style.display = 'none'; }
+
+map.on('contextmenu', (e) => {
+    e.preventDefault();
+    const la = e.lngLat.lat.toFixed(6);
+    const ln = e.lngLat.lng.toFixed(6);
+    const z  = Math.round(map.getZoom()) + 1;
+
+    ctxMenu.innerHTML = '';
+    const head = el('div', 'map-ctx-head', ctxMenu);
+    head.textContent = `${la}, ${ln}`;
+
+    const copy = el('button', 'map-ctx-item', ctxMenu);
+    copy.type = 'button';
+    copy.textContent = 'Copy coordinates';
+    copy.onclick = () => {
+        hideCtxMenu();
+        navigator.clipboard.writeText(`${la}, ${ln}`)
+            .then(() => showToast('Coordinates copied.', 'success'))
+            .catch(() => showToast('Could not copy to clipboard.'));
+    };
+
+    el('div', 'map-ctx-divider', ctxMenu);
+    CTX_LINKS.forEach(([label, url]) => {
+        const a = el('a', 'map-ctx-item', ctxMenu);
+        a.href = url(la, ln, z);
+        a.target = '_blank';
+        a.rel = 'noopener';
+        a.textContent = `Open in ${label}`;
+        a.onclick = hideCtxMenu;
+    });
+
+    // Place at the click, flipped so it stays inside the map
+    const box = map.getContainer().getBoundingClientRect();
+    ctxMenu.style.display = 'block';
+    const w = ctxMenu.offsetWidth, h = ctxMenu.offsetHeight;
+    const x = e.point.x + w > box.width  ? e.point.x - w : e.point.x;
+    const y = e.point.y + h > box.height ? e.point.y - h : e.point.y;
+    ctxMenu.style.left = `${Math.max(0, x)}px`;
+    ctxMenu.style.top  = `${Math.max(0, y)}px`;
+});
+
+map.on('click',     hideCtxMenu);
+map.on('movestart', hideCtxMenu);
+document.addEventListener('keydown',   (e) => { if (e.key === 'Escape') hideCtxMenu(); });
+document.addEventListener('mousedown', (e) => { if (!ctxMenu.contains(e.target)) hideCtxMenu(); });
+
+/* ============================================================
    MAP INTERACTION – place geo points
    ============================================================ */
 map.on('click', (e) => {
