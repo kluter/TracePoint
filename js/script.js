@@ -75,6 +75,8 @@ document.getElementById('exif-card').addEventListener('click', e => {
    SESSION MODEL
    Each session owns one image and all work done on it.
    ============================================================ */
+const ADJUST_DEFAULTS = { contrast: 100, brightness: 100, saturation: 100, invert: false };
+
 function createSession(name) {
     return {
         name,
@@ -88,7 +90,8 @@ function createSession(name) {
         /* Rays and the ellipse of every session live in one shared GeoJSON source (see rebuildWorkSource);
            markers are DOM elements owned here. */
         mapObjects:       { geoMarkers: [], intersectionMarker: null, intersectionLatLng: null, ellipseRing: null },
-        exifGpsMarker:    null
+        exifGpsMarker:    null,
+        adjust:           { ...ADJUST_DEFAULTS }   // display only, never exported
     };
 }
 
@@ -1292,6 +1295,8 @@ function switchToSession(idx) {
     // Show exif button if an image is loaded, or if exif data was restored from JSON
     exifWrap.style.display = (s.imgElement || s.exif) ? 'block' : 'none';
     exifCard.style.display = 'none';
+    adjustCard.style.display = 'none';
+    updateAdjustUI();
 
     if (s.imgElement) {
         canvas.width         = s.imgElement.width;
@@ -1429,6 +1434,7 @@ function loadImage(file) {
         render();
         renderSessionMenu();
         updateGuide();
+        updateAdjustUI();
     };
     s.imgElement.src = s.currentObjectURL;
 
@@ -1733,6 +1739,58 @@ document.addEventListener('click', (e) => {
 });
 
 /* ============================================================
+   CONTRAST / BRIGHTNESS  (#16)
+   A CSS filter applied while the photo is drawn, so lines and points
+   stay crisp and the pixels used for measuring are untouched.
+   ============================================================ */
+const adjustWrap   = document.getElementById('adjust-wrap');
+const adjustCard   = document.getElementById('adjust-card');
+const btnAdjust    = document.getElementById('btn-adjust');
+const adjustInvert = document.getElementById('adjust-invert');
+const ADJUST_SLIDERS = ['contrast', 'brightness', 'saturation'].map(key => ({
+    key, input: document.getElementById(`adjust-${key}`), val: document.getElementById(`adjust-${key}-val`)
+}));
+
+function isAdjusted(s) { return ADJUST_SLIDERS.some(sl => s.adjust[sl.key] !== 100) || s.adjust.invert; }
+
+/* Sets ctx.filter for the image draw that follows; ctx.restore() in render() clears it.
+   Browsers without ctx.filter fall back to filtering the whole canvas. */
+function applyImageFilter(s) {
+    const a = s.adjust;
+    const f = isAdjusted(s)
+        ? `contrast(${a.contrast}%) brightness(${a.brightness}%) saturate(${a.saturation}%)` + (a.invert ? ' invert(1)' : '')
+        : 'none';
+    if ('filter' in ctx) { ctx.filter = f; canvas.style.filter = ''; }
+    else canvas.style.filter = f;
+}
+
+function updateAdjustUI() {
+    const s = sess();
+    adjustWrap.style.display = s.imgElement ? 'block' : 'none';
+    ADJUST_SLIDERS.forEach(sl => { sl.input.value = s.adjust[sl.key]; sl.val.textContent = `${s.adjust[sl.key]}%`; });
+    adjustInvert.checked = !!s.adjust.invert;
+    btnAdjust.classList.toggle('active', isAdjusted(s));
+}
+
+ADJUST_SLIDERS.forEach(sl => sl.input.addEventListener('input', () => { sess().adjust[sl.key] = +sl.input.value; render(); updateAdjustUI(); }));
+adjustInvert.addEventListener('change', () => { sess().adjust.invert = adjustInvert.checked; render(); updateAdjustUI(); });
+document.getElementById('btn-adjust-reset').addEventListener('click', () => {
+    sess().adjust = { ...ADJUST_DEFAULTS };
+    render(); updateAdjustUI();
+});
+
+btnAdjust.addEventListener('click', (e) => {
+    e.stopPropagation();
+    adjustCard.style.display = adjustCard.style.display === 'none' ? 'block' : 'none';
+});
+document.addEventListener('click', (e) => {
+    if (!adjustWrap.contains(e.target)) adjustCard.style.display = 'none';
+});
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') adjustCard.style.display = 'none';
+});
+
+/* ============================================================
    JSON PICKER  (import trigger)
    ============================================================ */
 const jsonPicker = document.getElementById('json-picker');
@@ -1977,6 +2035,7 @@ function render() {
     ctx.translate(cx, cy);
     ctx.rotate(s.view.rotation * Math.PI / 180);
     ctx.translate(-cx, -cy);
+    applyImageFilter(s);
     ctx.drawImage(s.imgElement, 0, 0);
     ctx.restore();
 
