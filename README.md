@@ -119,7 +119,7 @@ Paste coordinates into the search box at the top-left of the map, or press `Ctrl
 
 ### Map view in the URL
 
-The address bar follows the map: `#lat,lon,zoom`, plus `,bearing,pitch` when the map is rotated or tilted, e.g. `#45.94060,7.71737,15.00`. Copy the URL to come back to the same view or send it to someone; a session file or an image is never part of it. The hash never leaves your browser, see [Security & Privacy](#security--privacy). Zoom is the same number the session files use.
+The address bar follows the map: `#lat,lon,zoom`, plus `,bearing,pitch` when the map is rotated or tilted, e.g. `#45.94060,7.71737,15.00`. Copy the URL to come back to the same view or send it to someone; a session file or an image is never part of it. The hash never leaves your browser, see [Security & Privacy](#security--privacy). Zoom is the same number the session files use. Because the view is in the URL, a reload brings it back; delete everything after the `#` to start from the world view.
 
 ### Accepted formats
 
@@ -242,7 +242,7 @@ python3 -m http.server
 
 | Version | Changes |
 |---------|---------|
-| v2.2.0 | Points can be moved after placing: drag the marker on the map (ray follows live, intersection updates on release) or slide the point along its line on the image. `Esc` while dragging snaps it back. |
+| v2.2.0 | Points can be moved after placing: drag the marker on the map (ray follows live, intersection updates on release) or slide the point along its line on the image. `Esc` while dragging snaps it back. Step guide on the image: the next step glows, a hint in the header says what to do, including "click the map to place L1 P2". Smaller geo markers, as before v2. |
 | v2.1.0 | 3D terrain toggle in the map menu (Mapzen Terrarium elevation tiles via AWS, off by default); clicks land on the slope. Right-click menu on the map: copy coordinates or open the spot in Google Maps, Street View, Google Earth, Apple, Bing or Yandex Maps. Map view in the URL hash (`#lat,lon,zoom`), restored on load. |
 | v2.0.0 | Map engine switched from Leaflet to [MapLibre GL JS](https://maplibre.org/): rotate and tilt the map (Ctrl + drag or right-drag, compass or `N` resets north), middle-drag pans, smoother zooming. Compass button bottom-right. Both libraries are now bundled in the repo, no CDN. Session files are json_version 2: map zoom is stored in MapLibre terms (one less than before) and the saved view includes bearing and pitch. Files from v1.x are not converted. |
 | v1.8.0 | Coordinate search: paste decimal, DMS or Google Maps links to drop numbered pins, listed under the search box. `Ctrl+V` anywhere on the page. Map zoom buttons moved to bottom-left. |

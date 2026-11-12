@@ -202,10 +202,54 @@ button:disabled     { opacity: 0.3; cursor: not-allowed; }
 #btn-horizon.horizon-active { background: #2a1800; color: #ffaa00; border-color: #ffaa00; }
 #btn-horizon svg            { width: 14px; height: 14px; flex-shrink: 0; }
 
-/* Map hint bar */
-.toolbar-hint {
-    font-size: 13px; color: #777; white-space: nowrap;
-    position: absolute; left: 50%; transform: translateX(-50%);
+/* Current-step hint, same yellow as the glowing step in the guide */
+.step-hint {
+    font-size: 12px; color: #ffdc32; white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis;
+}
+/* In the image header the hint may wrap to two lines when the panel is narrow */
+#image-hint {
+    margin: 0 auto; padding: 0 12px; min-width: 0; text-align: center;
+    white-space: normal; line-height: 1.25;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+}
+
+/* ---- STEP GUIDE ---- */
+#guide {
+    position: absolute; right: 10px; top: 50%; transform: translateY(-50%); z-index: 5;
+    width: 46px; padding: 8px 0;
+    background: #151515d9; border: 1px solid #2a2a2a; border-radius: 8px;
+    display: flex; flex-direction: column; align-items: center;
+}
+.guide-rail {
+    position: absolute; right: 7px; top: 24px; bottom: 24px; width: 2px;
+    background: #333; border-radius: 1px;
+}
+.guide-rail-fill {
+    width: 100%; height: 0; background: #ffdc32; border-radius: 1px;
+    transition: height 0.3s;
+}
+.guide-step, .guide-step:hover:not(:disabled) {
+    position: relative; width: 46px; height: 40px; flex-shrink: 0;
+    background: none; border: none; border-radius: 0; padding: 0; cursor: default;
+    display: flex; align-items: center; justify-content: center;
+    color: #555;
+}
+/* Steps with a key show the key cap until that key has been pressed, then their icon */
+.guide-step svg { width: 20px; height: 20px; margin-right: 8px; display: none; }
+.guide-key {
+    font-size: 9px; line-height: 1; margin-right: 8px; padding: 2px 4px;
+    border: 1px solid #383838; border-radius: 3px; color: #666; font-family: monospace;
+}
+.guide-step.done svg, .guide-step.pressed svg, .guide-step.no-key svg { display: block; }
+.guide-step.done .guide-key, .guide-step.pressed .guide-key, .guide-step.no-key .guide-key { display: none; }
+.guide-step.done, .guide-step.done:hover { color: #8a7a2a; }
+.guide-step.current, .guide-step.current:hover { color: #ffdc32; cursor: pointer; }
+.guide-step.current .guide-key { color: #ffdc32; border-color: #ffdc32; }
+.guide-step.current svg, .guide-step.current .guide-key { animation: guidePulse 1.6s ease-in-out infinite; }
+@keyframes guidePulse {
+    0%, 100% { filter: drop-shadow(0 0 2px #ffdc32aa); }
+    50%      { filter: drop-shadow(0 0 7px #ffdc32); }
 }
 
 /* ---- MAP POPUP ---- */
@@ -282,12 +326,12 @@ button:disabled     { opacity: 0.3; cursor: not-allowed; }
 .maplibregl-canvas:focus { outline: none; }
 
 /* geo reference points (small coloured dots; colour set per line in JS) */
-/* MapLibre positions .geo-point with its own transform, so the visuals live on the inner dot */
-.geo-point { width: 14px; height: 14px; cursor: grab; }
-/* Same look as the Leaflet circle marker before v2: 14px across, 2px stroke, 90% fill */
+/* MapLibre positions .geo-point with its own transform, so the visuals live on the inner dot.
+   Size and stroke are the two numbers to tune. */
+.geo-point { width: 12px; height: 12px; cursor: grab; }
 .geo-point-dot {
     width: 100%; height: 100%; box-sizing: border-box; border-radius: 50%;
-    border: 2px solid; background-clip: padding-box;
+    border: 1.5px solid; background-clip: padding-box;
     transition: transform 0.12s, box-shadow 0.12s;
 }
 /* Hover: grow and glow in the line colour, so a draggable point announces itself */

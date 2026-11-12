@@ -27,6 +27,7 @@
                 <div class="toolbar" id="toolbar">
                     <button id="btn-add-line">+ New Line</button>
                     <button id="btn-mode-toggle" disabled>Mode: Idle</button>
+                    <span class="step-hint" id="image-hint"></span>
                 </div>
                 <div class="navbar-right">
                     <button id="btn-horizon" title="Set horizon correction">
@@ -62,6 +63,7 @@
             </div>
             <div id="image-container">
                 <canvas id="image-canvas"></canvas>
+                <div id="guide" title=""></div>
                 <div id="drop-overlay">
                     Drop image here
                     <button id="btn-browse" type="button">Browse</button>
@@ -71,7 +73,7 @@
                 <div id="zoom-hint">
                     <span class="hint-pill">mouse: scroll to zoom · space+drag or middle-drag to pan</span>
                     <span class="hint-pill">keys: W · E · R · F · X · Tab · 1–5 · Esc</span>
-                    <span class="hint-pill" style="margin-left:auto">v2.0.0</span>
+                    <span class="hint-pill" style="margin-left:auto">v2.2.0</span>
                 </div>
             </div>
         </div>
@@ -80,7 +82,6 @@
         <div id="map-panel">
             <div class="panel-header">
                 <h3 style="margin:0; font-size:15px; font-weight:600;">Map View</h3>
-                <div class="toolbar-hint">Place geo points → Rays appear → Intersection = Image origin</div>
                 <div class="header-actions">
                     <a id="btn-github" href="https://github.com/kluter/TracePoint" target="_blank" rel="noopener" title="View on GitHub">
                         <svg viewBox="0 0 24 24" fill="currentColor">
