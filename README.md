@@ -76,6 +76,7 @@ The more lines you add, the more rays are generated and the more robustly the in
 | Delete a line or point | × button in the line bar |
 | Switch map layer | ☰ button, top-right of map panel |
 | Toggle 3D terrain | ⛰ Terrain in the ☰ map menu. Tilt the map (Ctrl + drag) to see it |
+| Copy a spot / open it elsewhere | Right-click the map: copy coordinates, or open the spot in Google Maps, Street View, Google Earth, Apple, Bing or Yandex Maps |
 | Jump to coordinates | Paste into the search box, top-left of map panel (or `Ctrl+V` anywhere) |
 | Go back to a pin | Click its row in the list below the search box |
 | Remove a pin | × on its row, or **Clear all** |
@@ -235,7 +236,7 @@ python3 -m http.server
 
 | Version | Changes |
 |---------|---------|
-| v2.1.0 | 3D terrain toggle in the map menu (Mapzen Terrarium elevation tiles via AWS, off by default); clicks land on the slope. |
+| v2.1.0 | 3D terrain toggle in the map menu (Mapzen Terrarium elevation tiles via AWS, off by default); clicks land on the slope. Right-click menu on the map: copy coordinates or open the spot in Google Maps, Street View, Google Earth, Apple, Bing or Yandex Maps. |
 | v2.0.0 | Map engine switched from Leaflet to [MapLibre GL JS](https://maplibre.org/): rotate and tilt the map (Ctrl + drag or right-drag, compass or `N` resets north), middle-drag pans, smoother zooming. Compass button bottom-right. Both libraries are now bundled in the repo, no CDN. Session files are json_version 2: map zoom is stored in MapLibre terms (one less than before) and the saved view includes bearing and pitch. Files from v1.x are not converted. |
 | v1.8.0 | Coordinate search: paste decimal, DMS or Google Maps links to drop numbered pins, listed under the search box. `Ctrl+V` anywhere on the page. Map zoom buttons moved to bottom-left. |
 | v1.7.1 | Custom layers fall back to lower-zoom tiles when a server has no tiles at the current zoom (no more black tiles on older Wayback releases). |
@@ -309,6 +310,10 @@ The only outbound requests are map tile fetches from public CDN servers (Esri, O
 ### Pasted coordinates stay local
 
 TracePoint never reads your clipboard on its own and never asks for clipboard permission. It only receives text at the moment you paste, into the search box or with `Ctrl+V` on the page. That text is parsed in the browser, no lookup service or geocoder is contacted, and the resulting pins live in memory only: they are not saved and disappear when you close the tab.
+
+### The right-click menu only builds links
+
+Right-clicking the map shows the clicked coordinate and links to other map services. These are ordinary links that open in a new tab when you click one; nothing is contacted when the menu opens. A link carries only the clicked coordinate and the zoom level, never your image or session data.
 
 ### No persistent storage
 

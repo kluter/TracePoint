@@ -338,6 +338,28 @@ button:disabled     { opacity: 0.3; cursor: not-allowed; }
 .layer-action:hover:not(:disabled)        { color: #fff; }
 .layer-action-delete:hover:not(:disabled) { color: #ff4444; }
 .layer-divider { height: 1px; background: #2a2a2a; margin: 2px 0; }
+/* ---- MAP CONTEXT MENU ---- */
+.map-ctx-menu {
+    position: absolute; z-index: 1000;
+    background: #151515; border: 1px solid #2a2a2a;
+    border-radius: 6px; min-width: 190px;
+    box-shadow: 0 4px 16px #000a; overflow: hidden;
+    font-size: 12px;
+}
+.map-ctx-head {
+    padding: 8px 14px; font-family: monospace; font-size: 11px;
+    color: #ffdc32; background: #0d0d0d; border-bottom: 1px solid #2a2a2a;
+    user-select: text;
+}
+.map-ctx-item {
+    display: block; width: 100%; box-sizing: border-box; text-align: left;
+    padding: 8px 14px; color: #bbb; text-decoration: none;
+    background: none; border: none; cursor: pointer; font: inherit;
+    transition: background 0.12s, color 0.12s;
+}
+.map-ctx-item:hover { background: #222; color: #fff; }
+.map-ctx-divider { height: 1px; background: #2a2a2a; margin: 2px 0; }
+
 .layer-terrain::after        { content: '  off'; color: #555; font-size: 11px; }
 .layer-terrain.active::after { content: '  on';  color: #00aaff; }
 .layer-add       { color: #777; }
