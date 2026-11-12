@@ -105,6 +105,7 @@ const state = {
     activeLineIndex: -1,
     mapPointTarget:  null,  // { lineIndex, pointIndex }
     isDragging:      false,
+    pointDrag:       null,  // { line, pt, origY } while a point is slid along its line on the image
     _horizonMouse:   null
 };
 
@@ -859,7 +860,7 @@ function updateLineManager() {
             `<button class="btn-delete" title="Delete line" data-action="delete-line" data-idx="${lIdx}">×</button>`;
         header.onclick = () => {
             state.activeLineIndex = lIdx;
-            if (state.mode === 'map-point') state.mode = 'drag-line';
+            if (state.mode !== 'add-point') state.mode = 'drag-line';   // from idle too, so the mode toggle works
             render(); updateUI();
         };
         item.appendChild(header);
@@ -989,9 +990,19 @@ document.addEventListener('keydown', (e) => {
     // Ignore when typing in an actual text input
     const tag = e.target.tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+    // Browser shortcuts (Ctrl+R reload, Ctrl+F find, ...) are not ours; Ctrl+V arrives as a paste event
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
 
     // Escape — cancel / deselect
     if (e.key === 'Escape') {
+        // A drag in progress snaps back instead of deselecting
+        if (cancelMarkerDrag()) return;
+        if (state.pointDrag) {
+            const { line, pt, origY } = state.pointDrag;
+            pt.y = origY; state.pointDrag = null; line.pristine = false;
+            render(); updateUI();
+            return;
+        }
         if (state.mode === 'map-point') {
             state.mode = 'drag-line';
             state.mapPointTarget = null;
@@ -1074,7 +1085,8 @@ document.addEventListener('keydown', (e) => {
         const idx = lineNum - 1;
         if (idx < sess().lines.length) {
             state.activeLineIndex = idx;
-            if (state.mode === 'map-point') { state.mode = 'drag-line'; state.mapPointTarget = null; }
+            if (state.mode === 'map-point') state.mapPointTarget = null;
+            if (state.mode !== 'add-point') state.mode = 'drag-line';   // from idle too, so the mode toggle works
             render(); updateUI();
         }
     }
@@ -1168,7 +1180,9 @@ function switchToSession(idx) {
     // Save outgoing session's map position (guard: session may already be gone if called from removeSession)
     if (sessions[activeSessionIndex]) {
         sessions[activeSessionIndex].mapView = getMapView();
+        setMarkersDraggable(sessions[activeSessionIndex], false);
     }
+    if (sessions[idx]) setMarkersDraggable(sessions[idx], true);
 
     activeSessionIndex = idx;
     const s = sess();
@@ -1836,12 +1850,18 @@ container.addEventListener('mousedown', (e) => {
 window.addEventListener('mouseup', () => {
     if (isPanning) { isPanning = false; container.style.cursor = ''; }
     state.isDragging = false;
+    if (state.pointDrag) { state.pointDrag = null; updateUI(); }
 });
 window.addEventListener('mousemove', (e) => {
     if (isPanning) {
         sess().view.tx = panOrigin.tx + (e.clientX - panStart.x);
         sess().view.ty = panOrigin.ty + (e.clientY - panStart.y);
         applyTransform();
+    }
+    if (state.pointDrag) {
+        state.pointDrag.pt.y = Math.max(0, Math.min(canvas.height, clientToImage(e).y));
+        render();
+        return;
     }
     if (state.isDragging && state.activeLineIndex !== -1) {
         sess().lines[state.activeLineIndex].x = clientToImage(e).x;
@@ -1965,6 +1985,21 @@ canvas.addEventListener('mousedown', (e) => {
         sess().lines.forEach((line, idx) => { if (Math.abs(line.x - mx) < THRESH) hit = idx; });
         if (hit === -1) { state.activeLineIndex = -1; state.mode = 'idle'; render(); updateUI(); }
         else sess().lines[hit].pristine = false;   // used without ever being dragged: the "grab me" glow is done
+        return;
+    }
+
+    // A point's circle grabs the point (slide along its line); otherwise the line itself
+    const { y: my } = clientToImage(e);
+    let ptHit = null;
+    sess().lines.forEach((line, idx) => line.points.forEach((pt) => {
+        if (Math.hypot(line.x - mx, pt.y - my) < THRESH) ptHit = { line, pt, idx };
+    }));
+    if (ptHit) {
+        state.activeLineIndex = ptHit.idx;
+        state.mode = 'drag-line';
+        state.pointDrag = { line: ptHit.line, pt: ptHit.pt, origY: ptHit.pt.y };
+        ptHit.line.pristine = false;
+        render(); updateUI();
         return;
     }
 
@@ -2104,6 +2139,7 @@ document.addEventListener('mousedown', (e) => { if (!ctxMenu.contains(e.target))
    ============================================================ */
 map.on('click', (e) => {
     if (state.mode !== 'map-point' || !state.mapPointTarget) return;
+    if (e.originalEvent?.target?.closest?.('.geo-point')) return;   // clicking an existing marker never places a point
     const { lineIndex, pointIndex } = state.mapPointTarget;
     const line = sess().lines[lineIndex];
     if (!line || !line.points[pointIndex]) return;
@@ -2212,14 +2248,60 @@ function rebuildMapForLine(lIdx) {
     line.points.forEach((pt, pIdx) => {
         if (!pt.geo) return;
         const node = el('div', 'geo-point');
-        node.style.background   = colour;
-        node.style.borderColor  = colour;
+        const dot  = el('div', 'geo-point-dot', node);
+        dot.style.background  = colour + 'e6';   // 90% fill, solid stroke, as the Leaflet marker had
+        dot.style.borderColor = colour;
+        dot.style.color       = colour;   // hover halo uses currentColor
         node.title = `L${lIdx + 1} P${pIdx + 1}`;
-        const marker = new maplibregl.Marker({ element: node }).setLngLat([pt.geo.lng, pt.geo.lat]).addTo(map);
+        const marker = new maplibregl.Marker({ element: node, draggable: true })
+            .setLngLat([pt.geo.lng, pt.geo.lat]).addTo(map);
+        attachMarkerDrag(marker, pt);
         mo.geoMarkers[lIdx].push(marker);
     });
 
     rebuildWorkSource();   // the ray for this line (if both points are placed)
+}
+
+/* Dragging a geo marker: the ray follows live, intersection and ellipse recompute on release.
+   Esc while dragging snaps the point back (see the keyboard handler). Only the active session's
+   markers are draggable (setMarkersDraggable on session switch). */
+let markerDrag = null;   // { marker, pt, origin: {lat, lng}, cancelled }
+
+function attachMarkerDrag(marker, pt) {
+    marker.on('dragstart', () => {
+        markerDrag = { marker, pt, origin: { ...pt.geo }, cancelled: false };
+        hideCtxMenu();
+    });
+    marker.on('drag', () => {
+        if (!markerDrag) return;
+        if (markerDrag.cancelled) { marker.setLngLat([markerDrag.origin.lng, markerDrag.origin.lat]); return; }
+        const ll = marker.getLngLat();
+        pt.geo = { lat: ll.lat, lng: ll.lng };
+        rebuildWorkSource();
+    });
+    marker.on('dragend', () => {
+        if (!markerDrag) return;
+        if (markerDrag.cancelled) marker.setLngLat([markerDrag.origin.lng, markerDrag.origin.lat]);
+        markerDrag = null;
+        recomputeIntersection();
+        updateUI();
+    });
+}
+
+function cancelMarkerDrag() {
+    if (!markerDrag) return false;
+    markerDrag.cancelled = true;
+    markerDrag.pt.geo = { ...markerDrag.origin };
+    markerDrag.marker.setLngLat([markerDrag.origin.lng, markerDrag.origin.lat]);
+    rebuildWorkSource();
+    return true;
+}
+
+function setMarkersDraggable(s, on) {
+    s.mapObjects.geoMarkers.forEach(list => (list || []).forEach(m => {
+        m.setDraggable(on);
+        m.getElement().classList.toggle('geo-point-fixed', !on);
+    }));
 }
 
 /* ============================================================
