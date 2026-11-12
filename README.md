@@ -75,6 +75,7 @@ The more lines you add, the more rays are generated and the more robustly the in
 | Place point on map | Click the map pill, then click the map |
 | Move a point | Drag its marker on the map, or slide it along its line on the image. `Esc` while dragging snaps it back |
 | Delete a line or point | × button in the line bar |
+| Adjust the photo on screen | ☀ button in the line bar: contrast, brightness, saturation, invert. Display only: the photo, lines and exports are untouched. Remembered per image while the tab is open |
 | Switch map layer | ☰ button, right of the map bar |
 | Toggle 3D terrain | ⛰ Terrain in the ☰ map menu. Tilt the map (Ctrl + drag) to see it |
 | Share or bookmark a view | Copy the URL: the map view is in the `#` part, nothing else |
@@ -242,7 +243,7 @@ python3 -m http.server
 
 | Version | Changes |
 |---------|---------|
-| v2.3.0 | Map bar under the map header, mirroring the line bar on the image side: the coordinate search box and the ☰ layer menu moved there, off the map. |
+| v2.3.0 | Map bar under the map header, mirroring the line bar on the image side: the coordinate search box and the ☰ layer menu moved there, off the map. Contrast, brightness and saturation sliders plus an invert switch for the photo (☀ in the line bar), display only, never written to the session file. |
 | v2.2.0 | Points can be moved after placing: drag the marker on the map (ray follows live, intersection updates on release) or slide the point along its line on the image. `Esc` while dragging snaps it back. Step guide on the image: the next step glows, a hint in the header says what to do, including "click the map to place L1 P2". Smaller geo markers, as before v2. |
 | v2.1.0 | 3D terrain toggle in the map menu (Mapzen Terrarium elevation tiles via AWS, off by default); clicks land on the slope. Right-click menu on the map: copy coordinates or open the spot in Google Maps, Street View, Google Earth, Apple, Bing or Yandex Maps. Map view in the URL hash (`#lat,lon,zoom`), restored on load. |
 | v2.0.0 | Map engine switched from Leaflet to [MapLibre GL JS](https://maplibre.org/): rotate and tilt the map (Ctrl + drag or right-drag, compass or `N` resets north), middle-drag pans, smoother zooming. Compass button bottom-right. Both libraries are now bundled in the repo, no CDN. Session files are json_version 2: map zoom is stored in MapLibre terms (one less than before) and the saved view includes bearing and pitch. Files from v1.x are not converted. |
