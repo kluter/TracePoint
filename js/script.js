@@ -825,7 +825,109 @@ function updateUI() {
     }
 
     updateLineManager();
+    updateGuide();
 }
+
+/* ============================================================
+   STEP GUIDE – vertical icon column on the image, next step glows,
+   one-line hints in both panel headers. Derived from state on every updateUI.
+   ============================================================ */
+const GUIDE_STEPS = [
+    { title: 'Load an image',            key: '',    icon: '<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-8 8"/>' },
+    { title: 'Add a line',               key: 'E',   icon: '<line x1="12" y1="3" x2="12" y2="21"/>' },
+    { title: 'Drag the line onto a feature', key: '', icon: '<line x1="12" y1="3" x2="12" y2="21"/><path d="M4 12h5M15 12h5"/><path d="M6 9l-3 3 3 3M18 9l3 3-3 3"/>' },
+    { title: 'Place P1 and P2 on the line', key: 'Tab', icon: '<line x1="12" y1="3" x2="12" y2="21"/><circle cx="12" cy="8" r="2.5"/><circle cx="12" cy="16" r="2.5"/>' },
+    { title: 'Mark the points on the map', key: 'F', icon: '<path d="M12 21s-6-5.5-6-10a6 6 0 0 1 12 0c0 4.5-6 10-6 10z"/><circle cx="12" cy="11" r="2"/>' },
+    { title: 'Add a second line',         key: 'E',   icon: '<line x1="8" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="16" y2="21"/>' },
+    { title: 'Position found',            key: '',    icon: '<circle cx="12" cy="12" r="7"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/>' }
+];
+
+const guideEl   = document.getElementById('guide');
+const imageHint = document.getElementById('image-hint');
+
+/* Which step is next, the header hint, and overall progress 0–1.
+   Progress counts finished work (image, then per line: created, aligned, 2 points, 2 map points,
+   for the two lines a position needs), so the rail only ever grows while steps 2–5 repeat. */
+function guideStatus() {
+    const s = sess();
+    const UNITS_PER_LINE = 6, TOTAL = 1 + 2 * UNITS_PER_LINE;
+    let done = s.imgElement ? 1 : 0;
+    s.lines.slice(0, 2).forEach(l => {
+        done += 1 + (l.pristine ? 0 : 1) + Math.min(l.points.length, 2) + l.points.filter(p => p.geo).length;
+    });
+    const progress = Math.min(done / TOTAL, 1);
+
+    if (!s.imgElement) return { idx: 0, progress, hint: 'Drop a photo here, or pick the demo from the ☰ menu' };
+    if (s.lines.length === 0) return { idx: 1, progress, hint: 'Press E or click + New Line' };
+
+    // The first line that still needs work drives the guide
+    const lIdx = s.lines.findIndex(l => l.points.length < 2 || l.points.some(p => !p.geo));
+    if (lIdx !== -1) {
+        const line = s.lines[lIdx], L = `L${lIdx + 1}`;
+        if (line.pristine) return { idx: 2, progress, hint: `Drag ${L} onto a road, shadow or edge pointing away from the camera` };
+        if (line.points.length < 2) {
+            const n = line.points.length + 1;
+            return state.mode === 'add-point' && state.activeLineIndex === lIdx
+                ? { idx: 3, progress, pressed: true, hint: `Click ${L} on a known feature to place P${n}` }
+                : { idx: 3, progress, hint: `Select ${L} · press Tab or click Mode for Add Point` };
+        }
+        const pIdx = line.points.findIndex(p => !p.geo);
+        if (state.mode === 'map-point' && state.mapPointTarget) {
+            const t = state.mapPointTarget;
+            return { idx: 4, progress, pressed: true, hint: `Click the map to place L${t.lineIndex + 1} P${t.pointIndex + 1} · Esc to cancel` };
+        }
+        return { idx: 4, progress, hint: `Press F or click 🌐 P${pIdx + 1} of ${L}, then click the map` };
+    }
+    if (s.lines.length < 2) return { idx: 5, progress, hint: 'Press E for a second line: two rays give the position' };
+    if (s.lines.length === 2) return { idx: 6, progress, hint: 'Position found. A third line adds a confidence ellipse' };
+    return { idx: 6, progress, hint: 'Done. More lines tighten the ellipse' };
+}
+
+function buildGuide() {
+    guideEl.innerHTML = '';
+    const rail = el('div', 'guide-rail', guideEl);
+    el('div', 'guide-rail-fill', rail);
+    GUIDE_STEPS.forEach((st, i) => {
+        const b = el('button', 'guide-step' + (st.key ? '' : ' no-key'), guideEl);
+        b.type = 'button';
+        b.title = st.title + (st.key ? ` (${st.key})` : '');
+        b.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${st.icon}</svg>` +
+                      (st.key ? `<span class="guide-key">${st.key}</span>` : '');
+        b.onclick = () => guideAction(i);
+    });
+}
+
+/* Clicking the current step does what its key does */
+function guideAction(i) {
+    const { idx } = guideStatus();
+    if (i !== idx) return;
+    if (i === 1 || i === 5) { btnAddLine.click(); return; }
+    if (i === 3 && state.activeLineIndex !== -1 && state.mode === 'drag-line') { btnModeToggle.click(); return; }
+    if (i === 4) {
+        const s = sess();
+        const lIdx = s.lines.findIndex(l => l.points.length >= 2 && l.points.some(p => !p.geo));
+        if (lIdx === -1) return;
+        state.activeLineIndex = lIdx;
+        state.mode = 'map-point';
+        state.mapPointTarget = { lineIndex: lIdx, pointIndex: s.lines[lIdx].points.findIndex(p => !p.geo) };
+        render(); updateUI();
+    }
+}
+
+function updateGuide() {
+    if (!guideEl.querySelector('.guide-rail-fill')) return;   // not built yet
+    const { idx, hint, progress, pressed } = guideStatus();
+    guideEl.querySelectorAll('.guide-step').forEach((b, i) => {
+        b.classList.toggle('done',    i < idx || (progress >= 1 && i !== idx));   // a third line repeats 2–5 but the goal is reached
+        b.classList.toggle('current', i === idx);
+        b.classList.toggle('pressed', i === idx && !!pressed);                    // key already pressed, step still running
+    });
+    guideEl.querySelector('.guide-rail-fill').style.height = `${progress * 100}%`;
+    imageHint.textContent = hint;
+}
+
+buildGuide();
+updateGuide();
 
 function updateLineManager() {
     lineBar.querySelectorAll('.line-item, .map-hint').forEach(el => el.remove());
@@ -1335,6 +1437,7 @@ function loadImage(file) {
         applyTransform();
         render();
         renderSessionMenu();
+        updateGuide();
     };
     s.imgElement.src = s.currentObjectURL;
 
