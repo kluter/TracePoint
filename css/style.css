@@ -282,10 +282,24 @@ button:disabled     { opacity: 0.3; cursor: not-allowed; }
 .maplibregl-canvas:focus { outline: none; }
 
 /* geo reference points (small coloured dots; colour set per line in JS) */
-.geo-point {
-    width: 14px; height: 14px; border-radius: 50%;
-    border: 2px solid; opacity: 0.9;
-    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5);
+/* MapLibre positions .geo-point with its own transform, so the visuals live on the inner dot */
+.geo-point { width: 14px; height: 14px; cursor: grab; }
+/* Same look as the Leaflet circle marker before v2: 14px across, 2px stroke, 90% fill */
+.geo-point-dot {
+    width: 100%; height: 100%; box-sizing: border-box; border-radius: 50%;
+    border: 2px solid; background-clip: padding-box;
+    transition: transform 0.12s, box-shadow 0.12s;
+}
+/* Hover: grow and glow in the line colour, so a draggable point announces itself */
+.geo-point:hover .geo-point-dot {
+    transform: scale(1.3);
+    box-shadow: 0 0 0 5px color-mix(in srgb, currentColor 35%, transparent);
+}
+.geo-point:active { cursor: grabbing; }
+.geo-point:active .geo-point-dot { transform: scale(1.1); }
+.geo-point-fixed { cursor: default; }   /* another session's point: switch to it to drag */
+.geo-point-fixed .geo-point-dot, .geo-point-fixed:hover .geo-point-dot {
+    opacity: 0.6; transform: none; box-shadow: none;
 }
 
 /* ---- ZOOM HINT ---- */
