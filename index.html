@@ -30,7 +30,6 @@
                 <div class="toolbar" id="toolbar">
                     <button id="btn-add-line">+ New Line</button>
                     <button id="btn-mode-toggle" disabled>Mode: Idle</button>
-                    <span class="step-hint" id="image-hint"></span>
                 </div>
                 <div class="navbar-right">
                     <button id="btn-horizon" title="Set horizon correction">
@@ -104,9 +103,8 @@
                 <input type="file" id="file-picker" accept="image/*" style="display:none">
                 <input type="file" id="json-picker" accept=".json" style="display:none">
                 <div id="zoom-hint">
-                    <span class="hint-pill">mouse: scroll to zoom · space+drag or middle-drag to pan</span>
-                    <span class="hint-pill">keys: W · E · R · F · X · Tab · 1–5 · Esc</span>
-                    <span class="hint-pill" style="margin-left:auto">v2.4.1</span>
+                    <span class="step-hint" id="image-hint"></span>
+                    <span class="hint-pill">v2.4.1</span>
                 </div>
             </div>
         </div>
@@ -154,6 +152,7 @@
                         <span class="help-key">Tab</span><span>Toggle Drag / Add Point mode</span>
                         <span class="help-key">1–5</span><span>Jump to line</span>
                         <span class="help-key">Esc</span><span>Cancel / deselect</span>
+                        <span class="help-key">Scroll</span><span>Zoom the image; Space+drag or middle-drag pans it</span>
                         <span class="help-key">Ctrl+V</span><span>Paste coordinates → pin on map</span>
                         <span class="help-key">Ctrl+drag</span><span>Rotate and tilt the map (right-drag works too); middle-drag pans</span>
                         <span class="help-key">N</span><span>Reset map to north and flat (same as the compass)</span>
