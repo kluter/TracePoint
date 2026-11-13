@@ -869,7 +869,7 @@ function updateUI() {
 
 /* ============================================================
    STEP GUIDE – vertical icon column on the image, next step glows,
-   one-line hints in both panel headers. Derived from state on every updateUI.
+   a one-line hint in a bar at the bottom of the image. Derived from state on every updateUI.
    ============================================================ */
 const GUIDE_STEPS = [
     { title: 'Load an image',            key: '',    icon: '<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-8 8"/>' },
@@ -884,7 +884,7 @@ const GUIDE_STEPS = [
 const guideEl   = document.getElementById('guide');
 const imageHint = document.getElementById('image-hint');
 
-/* Which step is next, the header hint, and overall progress 0–1.
+/* Which step is next, the hint for the bottom bar, and overall progress 0–1.
    Progress counts finished work (image, then per line: created, aligned, 2 points, 2 map points,
    for the two lines a position needs), so the rail only ever grows while steps 2–5 repeat. */
 function guideStatus() {
