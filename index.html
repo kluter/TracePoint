@@ -4,6 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="author" content="Pawel Kluter">
+    <!-- Only the bundled scripts may run. Map tiles and custom layers may come from any https server;
+         blob: is for the dropped photo and MapLibre's worker. -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; connect-src 'self' data: blob: https:; worker-src 'self' blob:; child-src blob:; object-src 'none'; base-uri 'self'">
     <title>TracePoint</title>
     <link rel="stylesheet" href="css/maplibre-gl.css">
     <script src="js/maplibre-gl.js"></script>

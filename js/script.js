@@ -13,6 +13,16 @@ const toolbar       = document.getElementById("toolbar");
 const lineBar       = document.getElementById("line-bar");
 
 let pulseFrameId = null;
+
+/* Geo maths constants (functions: see GEO MATHS at the end) */
+const DEG = Math.PI / 180;
+const RAD = 180 / Math.PI;
+const R   = 6371; // Earth radius km
+
+const MAX_LINES = 5;   // per image; keys 1–5 jump to them
+
+function finite(v) { return typeof v === 'number' && Number.isFinite(v); }
+
 const toastCounts = new Map();
 const TOAST_DURATION = 7000;
 const TOAST_MAX_STACK = 3;
@@ -22,19 +32,19 @@ function showToast(msg, type = 'error') {
     if (count >= TOAST_MAX_STACK) return;
     toastCounts.set(msg, count + 1);
 
-    const container = document.getElementById('toast-container');
+    const box = document.getElementById('toast-container');
     const item = document.createElement('div');
     item.className = 'toast-item' + (type === 'success' ? ' toast-success' : '');
     item.innerHTML = `<span>${escHtml(msg)}</span><button class="toast-close" aria-label="Dismiss">×</button>`;
     item.querySelector('.toast-close').onclick = () => dismissToast(item, msg);
-    container.appendChild(item);
+    box.appendChild(item);
     requestAnimationFrame(() => item.classList.add('toast-visible'));
 
     setTimeout(() => dismissToast(item, msg), TOAST_DURATION);
 }
 
 function dismissToast(item, msg) {
-    if (!item.isConnected) return;
+    if (!item.isConnected || item.classList.contains('toast-hiding')) return;   // already on its way out
     item.classList.add('toast-hiding');
     item.addEventListener('transitionend', () => {
         item.remove();
@@ -108,6 +118,7 @@ const AUTOSAVE_KEY = 'tp-autosave';   // localStorage: '0' = switched off
 let autosaveOn    = localStorage.getItem(AUTOSAVE_KEY) !== '0';
 let autosaveReady = false;            // false until the restore on start has finished, so the empty start state never overwrites saved work
 let autosaveTimer = null;
+let autosaveOwner = !navigator.locks; // only one tab writes the store (see claimAutosave); no Web Locks API: single-tab behaviour
 
 /* ---- INTERACTION STATE (not per-session) ---- */
 const state = {
@@ -170,24 +181,23 @@ let mapReady = false;   // sources and layers can only be added once the style h
 /* Middle-button drag pans the map (MapLibre ignores button 1; without this the browser autoscrolls).
    Mirrors the image panel, which also pans with middle-drag. */
 (() => {
-    const canvas = map.getCanvasContainer();
+    const mapCanvas = map.getCanvasContainer();
     let last = null;
-    canvas.addEventListener('mousedown', (e) => {
+    const stop = () => { last = null; mapCanvas.style.cursor = ''; };
+    mapCanvas.addEventListener('mousedown', (e) => {
         if (e.button !== 1) return;
         e.preventDefault();
         last = { x: e.clientX, y: e.clientY };
-        canvas.style.cursor = 'grabbing';
+        mapCanvas.style.cursor = 'grabbing';
     });
     window.addEventListener('mousemove', (e) => {
         if (!last) return;
+        if (!(e.buttons & 4)) return stop();   // button was released outside the window
         map.panBy([last.x - e.clientX, last.y - e.clientY], { duration: 0 });
         last = { x: e.clientX, y: e.clientY };
     });
-    window.addEventListener('mouseup', (e) => {
-        if (e.button !== 1 || !last) return;
-        last = null;
-        canvas.style.cursor = '';
-    });
+    window.addEventListener('mouseup', (e) => { if (e.button === 1 && last) stop(); });
+    window.addEventListener('blur', stop);
 })();
 
 function getMapView() {
@@ -361,10 +371,13 @@ function expandSubdomains(url) {
     return url.includes('{s}') ? ['a', 'b', 'c'].map(s => url.replace('{s}', s)) : [url];
 }
 
-async function fetchBitmap(url, signal) {
+/* Fetch a tile. decode: also return it as a bitmap (needed for cropping, and to tell an image
+   from an error page when the server does not label the response as an image). */
+async function fetchTile(url, signal, decode) {
     const res = await fetch(url, { signal });
     if (!res.ok) return null;
     const blob = await res.blob();
+    if (!decode && blob.type.startsWith('image/')) return { blob, bmp: null };
     try { return { blob, bmp: await createImageBitmap(blob) }; }
     catch { return null; }   // 200 but not an image
 }
@@ -381,18 +394,22 @@ maplibregl.addProtocol('fallback', async (params, abort) => {
         const url = tpl.replace('{z}', cz).replace('{x}', cx).replace('{y}', cy).replace('{s}', 'a');
 
         let got;
-        try { got = await fetchBitmap(url, abort.signal); }
+        try { got = await fetchTile(url, abort.signal, level > 0); }
         catch (e) { if (abort.signal.aborted) throw e; got = null; }
         if (!got) continue;
 
-        if (level === 0) return { data: await got.blob.arrayBuffer() };
+        if (level === 0) {
+            if (got.bmp) got.bmp.close();
+            return { data: await got.blob.arrayBuffer() };
+        }
 
-        // Crop the part of the parent tile that covers this tile
-        const part = size / f;
+        // Crop the part of the parent tile that covers this tile (the parent may be 256 or 512 px)
+        const part = got.bmp.width / f;
         const sx = (x - cx * f) * part, sy = (y - cy * f) * part;
-        const canvas = new OffscreenCanvas(size, size);
-        canvas.getContext('2d').drawImage(got.bmp, sx, sy, part, part, 0, 0, size, size);
-        return { data: await (await canvas.convertToBlob({ type: 'image/png' })).arrayBuffer() };
+        const tile = new OffscreenCanvas(size, size);
+        tile.getContext('2d').drawImage(got.bmp, sx, sy, part, part, 0, 0, size, size);
+        got.bmp.close();
+        return { data: await (await tile.convertToBlob({ type: 'image/png' })).arrayBuffer() };
     }
     throw new Error('tile missing at all fallback levels');
 });
@@ -791,6 +808,12 @@ function lineColour(lineIdx, sessionIdx = activeSessionIndex) {
     return LINE_COLOURS[(sessionColourIndex(sessionIdx) * 2 + lineIdx) % LINE_COLOURS.length];
 }
 
+/* Colour of a line of the active session: its own (the EXIF ray) or the palette's */
+function activeLineColour(lIdx) {
+    const line = sess().lines[lIdx];
+    return (line && line.colour) || lineColour(lIdx, activeSessionIndex);
+}
+
 /* Now both map and LINE_COLOURS exist — safe to create the first session */
 sessions = [createSession('Image 1')];
 
@@ -800,7 +823,7 @@ sessions = [createSession('Image 1')];
 function updateUI() {
     btnModeToggle.removeAttribute('style');
     if (state.activeLineIndex !== -1) {
-        const c = lineColour(state.activeLineIndex, activeSessionIndex);
+        const c = activeLineColour(state.activeLineIndex);
         btnModeToggle.disabled = false;
         if (state.mode === 'drag-line') {
             const line = sess().lines[state.activeLineIndex];
@@ -946,7 +969,7 @@ buildGuide();
 updateGuide();
 
 function updateLineManager() {
-    lineBar.querySelectorAll('.line-item, .map-hint').forEach(el => el.remove());
+    lineBar.querySelectorAll('.line-item, .map-hint').forEach(node => node.remove());
 
     sess().lines.forEach((line, lIdx) => {
         const colour = line.colour || lineColour(lIdx, activeSessionIndex);
@@ -998,7 +1021,7 @@ function updateLineManager() {
                     && state.mapPointTarget.pointIndex === pIdx;
 
                 ptItem.title = hasGeo ? 'Re-place on map' : 'Place on map';
-                const iconStyle = isTarget ? `style="color:${colour}"` : '';
+                const iconStyle = isTarget ? `style="color:${escHtml(colour)}"` : '';
                 const geoIcon = hasGeo
                     ? `<svg class="pt-geo-icon ${isTarget ? 'geo-active' : ''}" ${iconStyle} viewBox="0 0 24 24" fill="currentColor">
                            <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5S10.62 6.5 12 6.5s2.5 1.12 2.5 2.5S13.38 11.5 12 11.5z"/>
@@ -1024,7 +1047,7 @@ function updateLineManager() {
 
     if (state.mode === 'map-point' && state.mapPointTarget) {
         const { lineIndex, pointIndex } = state.mapPointTarget;
-        const c = lineColour(lineIndex, activeSessionIndex);
+        const c = activeLineColour(lineIndex);
         const hint = document.createElement('div');
         hint.className = 'map-hint';
         hint.style.cssText = `color:${c}; border-color:${c}55; background:${c}18;`;
@@ -1036,18 +1059,24 @@ function updateLineManager() {
 /* ============================================================
    LINE / POINT LOGIC
    ============================================================ */
-window.deleteLine = (idx) => {
+function deleteLine(idx) {
     clearMapObjectsForLine(idx);
     sess().lines.splice(idx, 1);
     sess().mapObjects.geoMarkers.splice(idx, 1);
+    // The line numbers shift: a pending map point would land on another line, so it is dropped
+    if (state.mapPointTarget) {
+        state.mapPointTarget = null;
+        if (state.mode === 'map-point') state.mode = 'drag-line';
+    }
+    if (idx < state.activeLineIndex) state.activeLineIndex--;   // keep the same line active
     state.activeLineIndex = Math.min(state.activeLineIndex, sess().lines.length - 1);
-    if (sess().lines.length === 0) { state.activeLineIndex = -1; state.mode = 'idle'; }
+    if (state.activeLineIndex === -1 && state.mode !== 'horizon') state.mode = 'idle';
     sess().lines.forEach((_, lIdx) => rebuildMapForLine(lIdx));
     recomputeIntersection();
     render(); updateUI();
-};
+}
 
-window.deletePoint = (lIdx, pIdx) => {
+function deletePoint(lIdx, pIdx) {
     sess().lines[lIdx].points.splice(pIdx, 1);
     if (state.mode === 'map-point' && state.mapPointTarget &&
         state.mapPointTarget.lineIndex === lIdx) {
@@ -1057,17 +1086,17 @@ window.deletePoint = (lIdx, pIdx) => {
     rebuildMapForLine(lIdx);
     recomputeIntersection();
     render(); updateUI();
-};
+}
 
-window.startMapPoint = (lIdx, pIdx) => {
+function startMapPoint(lIdx, pIdx) {
     state.mode = 'map-point';
     state.mapPointTarget = { lineIndex: lIdx, pointIndex: pIdx };
     updateUI();
-};
+}
 
 btnAddLine.onclick = () => {
     if (!sess().imgElement) return showToast("Drop an image first.");
-    if (sess().lines.length >= 5) return showToast("Maximum of 5 lines per image.");
+    if (sess().lines.length >= MAX_LINES) return showToast(`Maximum of ${MAX_LINES} lines per image.`);
     const v  = sess().view;
     const cr = container.getBoundingClientRect();
     // Place the line at the horizontal centre of the currently visible viewport
@@ -1091,16 +1120,16 @@ btnModeToggle.onclick = () => {
 
 btnHorizon.onclick = () => {
     if (!sess().imgElement) return;
+    state.mapPointTarget = null;
+    sess().horizonPoints = [];
     if (sess().view.rotation !== 0) {
         sess().view.rotation = 0;
-        state.mode = 'idle';
-        sess().horizonPoints = [];
-        render(); updateUI();
+        state.mode = state.activeLineIndex !== -1 ? 'drag-line' : 'idle';
     } else {
         state.mode = 'horizon';
-        sess().horizonPoints = [];
-        render(); updateUI();
+        state.activeLineIndex = -1;   // no line is active while levelling, so the mode button reads Idle
     }
+    render(); updateUI();
 };
 
 /* Keyboard shortcuts */
@@ -1135,16 +1164,16 @@ document.addEventListener('keydown', (e) => {
         return;
     }
 
-    // F — activate map-point mode for the next unmapped point of the active line
+    // F — map-point mode for the next unmapped point: of the active line, else of the first line that has one
     if (e.key === 'f' || e.key === 'F') {
         e.preventDefault();
         const s = sess();
-        if (state.activeLineIndex === -1 || !s.lines[state.activeLineIndex]) return;
-        const line = s.lines[state.activeLineIndex];
-        const unmapped = line.points.findIndex(p => !p.geo);
-        if (unmapped !== -1) {
+        const hasUnmapped = (l) => !!l && l.points.some(p => !p.geo);
+        const lIdx = hasUnmapped(s.lines[state.activeLineIndex]) ? state.activeLineIndex : s.lines.findIndex(hasUnmapped);
+        if (lIdx !== -1) {
+            state.activeLineIndex = lIdx;
             state.mode = 'map-point';
-            state.mapPointTarget = { lineIndex: state.activeLineIndex, pointIndex: unmapped };
+            state.mapPointTarget = { lineIndex: lIdx, pointIndex: s.lines[lIdx].points.findIndex(p => !p.geo) };
             render(); updateUI();
         }
         return;
@@ -1198,7 +1227,7 @@ document.addEventListener('keydown', (e) => {
 
     // 1–5 — jump to line
     const lineNum = parseInt(e.key);
-    if (lineNum >= 1 && lineNum <= 5) {
+    if (lineNum >= 1 && lineNum <= MAX_LINES) {
         e.preventDefault();
         const idx = lineNum - 1;
         if (idx < sess().lines.length) {
@@ -1309,6 +1338,7 @@ function switchToSession(idx) {
     state.activeLineIndex = -1;
     state.mapPointTarget  = null;
     state.isDragging      = false;
+    state.pointDrag       = null;
     state._horizonMouse   = null;
 
     // Save outgoing session's map position (guard: session may already be gone if called from removeSession)
@@ -1365,22 +1395,28 @@ function addSession() {
     switchToSession(sessions.length - 1);
 }
 
-window.removeSession = (idx) => {
+function removeSession(idx) {
     removeSessionMarkers(sessions[idx]);
     if (sessions[idx].currentObjectURL) URL.revokeObjectURL(sessions[idx].currentObjectURL);
-    hideHelp();
-    // Save active session's map view before splice shifts indices
-    if (activeSessionIndex !== idx && sessions[activeSessionIndex]) {
-        sessions[activeSessionIndex].mapView = getMapView();
-    }
+    const wasActive = idx === activeSessionIndex;
     sessions.splice(idx, 1);
     rebuildWorkSource();   // drops the removed session's rays and ellipse
+
+    if (!wasActive) {
+        // Another session went: stay on the one being worked on, only its index may have shifted
+        if (idx < activeSessionIndex) activeSessionIndex--;
+        renderSessionMenu();
+        scheduleAutosave();
+        return;
+    }
+
+    hideHelp();
     const wasLast = sessions.length === 0;
     if (wasLast) sessions.push(createSession('Image 1'));
     activeSessionIndex = sessions.length; // out of range → switchToSession skips its save step
     switchToSession(Math.min(idx, sessions.length - 1));
     if (wasLast) applyMapView(WORLD_VIEW);
-};
+}
 
 /* ============================================================
    HELP CARD
@@ -1405,14 +1441,15 @@ document.getElementById('btn-help-close').onclick = hideHelp;
    ============================================================ */
 function loadDemoImage() {
     fetch('assets/Potsdam_Germany.jpg')
-        .then(r => r.blob())
+        .then(r => { if (!r.ok) throw new Error(r.status); return r.blob(); })
         .then(blob => {
             const file = new File([blob], 'Potsdam_Germany.jpg', { type: 'image/jpeg' });
-            if (sess().imgElement) addSession();
-            loadImage(file);
-            jumpTo({ lat: 52.3899735750511, lng: 13.060147762298586 }, 15);
-            showHelp(true);
-        });
+            openImageFile(file, () => {
+                jumpTo({ lat: 52.3899735750511, lng: 13.060147762298586 }, 15);
+                showHelp(true);
+            });
+        })
+        .catch(() => showToast('Could not load the demo image.'));
 }
 
 /* Wire up session burger button */
@@ -1448,28 +1485,38 @@ function updateDropOverlay() {
     }
 }
 
-/* s: the session that gets the image (the active one unless restoring).
-   fromStore: the file comes out of the autosave store, so it is not written back. */
-function loadImage(file, s = sess(), fromStore = false) {
-    const isRestore = fromStore || !!s.pendingImageFilename;
-    if (s.currentObjectURL) URL.revokeObjectURL(s.currentObjectURL);
-    s.currentObjectURL = URL.createObjectURL(file);
-    s.imageFile = file;
-    s.imageFilename = file.name || s.imageFilename;
-    s.pendingImageFilename = null;
-    if (!isRestore) s.name = file.name.replace(/\.[^.]+$/, '');
-    if (!fromStore) autosavePutImage(s);
-    s.imgElement = new Image();
-    s.imgElement.onload = () => {
+/* s: the session that gets the image; null = a new session, created once the image has loaded.
+   fromStore: the file comes out of the autosave store, so it is not written back.
+   Nothing in the session changes until the browser has decoded the image, so a file it cannot
+   show (HEIC, a broken download) leaves the session as it was. */
+function loadImage(file, s = sess(), fromStore = false, onReady = null) {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onerror = () => {
+        URL.revokeObjectURL(url);
+        showToast(`Could not open ${file.name || 'the image'}: this browser cannot display it.`);
+    };
+    img.onload = () => {
+        if (!s) { addSession(); s = sess(); }
+        else if (!sessions.includes(s)) { URL.revokeObjectURL(url); return; }   // removed while loading
+        const isRestore = fromStore || !!s.pendingImageFilename;
+        if (s.currentObjectURL) URL.revokeObjectURL(s.currentObjectURL);
+        s.currentObjectURL = url;
+        s.imgElement = img;
+        s.imageFile = file;
+        s.imageFilename = file.name || s.imageFilename;
+        s.pendingImageFilename = null;
+        if (!isRestore && file.name) s.name = file.name.replace(/\.[^.]+$/, '');
+        if (!fromStore) autosavePutImage(s);
         if (!isRestore) {
             const cr = container.getBoundingClientRect();
-            s.view.scale = Math.min(cr.width / s.imgElement.width, cr.height / s.imgElement.height, 1);
-            s.view.tx = (cr.width  - s.imgElement.width  * s.view.scale) / 2;
-            s.view.ty = (cr.height - s.imgElement.height * s.view.scale) / 2;
+            s.view.scale = Math.min(cr.width / img.width, cr.height / img.height, 1);
+            s.view.tx = (cr.width  - img.width  * s.view.scale) / 2;
+            s.view.ty = (cr.height - img.height * s.view.scale) / 2;
         }
         if (s === sess()) {
-            canvas.width  = s.imgElement.width;
-            canvas.height = s.imgElement.height;
+            canvas.width  = img.width;
+            canvas.height = img.height;
             canvas.style.display = 'block';
             overlay.style.display = 'none';
             applyTransform();
@@ -1479,19 +1526,27 @@ function loadImage(file, s = sess(), fromStore = false) {
         }
         renderSessionMenu();
         scheduleAutosave();
-    };
-    s.imgElement.src = s.currentObjectURL;
+        if (onReady) onReady();
 
-    // Read EXIF metadata — enable all segments so XMP/IPTC fields are included
-    exifr.parse(file, { tiff: true, exif: true, gps: true, xmp: true, iptc: true })
-        .then(exif => { s.exif = exif || null; })
-        .catch(() => { s.exif = null; })
-        .finally(() => {
-            scheduleAutosave();
-            if (s !== sess()) return;
-            document.getElementById('exif-wrap').style.display = 'block';
-            document.getElementById('exif-card').style.display = 'none';
-        });
+        // Read EXIF metadata — enable all segments so XMP/IPTC fields are included
+        exifr.parse(file, { tiff: true, exif: true, gps: true, xmp: true, iptc: true })
+            .then(exif => { s.exif = exif || null; })
+            .catch(() => { s.exif = null; })
+            .finally(() => {
+                scheduleAutosave();
+                if (s !== sess()) return;
+                document.getElementById('exif-wrap').style.display = 'block';
+                document.getElementById('exif-card').style.display = 'none';
+            });
+    };
+    img.src = url;
+}
+
+/* An image the user picked: into the active session, or into a new one when that already has a photo
+   (its lines belong to the old photo). */
+function openImageFile(file, onReady) {
+    if (!file.type.startsWith('image/')) return showToast('That is not an image file.');
+    loadImage(file, sess().imgElement ? null : sess(), false, onReady);
 }
 
 container.addEventListener('dragover',  (e) => { e.preventDefault(); container.classList.add('drag-active'); });
@@ -1499,8 +1554,11 @@ container.addEventListener('dragleave', ()  => container.classList.remove('drag-
 container.addEventListener('drop', (e) => {
     e.preventDefault(); container.classList.remove('drag-active');
     const file = e.dataTransfer.files[0];
-    if (file && file.type.startsWith('image/')) loadImage(file);
+    if (file) openImageFile(file);
 });
+/* A file dropped anywhere else would make the browser open it and leave the app */
+window.addEventListener('dragover', (e) => e.preventDefault());
+window.addEventListener('drop',     (e) => e.preventDefault());
 
 const filePicker = document.getElementById('file-picker');
 overlay.addEventListener('click', (e) => {
@@ -1508,7 +1566,7 @@ overlay.addEventListener('click', (e) => {
 });
 filePicker.addEventListener('change', () => {
     const file = filePicker.files[0];
-    if (file) { loadImage(file); filePicker.value = ''; }
+    if (file) { openImageFile(file); filePicker.value = ''; }
 });
 
 /* ============================================================
@@ -1525,6 +1583,10 @@ function formatExifDate(val) {
     }
     // exifr sometimes returns a string "YYYY:MM:DD HH:MM:SS"
     if (typeof val === 'string') {
+        // A date that went through a session file or the autosave is an ISO string
+        if (/^\d{4}-\d{2}-\d{2}T/.test(val) && !isNaN(Date.parse(val))) {
+            return new Date(val).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+        }
         const m = val.match(/^(\d{4}):(\d{2}):(\d{2}) (\d{2}):(\d{2}):(\d{2})$/);
         if (m) {
             const d = new Date(+m[1], +m[2]-1, +m[3], +m[4], +m[5], +m[6]);
@@ -1535,37 +1597,48 @@ function formatExifDate(val) {
     return String(val);
 }
 
+/* exifr hands most coded fields over already translated to text ("Flash did not fire", "Auto",
+   "Rotate 90 CW"); the raw numbers are handled too, for files read with other settings. */
 function formatExposure(val) {
-    if (val == null) return null;
-    if (val >= 1) return `${val}s`;
+    if (!finite(val) || val <= 0) return null;
+    if (val >= 1) return `${+val.toFixed(1)}s`;
     const denom = Math.round(1 / val);
     return `1/${denom}s`;
 }
 
+/* ShutterSpeedValue and ApertureValue are APEX values, not seconds and f-numbers */
+function apexToSeconds(v) { return finite(v) ? Math.pow(2, -v) : null; }
+function apexToFNumber(v) { return finite(v) ? +Math.pow(2, v / 2).toFixed(1) : null; }
+
 function formatFlash(val) {
     if (val == null) return null;
+    if (typeof val === 'string') return /fired/i.test(val) && !/not fire/i.test(val) ? 'Fired' : 'No flash';
     return (val & 0x01) ? 'Fired' : 'No flash';
 }
 
 function formatOrientation(val) {
-    const map = { 1:'Normal', 2:'Mirrored', 3:'180°', 4:'Mirrored 180°',
-                  5:'90° CCW mirrored', 6:'90° CW', 7:'90° CW mirrored', 8:'90° CCW' };
-    return map[val] || null;
+    if (typeof val === 'string') return val || null;
+    const names = { 1:'Normal', 2:'Mirrored', 3:'180°', 4:'Mirrored 180°',
+                    5:'90° CCW mirrored', 6:'90° CW', 7:'90° CW mirrored', 8:'90° CCW' };
+    return names[val] || null;
 }
 
 function formatWhiteBalance(val) {
     if (val == null) return null;
+    if (typeof val === 'string') return val || null;
     return val === 0 ? 'Auto' : val === 1 ? 'Manual' : null;
 }
 
 function formatExposureMode(val) {
     if (val == null) return null;
+    if (typeof val === 'string') return val || null;
     return (['Auto', 'Manual', 'Auto bracket'][val]) ?? null;
 }
 
 function formatGPSSpeed(speed, ref) {
-    if (speed == null) return null;
-    const unit = ref === 'M' ? 'mph' : ref === 'N' ? 'kn' : 'km/h';
+    if (!finite(speed)) return null;
+    const r = String(ref || '');
+    const unit = /^m/i.test(r) ? 'mph' : /^(n|kn)/i.test(r) ? 'kn' : 'km/h';
     return `${speed.toFixed(1)} ${unit}`;
 }
 
@@ -1574,6 +1647,8 @@ function formatGPSTimestamp(ts, dateStamp) {
     let time;
     if (Array.isArray(ts) && ts.length === 3) {
         time = ts.map(n => String(Math.floor(n)).padStart(2, '0')).join(':');
+    } else if (typeof ts === 'string' && /^\d{1,2}:\d{1,2}:\d{1,2}/.test(ts)) {
+        time = ts.split(':').map(n => String(Math.floor(+n)).padStart(2, '0')).join(':');
     } else if (ts instanceof Date) {
         time = ts.toISOString().slice(11, 19);
     } else return null;
@@ -1591,8 +1666,20 @@ function pick(e, ...keys) {
 function dmsToDecimal(val) {
     if (val == null) return null;
     if (typeof val === 'number') return val;
-    if (Array.isArray(val) && val.length === 3) return val[0] + val[1] / 60 + val[2] / 3600;
+    if (Array.isArray(val) && val.length === 3 && val.every(finite)) return val[0] + val[1] / 60 + val[2] / 3600;
     return null;
+}
+
+/* Signed position of the photo, or null. exifr adds latitude/longitude with the hemisphere applied;
+   the raw GPSLatitude/GPSLongitude arrays carry no sign, so without those two the Ref letters decide. */
+function exifLatLng(e) {
+    if (!e) return null;
+    let lat = finite(e.latitude)  ? e.latitude  : dmsToDecimal(e.GPSLatitude);
+    let lng = finite(e.longitude) ? e.longitude : dmsToDecimal(e.GPSLongitude);
+    if (!finite(lat) || !finite(lng)) return null;
+    if (!finite(e.latitude)  && /^S/i.test(String(e.GPSLatitudeRef  || ''))) lat = -Math.abs(lat);
+    if (!finite(e.longitude) && /^W/i.test(String(e.GPSLongitudeRef || ''))) lng = -Math.abs(lng);
+    return validLatLng(lat, lng);
 }
 
 function cardinalDir(deg) {
@@ -1609,11 +1696,14 @@ function renderExifCard() {
     }
     try {
         const e   = s.exif;
-        const lat = dmsToDecimal(e.GPSLatitude);
-        const lng = dmsToDecimal(e.GPSLongitude);
+        const pos = exifLatLng(e);
+        const lat = pos ? pos.lat : null;
+        const lng = pos ? pos.lng : null;
         const alt = dmsToDecimal(e.GPSAltitude);
-        const dir = e.GPSImgDirection != null ? Number(e.GPSImgDirection) : null;
-        const trk = e.GPSTrack        != null ? Number(e.GPSTrack)        : null;
+        const dir = finite(e.GPSImgDirection) ? e.GPSImgDirection : null;
+        const trk = finite(e.GPSTrack)        ? e.GPSTrack        : null;
+        const fNumber  = finite(e.FNumber) ? e.FNumber : apexToFNumber(e.ApertureValue);
+        const exposure = finite(e.ExposureTime) ? e.ExposureTime : apexToSeconds(e.ShutterSpeedValue);
 
         const cameraStr = [e.Make, e.Model].filter(Boolean).join(' ') || null;
         const lensStr   = e.LensModel && e.LensModel !== e.Model ? e.LensModel : null;
@@ -1636,8 +1726,8 @@ function renderExifCard() {
             ['Date',          formatExifDate(date)],
             ['Focal length',  pick(e, 'FocalLength')         != null ? `${e.FocalLength} mm` : null],
             ['35mm equiv',    pick(e, 'FocalLengthIn35mmFilm')!= null ? `${e.FocalLengthIn35mmFilm} mm` : null],
-            ['Aperture',      pick(e, 'FNumber', 'ApertureValue') != null ? `f/${e.FNumber ?? e.ApertureValue}` : null],
-            ['Shutter',       formatExposure(pick(e, 'ExposureTime', 'ShutterSpeedValue'))],
+            ['Aperture',      fNumber != null ? `f/${fNumber}` : null],
+            ['Shutter',       formatExposure(exposure)],
             ['ISO',           pick(e, 'ISO', 'ISOSpeedRatings', 'PhotographicSensitivity') != null ? `${pick(e, 'ISO', 'ISOSpeedRatings', 'PhotographicSensitivity')}` : null],
             ['Flash',         formatFlash(pick(e, 'Flash'))],
             ['Exposure',      formatExposureMode(pick(e, 'ExposureMode'))],
@@ -1689,11 +1779,11 @@ function renderExifCard() {
     }
 }
 
-window.goToExifGps = () => {
+function goToExifGps() {
     const s   = sess();
-    const lat = dmsToDecimal(s.exif?.GPSLatitude);
-    const lng = dmsToDecimal(s.exif?.GPSLongitude);
-    if (lat == null || lng == null) return;
+    const pos = exifLatLng(s.exif);
+    if (!pos) return;
+    const { lat, lng } = pos;
 
     // Remove previous EXIF GPS marker for this session
     if (s.exifGpsMarker) {
@@ -1709,7 +1799,7 @@ window.goToExifGps = () => {
 
     jumpTo({ lat, lng }, Math.max(map.getZoom(), 15));
     s.exifGpsMarker.togglePopup();
-};
+}
 
 /* Popup with a header, the coordinates and a copy button (intersection + EXIF markers) */
 function coordPopup(title, coords, className, offset) {
@@ -1726,16 +1816,16 @@ function coordPopup(title, coords, className, offset) {
         );
 }
 
-window.addExifRay = () => {
+function addExifRay() {
     const s   = sess();
-    const lat = dmsToDecimal(s.exif?.GPSLatitude);
-    const lng = dmsToDecimal(s.exif?.GPSLongitude);
-    const dir = s.exif?.GPSImgDirection != null ? Number(s.exif.GPSImgDirection) : null;
-    if (lat == null || lng == null) return showToast('No GPS coordinates in image metadata.');
+    const pos = exifLatLng(s.exif);
+    const dir = finite(s.exif?.GPSImgDirection) ? s.exif.GPSImgDirection : null;
+    if (!pos) return showToast('No GPS coordinates in image metadata.');
     if (dir == null) return showToast('No camera direction in image metadata.');
     if (!s.imgElement) return showToast('Load the image before adding a ray.');
     if (s.lines.some(l => l.source === 'exif' || l.colour === '#e03c3c')) return showToast('EXIF direction ray already added.');
-    if (s.lines.length >= 5) return showToast('Maximum of 5 lines per image.');
+    if (s.lines.length >= MAX_LINES) return showToast(`Maximum of ${MAX_LINES} lines per image.`);
+    const { lat, lng } = pos;
 
     // Canvas line centred horizontally, points at top and bottom of image
     const v  = sess().view;
@@ -1762,7 +1852,7 @@ window.addExifRay = () => {
     recomputeIntersection();
     render(); updateUI();
     showToast('EXIF direction ray added.', 'success');
-};
+}
 
 /* Button toggle */
 document.getElementById('btn-exif').addEventListener('click', (e) => {
@@ -1799,15 +1889,36 @@ const ADJUST_SLIDERS = ['contrast', 'brightness', 'saturation'].map(key => ({
 
 function isAdjusted(s) { return ADJUST_SLIDERS.some(sl => s.adjust[sl.key] !== 100) || s.adjust.invert; }
 
-/* Sets ctx.filter for the image draw that follows; ctx.restore() in render() clears it.
-   Browsers without ctx.filter fall back to filtering the whole canvas. */
-function applyImageFilter(s) {
+function imageFilter(s) {
     const a = s.adjust;
-    const f = isAdjusted(s)
+    return isAdjusted(s)
         ? `contrast(${a.contrast}%) brightness(${a.brightness}%) saturate(${a.saturation}%)` + (a.invert ? ' invert(1)' : '')
         : 'none';
-    if ('filter' in ctx) { ctx.filter = f; canvas.style.filter = ''; }
+}
+
+/* The photo with its rotation and display filter, drawn once into an offscreen canvas and redrawn
+   only when the image, the rotation or a slider changes. render() copies it, so the pulse animation
+   and every drag frame no longer rotate and filter the full photo again.
+   Browsers without ctx.filter fall back to filtering the whole visible canvas. */
+const photoCache = { canvas: document.createElement('canvas'), img: null, key: '' };
+
+function photoLayer(s) {
+    const img = s.imgElement, f = imageFilter(s);
+    const key = `${img.width}x${img.height}|${s.view.rotation}|${f}`;
+    if (photoCache.img === img && photoCache.key === key) return photoCache.canvas;
+
+    const c = photoCache.canvas;
+    c.width = img.width; c.height = img.height;   // also resets the context
+    const pc = c.getContext('2d');
+    const cx = c.width / 2, cy = c.height / 2;
+    pc.translate(cx, cy);
+    pc.rotate(s.view.rotation * Math.PI / 180);
+    pc.translate(-cx, -cy);
+    if ('filter' in pc) { pc.filter = f; canvas.style.filter = ''; }
     else canvas.style.filter = f;
+    pc.drawImage(img, 0, 0);
+    photoCache.img = img; photoCache.key = key;
+    return c;
 }
 
 function updateAdjustUI() {
@@ -1899,7 +2010,7 @@ function downloadJSON(data, filename) {
     URL.revokeObjectURL(url);
 }
 
-window.exportSession = (idx) => {
+function exportSession(idx) {
     const s  = sessions[idx];
     if (idx === activeSessionIndex) s.mapView = getMapView();
     const ts = new Date().toISOString().slice(0, 16).replace('T', '_').replace(/:/g, '-');
@@ -1908,7 +2019,7 @@ window.exportSession = (idx) => {
         `tracepoint_${s.name}_${ts}.json`
     );
     showToast('Session exported.', 'success');
-};
+}
 
 function exportAllSessions() {
     if (sessions[activeSessionIndex]) {
@@ -1926,46 +2037,56 @@ function exportAllSessions() {
 /* Builds sessions from the `sessions` array of a session file; every field is type-checked.
    Used by the JSON import and by the autosave restore. Returns the sessions it filled.
    keepView: the saved map view wins over the automatic zoom to the intersection. */
+const HEX_COLOUR = /^#[0-9a-f]{6}$/i;   // the only colour form a session file may carry: it ends up in styles
+
+/* A map position from a file: plain numbers in range, nothing else carried over */
+function cleanGeo(g) {
+    if (!g || !finite(g.lat) || !finite(g.lng) || Math.abs(g.lat) > 90 || Math.abs(g.lng) > 360) return null;
+    return { lat: g.lat, lng: g.lng };
+}
+
 function applySessionData(list, keepView = false) {
-    return list.map(sd => {
-        // Reuse the current session slot if it's completely empty
+    return list.filter(sd => sd && typeof sd === 'object').map((sd, i) => {
+        // Only the first session of a file may take over the current slot, and only if that is completely
+        // empty. A session waiting for its image has no image and maybe no lines yet, but it is not empty.
         const cur = sess();
+        const name = typeof sd.name === 'string' && sd.name ? sd.name : 'Imported session';
         let s;
-        if (!cur.imgElement && cur.lines.length === 0) {
+        if (i === 0 && !cur.imgElement && cur.lines.length === 0 && !cur.pendingImageFilename) {
             s = cur;
-            s.name = typeof sd.name === 'string' ? sd.name : 'Imported session';
+            s.name = name;
         } else {
-            s = createSession(typeof sd.name === 'string' ? sd.name : 'Imported session');
+            s = createSession(name);
             sessions.push(s);
         }
 
-        if (sd.colourIndex != null) s.colourIndex = sd.colourIndex;
-        if ('exif' in sd) s.exif = sd.exif;
-        s.imageFilename        = sd.imageFilename || null;
-        s.pendingImageFilename = sd.imageFilename || null;
-        s.lines = (sd.lines || [])
-            .filter(l => l && typeof l.x === 'number')
+        if (Number.isInteger(sd.colourIndex) && sd.colourIndex >= 0 && sd.colourIndex < LINE_COLOURS.length) {
+            s.colourIndex = sd.colourIndex;
+        }
+        if ('exif' in sd) s.exif = (sd.exif && typeof sd.exif === 'object') ? sd.exif : null;
+        const filename = typeof sd.imageFilename === 'string' && sd.imageFilename ? sd.imageFilename : null;
+        s.imageFilename        = filename;
+        s.pendingImageFilename = filename;
+        s.lines = (Array.isArray(sd.lines) ? sd.lines : [])
+            .filter(l => l && finite(l.x))
+            .slice(0, MAX_LINES)
             .map(l => ({
                 x:      l.x,
-                colour: typeof l.colour === 'string' ? l.colour : null,
-                source: typeof l.source === 'string' ? l.source : null,
-                points: (l.points || [])
-                    .filter(pt => pt && typeof pt.y === 'number')
-                    .map(pt => ({
-                        y:   pt.y,
-                        geo: (pt.geo && typeof pt.geo.lat === 'number' && typeof pt.geo.lng === 'number')
-                             ? pt.geo : null
-                    }))
+                colour: typeof l.colour === 'string' && HEX_COLOUR.test(l.colour) ? l.colour : null,
+                source: l.source === 'exif' ? 'exif' : null,
+                points: (Array.isArray(l.points) ? l.points : [])
+                    .filter(pt => pt && finite(pt.y))
+                    .slice(0, 2)
+                    .map(pt => ({ y: pt.y, geo: cleanGeo(pt.geo) }))
             }));
         if (sd.view && typeof sd.view === 'object') {
             const { scale, tx, ty, rotation } = sd.view;
-            const validScale = typeof scale === 'number' && isFinite(scale);
-            if (validScale) {
-                s.view.scale = scale;
-                if (typeof tx === 'number' && isFinite(tx)) s.view.tx = tx;
-                if (typeof ty === 'number' && isFinite(ty)) s.view.ty = ty;
+            if (finite(scale) && scale > 0) {
+                s.view.scale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, scale));
+                if (finite(tx)) s.view.tx = tx;
+                if (finite(ty)) s.view.ty = ty;
             }
-            if (typeof rotation === 'number' && isFinite(rotation)) s.view.rotation = rotation;
+            if (finite(rotation)) s.view.rotation = rotation;
         }
 
         // Switch first — switchToSession saves the outgoing session's live map
@@ -1974,16 +2095,14 @@ function applySessionData(list, keepView = false) {
         switchToSession(sessions.indexOf(s));
 
         // Restore imported mapView after the switch so it can't be clobbered
-        if (sd.mapView &&
-            typeof sd.mapView.center?.lat === 'number' && isFinite(sd.mapView.center.lat) &&
-            typeof sd.mapView.center?.lng === 'number' && isFinite(sd.mapView.center.lng) &&
-            typeof sd.mapView.zoom === 'number' && isFinite(sd.mapView.zoom)) {
-            const num = (v) => (typeof v === 'number' && isFinite(v)) ? v : 0;
+        const centre = cleanGeo(sd.mapView?.center);
+        if (centre && finite(sd.mapView.zoom)) {
+            const num = (v) => finite(v) ? v : 0;
             s.mapView = {
-                center:  { lat: sd.mapView.center.lat, lng: sd.mapView.center.lng },
-                zoom:    sd.mapView.zoom,
+                center:  centre,
+                zoom:    Math.min(20, Math.max(0, sd.mapView.zoom)),
                 bearing: num(sd.mapView.bearing),
-                pitch:   num(sd.mapView.pitch)
+                pitch:   Math.min(90, Math.max(0, num(sd.mapView.pitch)))
             };
             applyMapView(s.mapView);
         }
@@ -2005,9 +2124,10 @@ function importSessions(file) {
             const data = JSON.parse(e.target.result);
             const list = data.sessions;
             if (!Array.isArray(list) || list.length === 0) return showToast('No sessions found in file.');
-            applySessionData(list);
+            const n = applySessionData(list).length;
             renderSessionMenu();
-            showToast(`${list.length} session${list.length > 1 ? 's' : ''} imported.`, 'success');
+            if (!n) return showToast('No sessions found in file.');
+            showToast(`${n} session${n > 1 ? 's' : ''} imported.`, 'success');
         } catch (err) {
             showToast('Invalid TracePoint session file.');
         }
@@ -2026,6 +2146,32 @@ function importSessions(file) {
 const AUTOSAVE_STORE = 'autosave';
 let autosaveDb = null;        // Promise<IDBDatabase>, opened on first use
 let autosaveWarned = false;
+
+/* The store is shared by every tab of this site, and a write removes the images it does not know.
+   So only one tab writes: the one holding the Web Lock. A second tab still restores the saved work
+   but keeps its changes to itself until the first tab is closed, then takes over. */
+const AUTOSAVE_LOCK = 'tracepoint-autosave';
+
+function claimAutosave() {
+    if (!navigator.locks) return Promise.resolve();
+    const hold = () => new Promise(() => {});   // never settles: the lock lasts as long as the tab
+    return new Promise(resolve => {
+        navigator.locks.request(AUTOSAVE_LOCK, { ifAvailable: true }, (lock) => {
+            if (!lock) { resolve(); return; }
+            autosaveOwner = true;
+            resolve();
+            return hold();
+        }).catch(() => { autosaveOwner = true; resolve(); });
+    }).then(() => {
+        if (autosaveOwner) return;
+        if (autosaveOn) showToast('TracePoint is open in another tab. Autosave is paused here until that tab is closed.');
+        navigator.locks.request(AUTOSAVE_LOCK, () => {
+            autosaveOwner = true;
+            if (autosaveOn && autosaveReady) { sessions.forEach(autosavePutImage); autosaveWrite(); }
+            return hold();
+        }).catch(() => {});
+    });
+}
 
 function openAutosaveDb() {
     if (!autosaveDb) autosaveDb = new Promise((resolve, reject) => {
@@ -2058,7 +2204,7 @@ function sessionsHaveWork() {
 }
 
 function scheduleAutosave() {
-    if (!autosaveOn || !autosaveReady) return;
+    if (!autosaveOn || !autosaveReady || !autosaveOwner) return;
     clearTimeout(autosaveTimer);
     autosaveTimer = setTimeout(autosaveWrite, 400);
 }
@@ -2066,7 +2212,7 @@ function scheduleAutosave() {
 function autosaveWrite() {
     clearTimeout(autosaveTimer);
     autosaveTimer = null;
-    if (!autosaveOn || !autosaveReady) return;
+    if (!autosaveOn || !autosaveReady || !autosaveOwner) return;
     if (sessions[activeSessionIndex]) sessions[activeSessionIndex].mapView = getMapView();
     const json = sessionsHaveWork()
         ? JSON.stringify({ json_version: JSON_VERSION, exported: new Date().toISOString(), active: activeSessionIndex,
@@ -2083,7 +2229,7 @@ function autosaveWrite() {
 }
 
 function autosavePutImage(s) {
-    if (!autosaveOn || !s.imageFile) return;
+    if (!autosaveOn || !autosaveOwner || !s.imageFile) return;
     autosaveTx('readwrite', store => { store.put(s.imageFile, 'img:' + s.id); }).catch(autosaveFailed);
 }
 
@@ -2108,7 +2254,8 @@ function resetWorkspace(resetMap) {
 
 /* Runs once, at the end of this script. A view in the URL hash wins over the saved map view. */
 async function autosaveRestore() {
-    if (!autosaveOn) { await autosaveClearStore(); autosaveReady = true; return; }
+    await claimAutosave();
+    if (!autosaveOn) { if (autosaveOwner) await autosaveClearStore(); autosaveReady = true; return; }
     let json = null;
     try { json = await autosaveTx('readonly', store => store.get('session')); }
     catch (err) { autosaveReady = true; return; }   // no IndexedDB here: work without autosave
@@ -2117,9 +2264,10 @@ async function autosaveRestore() {
             const data = JSON.parse(json);
             if (!Array.isArray(data.sessions) || data.sessions.length === 0) throw new Error('no sessions');
             const hashView = parseViewHash(location.hash);
-            const restored = applySessionData(data.sessions, true);
+            const saved    = data.sessions.filter(sd => sd && typeof sd === 'object');   // same filter as applySessionData
+            const restored = applySessionData(saved, true);
             restored.forEach((s, i) => {
-                const id = data.sessions[i].id;
+                const id = saved[i].id;
                 if (typeof id === 'string' && id) s.id = id;
             });
             for (const s of restored) {
@@ -2129,7 +2277,7 @@ async function autosaveRestore() {
             switchToSession(Number.isInteger(data.active) && sessions[data.active] ? data.active : 0);
             if (hashView) applyMapView(hashView);
         } catch (err) {
-            await autosaveClearStore();
+            if (autosaveOwner) await autosaveClearStore();
             resetWorkspace(false);
             showToast('Saved session could not be restored. Starting fresh.');
         }
@@ -2182,6 +2330,7 @@ container.addEventListener('wheel', (e) => {
     v.ty = mouseY - (mouseY - v.ty) * (newScale / v.scale);
     v.scale = newScale;
     applyTransform();
+    render();   // line widths and labels follow the zoom
 }, { passive: false });
 
 /* ============================================================
@@ -2195,6 +2344,11 @@ document.addEventListener('keydown', (e) => {
     }
 });
 document.addEventListener('keyup', (e) => { if (e.code === 'Space') spaceDown = false; });
+/* A key or button released while the window is not focused never reports back */
+window.addEventListener('blur', () => {
+    spaceDown = false;
+    if (isPanning) { isPanning = false; container.style.cursor = ''; }
+});
 
 container.addEventListener('mousedown', (e) => {
     if (e.button === 1 || (e.button === 0 && spaceDown)) {
@@ -2211,6 +2365,7 @@ window.addEventListener('mouseup', () => {
     if (state.pointDrag) { state.pointDrag = null; updateUI(); }
 });
 window.addEventListener('mousemove', (e) => {
+    if (isPanning && e.buttons === 0) { isPanning = false; container.style.cursor = ''; }   // released outside the window
     if (isPanning) {
         sess().view.tx = panOrigin.tx + (e.clientX - panStart.x);
         sess().view.ty = panOrigin.ty + (e.clientY - panStart.y);
@@ -2222,7 +2377,7 @@ window.addEventListener('mousemove', (e) => {
         return;
     }
     if (state.isDragging && state.activeLineIndex !== -1) {
-        sess().lines[state.activeLineIndex].x = clientToImage(e).x;
+        sess().lines[state.activeLineIndex].x = Math.max(0, Math.min(canvas.width, clientToImage(e).x));   // stays on the image
         render();
     }
 });
@@ -2234,19 +2389,15 @@ function render() {
     const s = sess();
     if (!s.imgElement) return;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(photoLayer(s), 0, 0);
 
-    const cx = canvas.width  / 2;
-    const cy = canvas.height / 2;
-    ctx.save();
-    ctx.translate(cx, cy);
-    ctx.rotate(s.view.rotation * Math.PI / 180);
-    ctx.translate(-cx, -cy);
-    applyImageFilter(s);
-    ctx.drawImage(s.imgElement, 0, 0);
-    ctx.restore();
+    /* Lines live in image pixels. Zoomed out, a 1.5 px line on a 12 MP photo would be a fraction of a
+       screen pixel, so every size is multiplied by k to keep it constant on screen. Zoomed in past
+       100 % the sizes stay in image pixels and grow with the photo. */
+    const k = Math.max(1, 1 / s.view.scale);
 
     let needsRerender = false;
-    ctx.font = 'bold 11px monospace';
+    ctx.font = `bold ${11 * k}px monospace`;
 
     s.lines.forEach((line, idx) => {
         const active    = idx === state.activeLineIndex;
@@ -2261,15 +2412,15 @@ function render() {
         if (line.pristine) {
             const pulse = Math.sin(Date.now() / 250);   // -1 … +1
             ctx.shadowColor = colour;
-            ctx.shadowBlur  = 22 + 12 * pulse;          // 10 … 34
+            ctx.shadowBlur  = (22 + 12 * pulse) * k;    // 10 … 34
         }
 
         ctx.beginPath();
         ctx.moveTo(line.x, 0);
         ctx.lineTo(line.x, canvas.height);
         ctx.strokeStyle = colour;
-        ctx.lineWidth   = line.pristine ? 3.5 : (active ? 2.5 : 1.5);
-        ctx.setLineDash(active || line.pristine ? [] : [6, 4]);
+        ctx.lineWidth   = (line.pristine ? 3.5 : (active ? 2.5 : 1.5)) * k;
+        ctx.setLineDash(active || line.pristine ? [] : [6 * k, 4 * k]);
         ctx.stroke();
         ctx.setLineDash([]);
         ctx.shadowBlur  = 0;
@@ -2278,23 +2429,23 @@ function render() {
             const hasGeo = !!(pt.geo);
 
             ctx.beginPath();
-            ctx.moveTo(line.x - 8, pt.y);
-            ctx.lineTo(line.x + 8, pt.y);
+            ctx.moveTo(line.x - 8 * k, pt.y);
+            ctx.lineTo(line.x + 8 * k, pt.y);
             ctx.strokeStyle = colour;
-            ctx.lineWidth   = 2;
+            ctx.lineWidth   = 2 * k;
             ctx.stroke();
 
             ctx.beginPath();
-            ctx.arc(line.x, pt.y, 6, 0, Math.PI * 2);
+            ctx.arc(line.x, pt.y, 6 * k, 0, Math.PI * 2);
             ctx.fillStyle   = hasGeo ? colour : '#0a0a0a';
             ctx.strokeStyle = colour;
-            ctx.lineWidth   = 2;
+            ctx.lineWidth   = 2 * k;
             ctx.fill();
             ctx.stroke();
 
             ctx.globalAlpha = 1;
             ctx.fillStyle   = '#fff';
-            ctx.fillText(`P${pIdx + 1}`, line.x + 10, pt.y + 4);
+            ctx.fillText(`P${pIdx + 1}`, line.x + 10 * k, pt.y + 4 * k);
             ctx.globalAlpha = alpha;
         });
 
@@ -2313,8 +2464,8 @@ function render() {
         const p2 = s.horizonPoints[1] || state._horizonMouse;
         ctx.save();
         ctx.strokeStyle = '#ffdc32';
-        ctx.lineWidth   = 1.5;
-        ctx.setLineDash([5, 4]);
+        ctx.lineWidth   = 1.5 * k;
+        ctx.setLineDash([5 * k, 4 * k]);
         if (p2) {
             ctx.beginPath();
             ctx.moveTo(p1.x, p1.y);
@@ -2323,7 +2474,7 @@ function render() {
         }
         ctx.setLineDash([]);
         ctx.beginPath();
-        ctx.arc(p1.x, p1.y, 5, 0, Math.PI * 2);
+        ctx.arc(p1.x, p1.y, 5 * k, 0, Math.PI * 2);
         ctx.fillStyle = '#ffdc32';
         ctx.fill();
         ctx.restore();
@@ -2350,8 +2501,9 @@ canvas.addEventListener('mousedown', (e) => {
     // A point's circle grabs the point (slide along its line); otherwise the line itself
     const { y: my } = clientToImage(e);
     let ptHit = null;
+    const PT_THRESH = Math.max(THRESH, 7);   // zoomed in, the circle is 6 image px and larger than the 12 screen px
     sess().lines.forEach((line, idx) => line.points.forEach((pt) => {
-        if (Math.hypot(line.x - mx, pt.y - my) < THRESH) ptHit = { line, pt, idx };
+        if (Math.hypot(line.x - mx, pt.y - my) < PT_THRESH) ptHit = { line, pt, idx };
     }));
     if (ptHit) {
         state.activeLineIndex = ptHit.idx;
@@ -2617,8 +2769,8 @@ function rebuildMapForLine(lIdx) {
         attachMarkerDrag(marker, pt);
         mo.geoMarkers[lIdx].push(marker);
     });
-
-    rebuildWorkSource();   // the ray for this line (if both points are placed)
+    // Markers only. The rays are redrawn by recomputeIntersection(), which every caller runs next:
+    // once for all lines instead of once per line.
 }
 
 /* Dragging a geo marker: the ray follows live, intersection and ellipse recompute on release.
@@ -2743,11 +2895,8 @@ function recomputeIntersection() {
 }
 
 /* ============================================================
-   GEO MATHS
+   GEO MATHS  (constants DEG, RAD, R: top of the file)
    ============================================================ */
-const DEG = Math.PI / 180;
-const RAD = 180 / Math.PI;
-const R   = 6371; // Earth radius km
 
 function bearingDeg(p1, p2) {
     const dLng = (p2.lng - p1.lng) * DEG;
