@@ -79,6 +79,7 @@ const ADJUST_DEFAULTS = { contrast: 100, brightness: 100, saturation: 100, inver
 
 function createSession(name) {
     return {
+        id:               Date.now().toString(36) + Math.random().toString(36).slice(2, 10),   // key of the autosaved image, not exported
         name,
         colourIndex:      nextFreeColourIndex(),
         imgElement:       null,
@@ -102,6 +103,12 @@ let activeSessionIndex = 0;
 /* Convenience accessor – always returns the active session */
 function sess() { return sessions[activeSessionIndex]; }
 
+/* ---- AUTOSAVE STATE (functions: see AUTOSAVE below) ---- */
+const AUTOSAVE_KEY = 'tp-autosave';   // localStorage: '0' = switched off
+let autosaveOn    = localStorage.getItem(AUTOSAVE_KEY) !== '0';
+let autosaveReady = false;            // false until the restore on start has finished, so the empty start state never overwrites saved work
+let autosaveTimer = null;
+
 /* ---- INTERACTION STATE (not per-session) ---- */
 const state = {
     mode: 'idle',         // 'idle' | 'drag-line' | 'add-point' | 'map-point' | 'horizon'
@@ -120,6 +127,7 @@ function applyTransform() {
     const v = sess().view;
     canvas.style.transform       = `translate(${v.tx}px, ${v.ty}px) scale(${v.scale})`;
     canvas.style.transformOrigin = '0 0';
+    scheduleAutosave();
 }
 
 /* Convert mouse client coords → canvas-pixel coords (lines live in canvas space) */
@@ -146,7 +154,7 @@ const map = new maplibregl.Map({
     center: [WORLD_VIEW.center.lng, WORLD_VIEW.center.lat],
     zoom: WORLD_VIEW.zoom,
     minZoom: 0, maxZoom: 20,
-    maxPitch: 70,
+    maxPitch: 90,
     attributionControl: { compact: false },
     /* Ctrl+drag or right-drag rotates and tilts. aroundCenter: false = plain horizontal
        drag → bearing; the default hybrid mode wobbles when dragging slowly near the centre line. */
@@ -204,7 +212,7 @@ function parseViewHash(hash) {
     const parts = hash.replace(/^#/, '').split(',').map(Number);
     if (parts.length < 3 || parts.length > 5 || parts.some(n => !Number.isFinite(n))) return null;
     const [lat, lng, zoom, bearing = 0, pitch = 0] = parts;
-    if (Math.abs(lat) > 90 || Math.abs(lng) > 180 || zoom < 0 || zoom > 20 || Math.abs(pitch) > 70) return null;
+    if (Math.abs(lat) > 90 || Math.abs(lng) > 180 || zoom < 0 || zoom > 20 || Math.abs(pitch) > 90) return null;
     return { center: { lat, lng }, zoom, bearing, pitch };
 }
 
@@ -221,6 +229,19 @@ function writeViewHash() {
     if (initial) applyMapView(initial);
 }
 map.on('moveend', writeViewHash);
+map.on('moveend', scheduleAutosave);
+
+/* ---- MAP BAR READOUT: bearing (compass style, 0–359), tilt and zoom of the live view ---- */
+const mapReadout = document.getElementById('map-readout');
+function updateMapReadout() {
+    const bearing = Math.round(((map.getBearing() % 360) + 360) % 360) % 360;
+    mapReadout.innerHTML =
+        `<span><i>Bearing</i><b>${bearing}°</b></span>` +
+        `<span><i>Tilt</i><b>${Math.round(map.getPitch())}°</b></span>` +
+        `<span><i>Zoom</i><b>${map.getZoom().toFixed(1)}</b></span>`;
+}
+map.on('move', updateMapReadout);
+updateMapReadout();
 window.addEventListener('hashchange', () => {
     const v = parseViewHash(location.hash);
     if (v) applyMapView(v);
@@ -820,6 +841,7 @@ function updateUI() {
 
     updateLineManager();
     updateGuide();
+    scheduleAutosave();
 }
 
 /* ============================================================
@@ -1263,6 +1285,22 @@ function renderSessionMenu() {
         exportAllBtn.onclick = () => { exportAllSessions(); menu.style.display = 'none'; };
         menu.appendChild(exportAllBtn);
     }
+
+    // Autosave switch and the button that deletes what it saved
+    const saveDivider = document.createElement('div');
+    saveDivider.className = 'session-divider';
+    menu.appendChild(saveDivider);
+
+    const saveRow = document.createElement('div');
+    saveRow.className = 'session-autosave';
+    saveRow.innerHTML =
+        `<label class="autosave-switch" title="Keep the work in this browser so a refresh does not lose it. Off deletes the saved copy.">
+             <input type="checkbox" ${autosaveOn ? 'checked' : ''}> Autosave</label>
+         <button type="button" class="btn-clear-saved" title="Delete the saved session and start empty"
+                 ${autosaveOn && sessionsHaveWork() ? '' : 'disabled'}>Clear</button>`;
+    saveRow.querySelector('input').onchange = (e) => { setAutosave(e.target.checked); renderSessionMenu(); };
+    saveRow.querySelector('button').onclick = () => { menu.style.display = 'none'; clearSavedSession(); };
+    menu.appendChild(saveRow);
 }
 
 function switchToSession(idx) {
@@ -1410,31 +1448,37 @@ function updateDropOverlay() {
     }
 }
 
-function loadImage(file) {
-    const s = sess();
-    const isRestore = !!s.pendingImageFilename;
+/* s: the session that gets the image (the active one unless restoring).
+   fromStore: the file comes out of the autosave store, so it is not written back. */
+function loadImage(file, s = sess(), fromStore = false) {
+    const isRestore = fromStore || !!s.pendingImageFilename;
     if (s.currentObjectURL) URL.revokeObjectURL(s.currentObjectURL);
     s.currentObjectURL = URL.createObjectURL(file);
-    s.imageFilename = file.name;
+    s.imageFile = file;
+    s.imageFilename = file.name || s.imageFilename;
     s.pendingImageFilename = null;
     if (!isRestore) s.name = file.name.replace(/\.[^.]+$/, '');
+    if (!fromStore) autosavePutImage(s);
     s.imgElement = new Image();
     s.imgElement.onload = () => {
-        canvas.width  = s.imgElement.width;
-        canvas.height = s.imgElement.height;
-        canvas.style.display = 'block';
-        overlay.style.display = 'none';
         if (!isRestore) {
             const cr = container.getBoundingClientRect();
             s.view.scale = Math.min(cr.width / s.imgElement.width, cr.height / s.imgElement.height, 1);
             s.view.tx = (cr.width  - s.imgElement.width  * s.view.scale) / 2;
             s.view.ty = (cr.height - s.imgElement.height * s.view.scale) / 2;
         }
-        applyTransform();
-        render();
+        if (s === sess()) {
+            canvas.width  = s.imgElement.width;
+            canvas.height = s.imgElement.height;
+            canvas.style.display = 'block';
+            overlay.style.display = 'none';
+            applyTransform();
+            render();
+            updateGuide();
+            updateAdjustUI();
+        }
         renderSessionMenu();
-        updateGuide();
-        updateAdjustUI();
+        scheduleAutosave();
     };
     s.imgElement.src = s.currentObjectURL;
 
@@ -1443,6 +1487,8 @@ function loadImage(file) {
         .then(exif => { s.exif = exif || null; })
         .catch(() => { s.exif = null; })
         .finally(() => {
+            scheduleAutosave();
+            if (s !== sess()) return;
             document.getElementById('exif-wrap').style.display = 'block';
             document.getElementById('exif-card').style.display = 'none';
         });
@@ -1877,6 +1923,81 @@ function exportAllSessions() {
     showToast('All sessions exported.', 'success');
 }
 
+/* Builds sessions from the `sessions` array of a session file; every field is type-checked.
+   Used by the JSON import and by the autosave restore. Returns the sessions it filled.
+   keepView: the saved map view wins over the automatic zoom to the intersection. */
+function applySessionData(list, keepView = false) {
+    return list.map(sd => {
+        // Reuse the current session slot if it's completely empty
+        const cur = sess();
+        let s;
+        if (!cur.imgElement && cur.lines.length === 0) {
+            s = cur;
+            s.name = typeof sd.name === 'string' ? sd.name : 'Imported session';
+        } else {
+            s = createSession(typeof sd.name === 'string' ? sd.name : 'Imported session');
+            sessions.push(s);
+        }
+
+        if (sd.colourIndex != null) s.colourIndex = sd.colourIndex;
+        if ('exif' in sd) s.exif = sd.exif;
+        s.imageFilename        = sd.imageFilename || null;
+        s.pendingImageFilename = sd.imageFilename || null;
+        s.lines = (sd.lines || [])
+            .filter(l => l && typeof l.x === 'number')
+            .map(l => ({
+                x:      l.x,
+                colour: typeof l.colour === 'string' ? l.colour : null,
+                source: typeof l.source === 'string' ? l.source : null,
+                points: (l.points || [])
+                    .filter(pt => pt && typeof pt.y === 'number')
+                    .map(pt => ({
+                        y:   pt.y,
+                        geo: (pt.geo && typeof pt.geo.lat === 'number' && typeof pt.geo.lng === 'number')
+                             ? pt.geo : null
+                    }))
+            }));
+        if (sd.view && typeof sd.view === 'object') {
+            const { scale, tx, ty, rotation } = sd.view;
+            const validScale = typeof scale === 'number' && isFinite(scale);
+            if (validScale) {
+                s.view.scale = scale;
+                if (typeof tx === 'number' && isFinite(tx)) s.view.tx = tx;
+                if (typeof ty === 'number' && isFinite(ty)) s.view.ty = ty;
+            }
+            if (typeof rotation === 'number' && isFinite(rotation)) s.view.rotation = rotation;
+        }
+
+        // Switch first — switchToSession saves the outgoing session's live map
+        // position; setting s.mapView before the call would get overwritten when
+        // s === sessions[activeSessionIndex] (reused empty slot case).
+        switchToSession(sessions.indexOf(s));
+
+        // Restore imported mapView after the switch so it can't be clobbered
+        if (sd.mapView &&
+            typeof sd.mapView.center?.lat === 'number' && isFinite(sd.mapView.center.lat) &&
+            typeof sd.mapView.center?.lng === 'number' && isFinite(sd.mapView.center.lng) &&
+            typeof sd.mapView.zoom === 'number' && isFinite(sd.mapView.zoom)) {
+            const num = (v) => (typeof v === 'number' && isFinite(v)) ? v : 0;
+            s.mapView = {
+                center:  { lat: sd.mapView.center.lat, lng: sd.mapView.center.lng },
+                zoom:    sd.mapView.zoom,
+                bearing: num(sd.mapView.bearing),
+                pitch:   num(sd.mapView.pitch)
+            };
+            applyMapView(s.mapView);
+        }
+
+        if (keepView) s.hasAutoZoomed = true;
+        s.lines.forEach((_, lIdx) => rebuildMapForLine(lIdx));
+        recomputeIntersection();
+        // A session that had not found its position yet may still zoom to it later
+        if (keepView) s.hasAutoZoomed = !!s.mapObjects.intersectionLatLng;
+        updateUI();
+        return s;
+    });
+}
+
 function importSessions(file) {
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -1884,73 +2005,7 @@ function importSessions(file) {
             const data = JSON.parse(e.target.result);
             const list = data.sessions;
             if (!Array.isArray(list) || list.length === 0) return showToast('No sessions found in file.');
-
-            list.forEach(sd => {
-                // Reuse the current session slot if it's completely empty
-                const cur = sess();
-                let s;
-                if (!cur.imgElement && cur.lines.length === 0) {
-                    s = cur;
-                    s.name = typeof sd.name === 'string' ? sd.name : 'Imported session';
-                } else {
-                    s = createSession(typeof sd.name === 'string' ? sd.name : 'Imported session');
-                    sessions.push(s);
-                }
-
-                if (sd.colourIndex != null) s.colourIndex = sd.colourIndex;
-                if ('exif' in sd) s.exif = sd.exif;
-                s.imageFilename        = sd.imageFilename || null;
-                s.pendingImageFilename = sd.imageFilename || null;
-                s.lines = (sd.lines || [])
-                    .filter(l => l && typeof l.x === 'number')
-                    .map(l => ({
-                        x:      l.x,
-                        colour: typeof l.colour === 'string' ? l.colour : null,
-                        source: typeof l.source === 'string' ? l.source : null,
-                        points: (l.points || [])
-                            .filter(pt => pt && typeof pt.y === 'number')
-                            .map(pt => ({
-                                y:   pt.y,
-                                geo: (pt.geo && typeof pt.geo.lat === 'number' && typeof pt.geo.lng === 'number')
-                                     ? pt.geo : null
-                            }))
-                    }));
-                if (sd.view && typeof sd.view === 'object') {
-                    const { scale, tx, ty, rotation } = sd.view;
-                    const validScale = typeof scale === 'number' && isFinite(scale);
-                    if (validScale) {
-                        s.view.scale = scale;
-                        if (typeof tx === 'number' && isFinite(tx)) s.view.tx = tx;
-                        if (typeof ty === 'number' && isFinite(ty)) s.view.ty = ty;
-                    }
-                    if (typeof rotation === 'number' && isFinite(rotation)) s.view.rotation = rotation;
-                }
-
-                // Switch first — switchToSession saves the outgoing session's live map
-                // position; setting s.mapView before the call would get overwritten when
-                // s === sessions[activeSessionIndex] (reused empty slot case).
-                switchToSession(sessions.indexOf(s));
-
-                // Restore imported mapView after the switch so it can't be clobbered
-                if (sd.mapView &&
-                    typeof sd.mapView.center?.lat === 'number' && isFinite(sd.mapView.center.lat) &&
-                    typeof sd.mapView.center?.lng === 'number' && isFinite(sd.mapView.center.lng) &&
-                    typeof sd.mapView.zoom === 'number' && isFinite(sd.mapView.zoom)) {
-                    const num = (v) => (typeof v === 'number' && isFinite(v)) ? v : 0;
-                    s.mapView = {
-                        center:  { lat: sd.mapView.center.lat, lng: sd.mapView.center.lng },
-                        zoom:    sd.mapView.zoom,
-                        bearing: num(sd.mapView.bearing),
-                        pitch:   num(sd.mapView.pitch)
-                    };
-                    applyMapView(s.mapView);
-                }
-
-                s.lines.forEach((_, lIdx) => rebuildMapForLine(lIdx));
-                recomputeIntersection();
-                updateUI();
-            });
-
+            applySessionData(list);
             renderSessionMenu();
             showToast(`${list.length} session${list.length > 1 ? 's' : ''} imported.`, 'success');
         } catch (err) {
@@ -1959,6 +2014,157 @@ function importSessions(file) {
     };
     reader.readAsText(file);
 }
+
+/* ============================================================
+   AUTOSAVE
+   The work is kept in IndexedDB (database "tracepoint") so a refresh does not lose it:
+   key "session" holds the same JSON the export writes (all sessions, plus each session's
+   id and the active index), key "img:<session id>" holds the image file of a session.
+   Nothing leaves the browser. A hard reload does not clear it; the Autosave switch and
+   the Clear button in the session menu do.
+   ============================================================ */
+const AUTOSAVE_STORE = 'autosave';
+let autosaveDb = null;        // Promise<IDBDatabase>, opened on first use
+let autosaveWarned = false;
+
+function openAutosaveDb() {
+    if (!autosaveDb) autosaveDb = new Promise((resolve, reject) => {
+        const req = indexedDB.open('tracepoint', 1);
+        req.onupgradeneeded = () => req.result.createObjectStore(AUTOSAVE_STORE);
+        req.onsuccess = () => resolve(req.result);
+        req.onerror   = () => reject(req.error);
+    });
+    return autosaveDb;
+}
+
+/* One transaction on the store; resolves with the result of the request fn returns (if any) */
+function autosaveTx(mode, fn) {
+    return openAutosaveDb().then(db => new Promise((resolve, reject) => {
+        const tx  = db.transaction(AUTOSAVE_STORE, mode);
+        const req = fn(tx.objectStore(AUTOSAVE_STORE));
+        tx.oncomplete = () => resolve(req?.result);
+        tx.onerror = tx.onabort = () => reject(tx.error);
+    }));
+}
+
+function autosaveFailed() {
+    if (autosaveWarned) return;
+    autosaveWarned = true;
+    showToast('Autosave failed: browser storage is full or blocked.');
+}
+
+function sessionsHaveWork() {
+    return sessions.some(s => s.imgElement || s.lines.length > 0 || s.pendingImageFilename);
+}
+
+function scheduleAutosave() {
+    if (!autosaveOn || !autosaveReady) return;
+    clearTimeout(autosaveTimer);
+    autosaveTimer = setTimeout(autosaveWrite, 400);
+}
+
+function autosaveWrite() {
+    clearTimeout(autosaveTimer);
+    autosaveTimer = null;
+    if (!autosaveOn || !autosaveReady) return;
+    if (sessions[activeSessionIndex]) sessions[activeSessionIndex].mapView = getMapView();
+    const json = sessionsHaveWork()
+        ? JSON.stringify({ json_version: JSON_VERSION, exported: new Date().toISOString(), active: activeSessionIndex,
+                           sessions: sessions.map(s => ({ ...sessionToData(s), id: s.id })) })
+        : null;
+    const keep = new Set(sessions.map(s => 'img:' + s.id));
+    autosaveTx('readwrite', store => {
+        if (json) store.put(json, 'session'); else store.delete('session');
+        // images of removed sessions go too
+        store.getAllKeys().onsuccess = (e) => e.target.result.forEach(k => {
+            if (k !== 'session' && !keep.has(k)) store.delete(k);
+        });
+    }).catch(autosaveFailed);
+}
+
+function autosavePutImage(s) {
+    if (!autosaveOn || !s.imageFile) return;
+    autosaveTx('readwrite', store => { store.put(s.imageFile, 'img:' + s.id); }).catch(autosaveFailed);
+}
+
+function autosaveClearStore() {
+    clearTimeout(autosaveTimer);
+    autosaveTimer = null;
+    return autosaveTx('readwrite', store => { store.clear(); }).catch(() => {});
+}
+
+/* Back to one empty session. The map keeps its view unless resetMap is set. */
+function resetWorkspace(resetMap) {
+    sessions.forEach(s => {
+        removeSessionMarkers(s);
+        if (s.currentObjectURL) URL.revokeObjectURL(s.currentObjectURL);
+    });
+    sessions = [createSession('Image 1')];
+    activeSessionIndex = sessions.length;   // out of range → switchToSession skips its save step
+    switchToSession(0);
+    rebuildWorkSource();
+    if (resetMap) applyMapView(WORLD_VIEW);
+}
+
+/* Runs once, at the end of this script. A view in the URL hash wins over the saved map view. */
+async function autosaveRestore() {
+    if (!autosaveOn) { await autosaveClearStore(); autosaveReady = true; return; }
+    let json = null;
+    try { json = await autosaveTx('readonly', store => store.get('session')); }
+    catch (err) { autosaveReady = true; return; }   // no IndexedDB here: work without autosave
+    if (json != null) {
+        try {
+            const data = JSON.parse(json);
+            if (!Array.isArray(data.sessions) || data.sessions.length === 0) throw new Error('no sessions');
+            const hashView = parseViewHash(location.hash);
+            const restored = applySessionData(data.sessions, true);
+            restored.forEach((s, i) => {
+                const id = data.sessions[i].id;
+                if (typeof id === 'string' && id) s.id = id;
+            });
+            for (const s of restored) {
+                const file = await autosaveTx('readonly', store => store.get('img:' + s.id));
+                if (file instanceof Blob) loadImage(file, s, true);
+            }
+            switchToSession(Number.isInteger(data.active) && sessions[data.active] ? data.active : 0);
+            if (hashView) applyMapView(hashView);
+        } catch (err) {
+            await autosaveClearStore();
+            resetWorkspace(false);
+            showToast('Saved session could not be restored. Starting fresh.');
+        }
+    }
+    autosaveReady = true;
+}
+
+function setAutosave(on) {
+    autosaveOn = on;
+    localStorage.setItem(AUTOSAVE_KEY, on ? '1' : '0');
+    if (on) {
+        autosaveWarned = false;
+        sessions.forEach(autosavePutImage);
+        autosaveWrite();
+        showToast('Autosave on. Work is kept in this browser.', 'success');
+    } else {
+        autosaveClearStore();
+        showToast('Autosave off. Saved copy deleted.', 'success');
+    }
+}
+
+function clearSavedSession() {
+    if (!confirm('Delete the saved session and start empty? This cannot be undone.')) return;
+    autosaveClearStore().then(() => {
+        resetWorkspace(true);
+        showToast('Saved session cleared.', 'success');
+    });
+}
+
+/* Every edit ends with a mouse or key release; the debounce folds them into one write.
+   Leaving or hiding the tab writes what is still pending. */
+window.addEventListener('mouseup', scheduleAutosave);
+window.addEventListener('keyup',   scheduleAutosave);
+document.addEventListener('visibilitychange', () => { if (document.hidden && autosaveTimer) autosaveWrite(); });
+window.addEventListener('pagehide', () => { if (autosaveTimer) autosaveWrite(); });
 
 /* ============================================================
    ZOOM  (wheel on container)
@@ -2578,3 +2784,8 @@ function intersectLines(p1, p2, p3, p4) {
         lng: x1 + t * (x2 - x1)
     };
 }
+
+/* ============================================================
+   START – bring back the autosaved work, if any
+   ============================================================ */
+autosaveRestore();
