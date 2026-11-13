@@ -22,21 +22,17 @@ The more lines you add, the more rays are generated and the more robustly the in
 
 ## Features
 
-- Split-panel interface: photo left, satellite map right
-- Drop any image to load it, or click **Browse**
+- **Fully client-side:** no server, no uploads, no tracking
 - **Multi-image session manager:** all sessions visible on the map simultaneously, each with its own intersection result
 - **Bearing display:** each line shows its outward bearing once an intersection is found
-- **Confidence ellipse:** with 3 or more lines (up to 5 per image), a dashed ellipse around the intersection visualises the spread of ray crossings. A tighter ellipse means higher confidence. Computed via [Eigendecomposition](https://en.wikipedia.org/wiki/Eigendecomposition_of_a_matrix)
+- **Confidence ellipse:** with 3 or more lines (up to 5 per image), a dashed ellipse around the intersection shows the spread of ray crossings. A tighter ellipse means higher confidence
 - **Session export and import:** save and restore lines, geo points, bearings, and map view as JSON
+- **Autosave:** work and images are kept in this browser, so a refresh does not lose them. Switch it off or clear it in the ☰ image menu
 - **EXIF metadata viewer:** camera, lens, capture settings, GPS, altitude, and camera direction read from the image. GPS can be placed on the map as a reference marker
-- Built-in Potsdam demo with step-by-step guide
-- Horizon correction for tilted images
-- Map layer switcher: Esri Satellite, Sentinel-2 2024, OpenStreetMap, Esri Dark Gray, Esri Topo, Esri Streets
-- 3D terrain (off by default): tilt the map to see the relief, clicks land on the slope
-- **Custom map layers:** add any XYZ tile source by URL (same format as QGIS), saved in your browser
+- **Map layers:** Esri Satellite, Sentinel-2 2024, OpenStreetMap, Esri Dark Gray, Esri Topo, Esri Streets, optional 3D terrain, plus [custom XYZ layers](#custom-map-layers) by URL
 - **[Coordinate search](#coordinate-search):** paste coordinates (decimal, degrees-minutes-seconds or a Google Maps link) to drop numbered pins on the map
-- Full keyboard shortcut support
-- Fully client-side: no server, no uploads, no tracking
+- Horizon correction for tilted images
+- Built-in Potsdam demo with step-by-step guide
 
 ---
 
@@ -64,38 +60,21 @@ The more lines you add, the more rays are generated and the more robustly the in
 
 | Action | How |
 |---|---|
-| Zoom image | Scroll wheel |
 | Pan image | Space + drag, or middle-click drag |
-| Level image | Level button, then click two points on a horizontal reference |
-| Reset level | Click Level button again when correction is active |
-| Add a line | + New Line button |
-| Drag a line | Click and drag the line |
+| Level image | Level button, then click two points on a horizontal reference. Click it again to reset |
 | Deselect / cancel | Click blank canvas, or `Esc` |
-| Add a point | Add Point mode, click on the line |
 | Place point on map | Click the map pill, then click the map |
 | Move a point | Drag its marker on the map, or slide it along its line on the image. `Esc` while dragging snaps it back |
-| Delete a line or point | × button in the line bar |
-| Adjust the photo on screen | ☀ button in the line bar: contrast, brightness, saturation, invert. Display only: the photo, lines and exports are untouched. Remembered per image while the tab is open |
-| Switch map layer | ☰ button, right of the map bar |
-| Toggle 3D terrain | ⛰ Terrain in the ☰ map menu. Tilt the map (Ctrl + drag) to see it |
-| Share or bookmark a view | Copy the URL: the map view is in the `#` part, nothing else |
-| Copy a spot / open it elsewhere | Right-click the map: copy coordinates, or open the spot in Google Maps, Street View, Google Earth, Apple, Bing or Yandex Maps |
+| Adjust the photo on screen | ☀ button in the line bar: contrast, brightness, saturation, invert. Display only: the photo, lines and exports are untouched |
+| Image sessions, export, import | ☰ button, right of the line bar |
+| Autosave on / off, clear saved work | Last row of the ☰ image menu. Off or **Clear** deletes the copy kept in the browser |
+| Image metadata | `</>` button, left of the line bar. **Show on map** places the EXIF GPS position |
+| Rotate / tilt map | Ctrl + drag, or right-click drag, tilt up to 90°. Click the compass (bottom-right) or press `N` to reset. The map bar shows bearing, tilt and zoom |
+| Map layers and 3D terrain | ☰ button, right of the map bar. Custom layers: **+ Add custom layer…**, then ✎ / × to edit or remove |
 | Jump to coordinates | Paste into the search box in the map bar (or `Ctrl+V` anywhere) |
-| Go back to a pin | Click its row in the pin list at the top-left of the map |
-| Remove a pin | × on its row, or **Clear all** |
-| Zoom map | Scroll wheel, or + / − bottom-left of map panel |
-| Pan map | Drag, or middle-button drag |
-| Rotate / tilt map | Ctrl + drag, or right-click drag. Click the compass (bottom-right) or press `N` to reset north and tilt |
-| Add custom map layer | ☰ map menu → + Add custom layer… |
-| Edit / remove custom layer | ✎ / × next to the layer in the ☰ map menu |
-| Manage image sessions | ☰ button, right of line bar |
-| Browse for image | Click the drop zone |
-| Export session | ↓ button on session row in ☰ menu |
-| Export all sessions | ↓ Export all sessions in ☰ menu |
-| Import session | ↑ Import session in ☰ menu |
-| Open help guide | ? button, top-right of map panel |
-| View image metadata | `</>` button, left of line bar |
-| Place EXIF GPS on map | Show on map inside the metadata card |
+| Pins | Click a row in the pin list at the top-left of the map to go back to it; × or **Clear all** removes |
+| Copy a spot / open it elsewhere | Right-click the map: copy coordinates, or open the spot in Google Maps, Street View, Google Earth, Apple, Bing or Yandex Maps |
+| Share or bookmark a view | Copy the URL: the map view is in the `#` part, nothing else |
 
 ### Keyboard shortcuts
 
@@ -118,10 +97,6 @@ The more lines you add, the more rays are generated and the more robustly the in
 
 Paste coordinates into the search box in the bar under the map header, or press `Ctrl+V` anywhere outside a text field. Each location gets a numbered pin and a row in the pin list at the top-left of the map, which brightens on hover. The map keeps your zoom if you are already at town level or closer, otherwise it flies to zoom 14.
 
-### Map view in the URL
-
-The address bar follows the map: `#lat,lon,zoom`, plus `,bearing,pitch` when the map is rotated or tilted, e.g. `#45.94060,7.71737,15.00`. Copy the URL to come back to the same view or send it to someone; a session file or an image is never part of it. The hash never leaves your browser, see [Security & Privacy](#security--privacy). Zoom is the same number the session files use. Because the view is in the URL, a reload brings it back; delete everything after the `#` to start from the world view.
-
 ### Accepted formats
 
 | Format | Example |
@@ -139,6 +114,12 @@ The address bar follows the map: `#lat,lon,zoom`, plus `,bearing,pitch` when the
 | Google Maps link (query) | `https://maps.google.com/?q=52.4012,13.0645` |
 
 The first number is read as latitude, unless N/S/E/W letters or a value above 90 say otherwise.
+
+---
+
+## Map View in the URL
+
+The address bar follows the map: `#lat,lon,zoom`, plus `,bearing,pitch` when the map is rotated or tilted, e.g. `#45.94060,7.71737,15.00`. Copy the URL to come back to the same view or to send it to someone; it holds the view only, never your lines, points or image.
 
 ---
 
@@ -210,6 +191,8 @@ When three or more lines are used, a dashed ellipse appears around the estimated
 ![Ellipse comparison](assets/ellipse_comparison.png)
 The ideal result is a small, round ellipse. If you see a large or elongated one, adding a line at a different angle usually improves it significantly.
 
+How it is computed: every pair of rays produces a crossing point, and those crossings form a small cloud around the estimated origin. The ellipse is fitted to that cloud using [Eigendecomposition](https://en.wikipedia.org/wiki/Eigendecomposition_of_a_matrix). It stretches in the direction the crossings are most scattered and stays narrow where they agree.
+
 ---
 
 ## Technical Notes
@@ -223,9 +206,7 @@ Intersection uses flat-plane geometry on lat/lon coordinates. For most photograp
 - **Very long rays.** Reference points placed more than 20 to 30 km apart on the map, where the curvature of the Earth starts to affect flat-plane calculations.
 - **Heavily distorted lenses.** Fisheye or extreme wide-angle lenses warp straight lines, so bearing lines drawn on the image no longer correspond accurately to real-world directions.
 
-When three or more lines are used, every pair of rays produces a crossing point. Those crossings form a small cloud around the estimated origin. The confidence ellipse is fitted to that cloud using [Eigendecomposition](https://en.wikipedia.org/wiki/Eigendecomposition_of_a_matrix). The ellipse stretches in the direction the crossings are most scattered and stays narrow where they agree. A tight ellipse means the lines converge cleanly; a wide one means at least one bearing is off.
-
-No data leaves your machine. Map imagery is served by public tile servers (Esri, OpenStreetMap, EOX). Dependencies are [MapLibre GL JS](https://maplibre.org/) for maps and [exifr](https://github.com/MikeKovarik/exifr) by MikeKovarik for metadata parsing, both bundled in the repo. Everything else is vanilla HTML, CSS, and JavaScript. The map is rendered with WebGL, which every current browser supports.
+TracePoint has no server. Nothing you load or draw leaves your machine; the only requests are for map tiles (see [Security & Privacy](#security--privacy)). It is vanilla HTML, CSS and JavaScript plus two bundled libraries: [MapLibre GL JS](https://maplibre.org/) for the map and [exifr](https://github.com/MikeKovarik/exifr) by MikeKovarik for metadata.
 
 ---
 
@@ -241,36 +222,7 @@ python3 -m http.server
 
 ## Changelog
 
-| Version | Changes |
-|---------|---------|
-| v2.3.0 | Map bar under the map header, mirroring the line bar on the image side: the coordinate search box and the ☰ layer menu moved there, off the map. Contrast, brightness and saturation sliders plus an invert switch for the photo (☀ in the line bar), display only, never written to the session file. |
-| v2.2.0 | Points can be moved after placing: drag the marker on the map (ray follows live, intersection updates on release) or slide the point along its line on the image. `Esc` while dragging snaps it back. Step guide on the image: the next step glows, a hint in the header says what to do, including "click the map to place L1 P2". Smaller geo markers, as before v2. |
-| v2.1.0 | 3D terrain toggle in the map menu (Mapzen Terrarium elevation tiles via AWS, off by default); clicks land on the slope. Right-click menu on the map: copy coordinates or open the spot in Google Maps, Street View, Google Earth, Apple, Bing or Yandex Maps. Map view in the URL hash (`#lat,lon,zoom`), restored on load. |
-| v2.0.0 | Map engine switched from Leaflet to [MapLibre GL JS](https://maplibre.org/): rotate and tilt the map (Ctrl + drag or right-drag, compass or `N` resets north), middle-drag pans, smoother zooming. Compass button bottom-right. Both libraries are now bundled in the repo, no CDN. Session files are json_version 2: map zoom is stored in MapLibre terms (one less than before) and the saved view includes bearing and pitch. Files from v1.x are not converted. |
-| v1.8.0 | Coordinate search: paste decimal, DMS or Google Maps links to drop numbered pins, listed under the search box. `Ctrl+V` anywhere on the page. Map zoom buttons moved to bottom-left. |
-| v1.7.1 | Custom layers fall back to lower-zoom tiles when a server has no tiles at the current zoom (no more black tiles on older Wayback releases). |
-| v1.7.0 | Custom XYZ map layers (add, edit, remove, saved in browser). Sentinel-2 2024 layer. Esri Dark Gray replaces CARTO Dark Matter. |
-| v1.6.2 | Fixed map panning to intersection on every geo point placement. |
-| v1.6.1 | EXIF GPS popup restyled. Copy button added to GPS. EXIF ray fixed after session import. |
-
-<details>
-<summary>Older releases</summary>
-
-| Version | Changes |
-|---------|---------|
-| v1.6.0 | EXIF direction ray: ray from GPS position and camera bearing. Copy coordinates button. |
-| v1.5.0 | Keyboard shortcuts, confidence ellipse for 3+ lines, 5-line maximum per image. |
-| v1.4.3 | Line bar redesign: lines and points move to a dedicated bar below the toolbar. |
-| v1.4.2 | UX bug fixes: orphaned map rays, map-point mode not clearing, auto-zoom false trigger. |
-| v1.4.1 | Security hardening, JSON import validation, toast notification system. |
-| v1.4.0 | EXIF metadata viewer with GPS map marker. |
-| v1.3.0 | Session export / import, browse button, bearing display. |
-| v1.2.1 | Session naming, colour and map view fixes. |
-| v1.2.0 | Multi-image session manager. |
-| v1.1.0 | Horizon correction tool. |
-| v1.0.0 | Initial release. |
-
-</details>
+Current version: **v2.4.0**. All releases are listed in [CHANGELOG.md](CHANGELOG.md).
 
 ---
 
@@ -278,11 +230,11 @@ python3 -m http.server
 
 ### Curated Lists
 
-| List | Section | Stars |
-|---|---|---|
-| [jivoi/awesome-osint](https://github.com/jivoi/awesome-osint) | Image Analysis | 25k+ |
-| [Astrosp/Awesome-OSINT-List](https://github.com/Astrosp/Awesome-OSINT-List) | GEO | 3.3k |
-| [The-Osint-Toolbox/Geolocation-OSINT](https://github.com/The-Osint-Toolbox/Geolocation-OSINT) | Geolocation | 313 |
+| List | Section |
+|---|---|
+| [jivoi/awesome-osint](https://github.com/jivoi/awesome-osint) | Image Analysis |
+| [Astrosp/Awesome-OSINT-List](https://github.com/Astrosp/Awesome-OSINT-List) | GEO |
+| [The-Osint-Toolbox/Geolocation-OSINT](https://github.com/The-Osint-Toolbox/Geolocation-OSINT) | Geolocation |
 
 ### Press
 
@@ -298,13 +250,9 @@ A polished interface is not the same as a safe one. This section explains exactl
 
 ### Images never leave your machine
 
-Photos are loaded directly into an HTML5 `<canvas>` element and processed entirely in memory. No upload, no base64 POST, no fetch call carries image data anywhere. You can verify this yourself:
+Photos are loaded directly into an HTML5 `<canvas>` element and processed in the browser. No upload, no base64 POST, no fetch call carries image data anywhere. To verify, open **DevTools → Network** (`F12`) and load an image: no request involving it appears.
 
-1. Open **DevTools → Network tab** (`F12`)
-2. Load an image into TracePoint
-3. Filter by **Fetch/XHR** → no requests involving your image will appear
-
-The only outbound requests are map tile fetches from public CDN servers (Esri, OpenStreetMap, EOX), elevation tiles from AWS while 3D terrain is switched on, plus the servers of any [custom map layer](#custom-map-layers) you add yourself. These are standard HTTP requests for map imagery. They contain no session data, no coordinates from your work, and no image content. Like any tile server, the elevation host can see which map area you are viewing while terrain is on.
+The only outbound requests are map tile fetches from public servers (Esri, OpenStreetMap, EOX), elevation tiles from AWS while 3D terrain is switched on, plus the servers of any [custom map layer](#custom-map-layers) you add yourself. They contain no session data, no coordinates from your work, and no image content.
 
 ```javascript
 // The full extent of network activity in TracePoint:
@@ -316,78 +264,54 @@ The only outbound requests are map tile fetches from public CDN servers (Esri, O
 // No other requests.
 ```
 
-### Pasted coordinates stay local
+### What stays in the browser
 
-TracePoint never reads your clipboard on its own and never asks for clipboard permission. It only receives text at the moment you paste, into the search box or with `Ctrl+V` on the page. That text is parsed in the browser, no lookup service or geocoder is contacted, and the resulting pins live in memory only: they are not saved and disappear when you close the tab.
+- **Pasted coordinates.** TracePoint never reads your clipboard on its own. Text arrives only when you paste, it is parsed in the browser, and no geocoder or lookup service is contacted. Pins live in memory and disappear with the tab.
+- **The URL hash.** Browsers never send the part after `#` to the server, so whoever hosts your copy does not see which places you look at. It holds the map view only.
+- **The right-click menu.** It only builds ordinary links. Nothing is contacted until you click one, and a link carries the clicked coordinate and zoom, never your image or session.
 
-### The URL hash stays in the browser
+### Autosave keeps your work in this browser
 
-The map view is mirrored into the URL after the `#`. Browsers never send the hash part of a URL to the server, so GitHub Pages, or whoever hosts your copy, does not see which places you look at. The hash holds only latitude, longitude, zoom, bearing and pitch. Lines, points, pins and images are not in it, so a shared link shows the place, not your work.
+So that a refresh does not lose work, TracePoint saves the open sessions and their images in this browser's `IndexedDB`. Nothing is uploaded and nothing is synced: the saved copy exists only in this browser profile on this machine. Anyone who can use that profile can open TracePoint and see it.
 
-### The right-click menu only builds links
+- **It survives** closing the tab, restarting the browser and a hard reload (`Ctrl+F5`, `Ctrl+Shift+R`). A hard reload only skips the cache.
+- **Clear** in the ☰ image menu deletes the saved copy and empties the workspace.
+- **Autosave off** in the same menu deletes the saved copy at once and stores nothing from then on. Use this for sensitive material; closing the tab then leaves no trace of the investigation.
+- A private window works as usual; the browser deletes the saved copy when that window closes.
+- Two tabs share one saved copy; the last change wins.
 
-Right-clicking the map shows the clicked coordinate and links to other map services. These are ordinary links that open in a new tab when you click one; nothing is contacted when the menu opens. A link carries only the clicked coordinate and the zoom level, never your image or session data.
-
-### No persistent storage
-
-TracePoint writes only your chosen map layer, the terrain switch, and any custom layers you added, to `localStorage` so they persist between sessions. Nothing else is stored — no image data, no session content, no coordinates. `IndexedDB`, `sessionStorage`, and cookies are unused. Closing the tab leaves no investigation trace in the browser.
+Photo adjustments and coordinate pins are not saved. Besides that, `localStorage` holds a few settings. `sessionStorage` and cookies are unused.
 
 ```javascript
 // Verify in DevTools → Application → Storage
 // localStorage:   { "tp-tileset": "esri-sat" }  ← your map layer choice
 //                 { "tp-terrain": "0" }         ← 3D terrain on/off
 //                 { "tp-custom-layers": [...] } ← name + URL of custom layers, if you added any
+//                 { "tp-autosave": "1" }        ← autosave on/off
+// IndexedDB:      tracepoint → autosave         ← "session" (same JSON as the export) + one "img:…" per image
+//                                                 empty while autosave is off
 // sessionStorage: empty
-// IndexedDB:      empty
 // Cookies:        none set by TracePoint
 ```
 
-### Session files are plain JSON
+### Session import cannot run code
 
-Exported sessions are standard `.json` files saved to your local disk. No cloud sync, no server involved. You control where they go and who can access them.
-
-### JSON import is validated and sanitised
-
-Importing a session does not execute any code. Every field is type-checked and validated on the way in. Unknown or unexpected keys are discarded. String values are sanitised before display. There is no `eval()`, no raw HTML injection, and no way for a crafted session file to run code or exfiltrate data.
-
-```javascript
-// Example of how imported values are handled:
-function escHtml(str) {
-    return String(str)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;');
-}
-```
-
-A manipulated session file cannot execute code, redirect the page, or exfiltrate data. The worst a malformed file can do is fail to import.
+Importing a session file does not execute anything. Every field is type-checked on the way in, unknown keys are discarded, and strings are escaped before display. There is no `eval()` and no raw HTML injection. The worst a manipulated file can do is fail to import.
 
 ### The code is fully auditable
 
-TracePoint is vanilla HTML, CSS, and JavaScript with no build step and no obfuscation. Its own logic lives in `js/script.js`, unminified. What you read in the repo is what runs in your browser. The third-party libraries, MapLibre GL JS and exifr, are their standard minified builds, bundled in the repo.
+TracePoint is vanilla HTML, CSS, and JavaScript with no build step and no obfuscation. Its own logic lives in `js/script.js`, unminified. What you read in the repo is what runs in your browser.
+
+The two libraries, [MapLibre GL JS](https://maplibre.org/) (map rendering) and [exifr](https://github.com/MikeKovarik/exifr) (EXIF parsing, local only), are their standard minified builds, bundled in `js/` and `css/` and pinned to a known version. Nothing is loaded from a CDN, so no third-party host can swap the code that runs in your browser. To verify a bundled copy, compare it with the official release of the same version.
 
 This tool was developed with AI assistance. That is disclosed here precisely because the [risks of opaque, AI-generated OSINT tools](https://www.dutchosintguy.com/post/vibe-coding-is-becoming-an-osint-risk) are real. The answer is not to hide the involvement. It is to make the code readable so anyone can verify what it does.
-
-### Dependencies
-
-TracePoint has two runtime dependencies:
-
-| Library | Purpose | Loaded from | Touches your data? |
-|---|---|---|---|
-| [MapLibre GL JS](https://maplibre.org/) | Map rendering (WebGL) | bundled in `js/` and `css/` | No. Renders tiles only |
-| [exifr](https://github.com/MikeKovarik/exifr) | EXIF metadata parsing | bundled in `js/` | Locally only. No network calls |
-
-Both are bundled in the repository (js/maplibre-gl.js, css/maplibre-gl.css, js/exifr.min.js), pinned to a known version. Nothing is loaded from a CDN, so no third-party host can swap the code that runs in your browser. MapLibre's licence is in js/maplibre-gl.LICENSE.txt. To verify the bundled copy, compare it with the official release of the same version.
-
-Clone the repository and serve it locally with `npx serve .` or `python3 -m http.server`. No outbound requests except map tiles.
 
 ### Security caveats
 
 - **Map tiles reveal your target location.** Tile requests follow the format `tile/z/x/y`. The coordinates directly encode the area of the map you are viewing. A tile server operator can infer what location you are investigating. Use a VPN or TOR if that is a concern.
 - **Custom layers add another party.** A custom layer's server sees the same tile coordinates. If its URL carries an API key or token, that key is also tied to every request, and it is stored in plain text in your browser.
 - **Browser and OS trust.** If your browser or operating system is compromised, no web application can protect you. TracePoint is only as secure as the environment it runs in.
-- **Session files on disk.** Exported JSON files are unencrypted plaintext. Treat them with the same care as any other sensitive investigation material.
+- **Files and saved work are unencrypted.** Exported JSON files and the autosaved copy in the browser are plaintext. Treat them with the same care as any other sensitive investigation material.
 
 ---
 

@@ -61,7 +61,7 @@ button {
     font-size: 11px; white-space: nowrap; transition: background 0.15s, color 0.15s;
 }
 button:hover:not(:disabled) { background: #2a2a2a; color: #fff; }
-button.active-mode  { background: #003a55; color: #00aaff; border-color: #00aaff; font-weight: 600; }
+button.active-mode  { background: #2a2000; color: #ffdc32; border-color: #ffdc32; font-weight: 600; }
 button.map-mode     { background: #003325; color: #00ffaa; border-color: #00ffaa; }
 button:disabled     { opacity: 0.3; cursor: not-allowed; }
 
@@ -172,7 +172,7 @@ button:disabled     { opacity: 0.3; cursor: not-allowed; }
     cursor: pointer; transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
 #btn-browse:hover { background: #222; color: #aaa; border-color: #444; }
-#image-container.drag-active #drop-overlay { border-color: #00aaff; color: #00aaff; }
+#image-container.drag-active #drop-overlay { border-color: #ffdc32; color: #ffdc32; }
 
 /* GitHub button */
 #btn-github {
@@ -366,6 +366,28 @@ button:disabled     { opacity: 0.3; cursor: not-allowed; }
     flex-shrink: 0; position: relative; z-index: 6;
 }
 
+/* Live bearing, tilt and zoom of the map, right of the search box */
+#map-readout {
+    margin-left: auto; display: flex; align-items: stretch; height: 32px; box-sizing: border-box;
+    background: #151515; border: 1px solid #333; border-radius: 4px; box-shadow: 0 2px 6px #0006;
+    white-space: nowrap; overflow: hidden; flex-shrink: 0;
+}
+/* on a narrow map panel the search box gives way, not the readout */
+#map-bar .coord-search { flex: 0 1 230px; min-width: 70px; }
+#map-readout span {
+    display: flex; align-items: center; gap: 5px; padding: 0 8px;
+    border-left: 1px solid #2a2a2a;
+}
+#map-readout span:first-child { border-left: none; }
+#map-readout i {
+    font-style: normal; font-size: 10px; letter-spacing: 0.5px; text-transform: uppercase; color: #777;
+}
+#map-readout b {
+    font-size: 12px; font-weight: 600; color: #ffdc32;
+    font-variant-numeric: tabular-nums; min-width: 30px; text-align: right;
+}
+#map-readout + .layer-switcher-wrap { margin-left: 0; }
+
 /* ---- LAYER SWITCHER ---- */
 .layer-switcher-wrap {
     position: relative; margin-left: auto;
@@ -393,7 +415,7 @@ button:disabled     { opacity: 0.3; cursor: not-allowed; }
     white-space: nowrap;
 }
 .layer-item:hover  { background: #222; color: #fff; }
-.layer-item.active { color: #00aaff; background: #0a1a2a; }
+.layer-item.active { color: #ffdc32; background: #221c05; }
 .layer-item-custom { display: flex; align-items: center; gap: 4px; padding-right: 8px; }
 .layer-label { flex: 1; overflow: hidden; text-overflow: ellipsis; max-width: 200px; }
 .layer-action {
@@ -427,7 +449,7 @@ button:disabled     { opacity: 0.3; cursor: not-allowed; }
 .map-ctx-divider { height: 1px; background: #2a2a2a; margin: 2px 0; }
 
 .layer-terrain::after        { content: '  off'; color: #555; font-size: 11px; }
-.layer-terrain.active::after { content: '  on';  color: #00aaff; }
+.layer-terrain.active::after { content: '  on';  color: #ffdc32; }
 .layer-add       { color: #777; }
 .layer-add:hover { color: #fff; }
 
@@ -442,7 +464,7 @@ button:disabled     { opacity: 0.3; cursor: not-allowed; }
     outline: none; box-shadow: 0 2px 6px #0006;
 }
 .coord-search-input::placeholder { color: #666; }
-.coord-search-input:focus { border-color: #00aaff; }
+.coord-search-input:focus { border-color: #ffdc32; }
 /* a bad entry: red border, the message shows as the placeholder */
 .coord-search-input.search-input-error { border-color: #ff4444; }
 .coord-search-input.search-input-error::placeholder { color: #ff6666; }
@@ -522,7 +544,7 @@ button:disabled     { opacity: 0.3; cursor: not-allowed; }
     margin-bottom: 12px; outline: none;
     transition: border-color 0.15s;
 }
-.modal-input:focus { border-color: #00aaff; }
+.modal-input:focus { border-color: #ffdc32; }
 #layer-url { font-family: ui-monospace, Consolas, monospace; font-size: 11px; margin-bottom: 5px; }
 .modal-field-hint { font-size: 10px; color: #555; margin-bottom: 12px; }
 .modal-field-hint.field-error { color: #ff6666; }
@@ -533,7 +555,7 @@ button:disabled     { opacity: 0.3; cursor: not-allowed; }
 }
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .modal-actions button { padding: 6px 14px; font-size: 12px; }
-button.btn-primary { background: #003a55; color: #00aaff; border-color: #00aaff; }
+button.btn-primary { background: #2a2000; color: #ffdc32; border-color: #ffdc32; }
 button.btn-primary:hover:not(:disabled) { background: #004a6e; color: #fff; }
 .intersection-marker {
     width: 24px; height: 24px;
@@ -635,7 +657,7 @@ button.btn-primary:hover:not(:disabled) { background: #004a6e; color: #fff; }
 
 /* ---- CONTRAST / BRIGHTNESS ---- */
 .adjust-wrap { position: relative; z-index: 1000; padding-right: 8px; }
-.exif-burger.active, .exif-burger.active:hover { color: #00aaff; border-color: #00aaff; }
+.exif-burger.active, .exif-burger.active:hover { color: #ffdc32; border-color: #ffdc32; }
 .adjust-card {
     position: absolute; top: 100%; left: 0; margin-top: 6px;
     width: 260px; padding: 12px 14px; box-sizing: border-box;
@@ -654,10 +676,10 @@ button.btn-primary:hover:not(:disabled) { background: #004a6e; color: #fff; }
 }
 .adjust-row input[type="range"]::-webkit-slider-thumb {
     -webkit-appearance: none; width: 12px; height: 12px; border-radius: 50%;
-    background: #00aaff; border: none;
+    background: #ffdc32; border: none;
 }
 .adjust-row input[type="range"]::-moz-range-thumb {
-    width: 12px; height: 12px; border-radius: 50%; background: #00aaff; border: none;
+    width: 12px; height: 12px; border-radius: 50%; background: #ffdc32; border: none;
 }
 .adjust-foot {
     display: flex; justify-content: space-between; align-items: center; gap: 8px;
@@ -668,7 +690,7 @@ button.btn-primary:hover:not(:disabled) { background: #004a6e; color: #fff; }
     display: flex; align-items: center; gap: 6px; font-size: 11px; color: #bbb;
     margin: 0 0 10px; cursor: pointer;
 }
-.adjust-check input { accent-color: #00aaff; margin: 0; }
+.adjust-check input { accent-color: #ffdc32; margin: 0; }
 
 .exif-card {
     position: absolute; top: 100%; left: 0;
@@ -750,7 +772,7 @@ button.btn-primary:hover:not(:disabled) { background: #004a6e; color: #fff; }
     white-space: nowrap;
 }
 .session-item:hover       { background: #222; color: #fff; }
-.session-item.active-session { background: #0a1520; color: #fff; }
+.session-item.active-session { background: #1c1805; color: #fff; }
 
 .session-dot {
     width: 8px; height: 8px; border-radius: 50%;
@@ -776,7 +798,7 @@ button.btn-primary:hover:not(:disabled) { background: #004a6e; color: #fff; }
     color: #555; cursor: pointer;
     transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
-.btn-session-export:hover { background: #222; color: #00aaff; border-color: #00aaff; }
+.btn-session-export:hover { background: #222; color: #ffdc32; border-color: #ffdc32; }
 .btn-session-export svg, .export-icon svg { display: block; }
 
 .session-import { color: #555; display: flex; align-items: center; gap: 7px; }
@@ -791,7 +813,18 @@ button.btn-primary:hover:not(:disabled) { background: #004a6e; color: #fff; }
     background: #1a1a1a; border: 1px solid #333; border-radius: 3px;
     color: #555; transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
-.session-export-all:hover .export-icon { background: #222; color: #00aaff; border-color: #00aaff; }
+.session-export-all:hover .export-icon { background: #222; color: #ffdc32; border-color: #ffdc32; }
+
+/* Autosave switch and Clear button, last row of the session menu */
+.session-autosave {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 6px 12px; font-size: 12px; color: #777;
+}
+.autosave-switch { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+.autosave-switch:hover { color: #fff; }
+.autosave-switch input { accent-color: #ffdc32; margin: 0; }
+.btn-clear-saved { font-size: 11px; padding: 3px 10px; }
+.btn-clear-saved:not(:disabled):hover { color: #e03c3c; border-color: #e03c3c; }
 
 .drop-restored-title {
     color: #4caf7d; font-size: 14px; letter-spacing: 0.5px;
