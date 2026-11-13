@@ -110,7 +110,7 @@
 
 ## v1.2.1
 
-- Fixed: session naming, colour and map view
+- Fixed: session naming, color and map view
 
 ## v1.2.0
 
