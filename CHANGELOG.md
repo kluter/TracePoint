@@ -1,5 +1,16 @@
 # Changelog
 
+## v2.5.0
+
+- Undo and redo for lines and points, on the photo and on the map: `Ctrl+Z`, `Ctrl+Shift+Z` or `Ctrl+Y`, up to 100 steps per image
+- Photo points are open rings instead of filled dots, so the spot under a point stays visible; a point placed on the map gets two side arms
+- `E` puts the new line under the mouse
+- No more Drag / Add Point modes: a click on the active line places a point, a drag moves the line; the Mode button and `Tab` are gone
+- After the second point the map placement starts by itself; a tag next to the mouse says which point the next map click places, and that point pulses on the photo
+- A point picked on the photo is highlighted on the map and the other way round
+- `Delete` or `Backspace` removes the selected point, or the active line if no point is selected
+- Shorter hint texts
+
 ## v2.4.1
 
 - Fixed: restore and import overwrote images that had no lines yet
