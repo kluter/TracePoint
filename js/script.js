@@ -65,6 +65,7 @@ document.getElementById('session-menu').addEventListener('click', e => {
     const btn = e.target.closest('[data-action]');
     if (!btn) return;
     e.stopPropagation();
+    if (btn.dataset.action === 'rename-session') renameSession(+btn.dataset.idx);
     if (btn.dataset.action === 'export-session') exportSession(+btn.dataset.idx);
     if (btn.dataset.action === 'remove-session') removeSession(+btn.dataset.idx);
 });
@@ -1212,6 +1213,9 @@ document.addEventListener('keydown', (e) => {
     // Ignore when typing in an actual text input
     const tag = e.target.tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+    // F2 — rename the active image in the ☰ list
+    if (e.key === 'F2') { e.preventDefault(); renameSession(activeSessionIndex); return; }
+
     // Ctrl+Z undoes, Ctrl+Shift+Z or Ctrl+Y redoes (text fields returned above and keep the browser's own undo)
     if ((e.ctrlKey || e.metaKey) && !e.altKey) {
         const k = e.key.toLowerCase();
@@ -1341,6 +1345,11 @@ function renderSessionMenu() {
         nameSpan.textContent = s.name;
         item.appendChild(dot);
         item.appendChild(nameSpan);
+        item.insertAdjacentHTML('beforeend',
+            `<button class="btn-session-export" title="Rename (F2)" data-action="rename-session" data-idx="${idx}">
+                 <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                     <path d="M1.2 8.8l.6-2.4L6.7 1.5l1.8 1.8-4.9 4.9z"/>
+                 </svg></button>`);
         if (s.imgElement) {
             item.insertAdjacentHTML('beforeend',
                 `<button class="btn-session-export" title="Export session" data-action="export-session" data-idx="${idx}">
@@ -1350,7 +1359,8 @@ function renderSessionMenu() {
         }
         item.insertAdjacentHTML('beforeend',
             `<button class="btn-delete" title="Remove image" data-action="remove-session" data-idx="${idx}">×</button>`);
-        item.onclick = () => {
+        item.onclick = (e) => {
+            if (e.target.closest('[data-action], input')) return;   // a button of the row or the name being edited, not the row
             switchToSession(idx);
             menu.style.display = 'none';
         };
@@ -1402,6 +1412,48 @@ function renderSessionMenu() {
     saveRow.querySelector('input').onchange = (e) => { setAutosave(e.target.checked); renderSessionMenu(); };
     saveRow.querySelector('button').onclick = () => { menu.style.display = 'none'; clearSavedSession(); };
     menu.appendChild(saveRow);
+}
+
+/* Rename an image in the ☰ list: the name becomes a text field. Enter or a click elsewhere saves,
+   Esc cancels, an empty name keeps the old one. From the pencil on the row and from F2 (active image).
+   After renameSessionTab in briatlon's sessionTabs.js. */
+const SESSION_NAME_MAX = 60;
+
+function renameSession(idx) {
+    const s = sessions[idx];
+    const menu = document.getElementById('session-menu');
+    if (!s || !menu) return;
+    renderSessionMenu();
+    menu.style.display = 'block';
+    const span = menu.querySelectorAll('.session-item:not(.session-demo) .session-name')[idx];
+    if (!span) return;
+    const input = document.createElement('input');
+    input.className = 'session-name-input';
+    input.value = s.name;
+    input.maxLength = SESSION_NAME_MAX;
+    input.spellcheck = false;
+    input.setAttribute('aria-label', 'Image name');
+    let finished = false;
+    const finish = (cancel) => {
+        if (finished) return;
+        finished = true;
+        const name = input.value.trim().slice(0, SESSION_NAME_MAX);
+        if (!cancel && name && name !== s.name) {
+            s.name = name;
+            s.renamed = true;   // a photo loaded into this image later no longer names it (see loadImage)
+            scheduleAutosave();
+        }
+        renderSessionMenu();
+    };
+    input.onkeydown = (e) => {
+        if (e.key !== 'Enter' && e.key !== 'Escape') return;
+        e.preventDefault();
+        finish(e.key === 'Escape');
+    };
+    input.onblur = () => finish(false);
+    span.replaceWith(input);
+    input.focus();
+    input.select();
 }
 
 function switchToSession(idx) {
@@ -1582,7 +1634,7 @@ function loadImage(file, s = sess(), fromStore = false, onReady = null) {
         s.imageFile = file;
         s.imageFilename = file.name || s.imageFilename;
         s.pendingImageFilename = null;
-        if (!isRestore && file.name) s.name = file.name.replace(/\.[^.]+$/, '');
+        if (!isRestore && file.name && !s.renamed) s.name = file.name.replace(/\.[^.]+$/, '');
         if (!fromStore) autosavePutImage(s);
         if (!isRestore) fitPhoto(s);
         if (s === sess()) {
@@ -2148,13 +2200,19 @@ function downloadJSON(data, filename) {
     URL.revokeObjectURL(url);
 }
 
+/* An image name as part of a file name: the characters Windows refuses become "_".
+   The name inside the JSON stays as typed. */
+function fileSafe(name) {
+    return name.replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_');
+}
+
 function exportSession(idx) {
     const s  = sessions[idx];
     if (idx === activeSessionIndex) s.mapView = getMapView();
     const ts = new Date().toISOString().slice(0, 16).replace('T', '_').replace(/:/g, '-');
     downloadJSON(
         { json_version: JSON_VERSION, exported: new Date().toISOString(), sessions: [sessionToData(s)] },
-        `tracepoint_${s.name}_${ts}.json`
+        `tracepoint_${fileSafe(s.name)}_${ts}.json`
     );
     showToast('Session exported.', 'success');
 }
