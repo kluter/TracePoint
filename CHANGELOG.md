@@ -3,6 +3,8 @@
 ## v2.5.0
 
 - Undo and redo for lines and points, on the photo and on the map: `Ctrl+Z`, `Ctrl+Shift+Z` or `Ctrl+Y`, up to 100 steps per image
+- Photo points are open rings instead of filled dots, so the spot under a point stays visible; a point placed on the map gets two side arms
+- `E` puts the new line under the mouse
 
 ## v2.4.1
 
