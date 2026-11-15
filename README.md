@@ -90,6 +90,7 @@ The more lines you add, the more rays are generated and the more robustly the in
 | `Del` / `Backspace` | Delete the selected point, or the active line if no point is selected |
 | `1` – `5` | Jump to line 1–5 |
 | `Esc` | Cancel / deselect |
+| `F2` | Rename the active image |
 | `Ctrl+Z` | Undo a line or point edit; `Ctrl+Shift+Z` or `Ctrl+Y` redoes |
 | `Ctrl+V` | Paste a photo → new image; paste coordinates → pin on map |
 | `N` | Reset map to north |
@@ -225,7 +226,7 @@ python3 -m http.server
 
 ## Changelog
 
-Current version: **v2.5.0**. All releases are listed in [CHANGELOG.md](CHANGELOG.md).
+Current version: **v2.6.0**. All releases are listed in [CHANGELOG.md](CHANGELOG.md).
 
 ---
 

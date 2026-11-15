@@ -9,6 +9,8 @@
 - Fit photo button in the line bar
 - Show original: a switch next to ☀ and in the adjust card, yellow while the unadjusted photo is on screen
 - Stronger adjustments: contrast and brightness 25–300% (was 50–150%), saturation 0–300%; sliders stay centred on 100%, double-click resets one
+- Rename an image with the pencil in the ☰ image list or with `F2`; the name is used in exports and autosave
+- Removing or exporting an image from the list no longer switches to it first
 
 ## v2.5.0
 
