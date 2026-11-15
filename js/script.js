@@ -1160,19 +1160,26 @@ function startMapPoint(lIdx, pIdx) {
     updateUI();
 }
 
-btnAddLine.onclick = () => {
+/* Where the mouse is over the photo panel, or null when it is elsewhere (see addLine) */
+let photoCursor = null;
+container.addEventListener('mousemove',  (e) => { photoCursor = { clientX: e.clientX, clientY: e.clientY }; });
+container.addEventListener('mouseleave', () => { photoCursor = null; });
+
+/* atCursor: the E key puts the line under the mouse when that is over the photo.
+   Otherwise, and for the button and the step guide, it goes to the centre of the visible photo. */
+function addLine(atCursor = false) {
     if (!sess().imgElement) return showToast("Drop an image first.");
     if (sess().lines.length >= MAX_LINES) return showToast(`Maximum of ${MAX_LINES} lines per image.`);
     const v  = sess().view;
     const cr = container.getBoundingClientRect();
-    // Place the line at the horizontal centre of the currently visible viewport
-    const viewCenterX = (cr.width / 2 - v.tx) / v.scale;
-    const clampedX    = Math.max(0, Math.min(canvas.width, viewCenterX));
-    sess().lines.push({ x: clampedX, points: [], pristine: true });
+    const x  = (atCursor && photoCursor) ? clientToImage(photoCursor).x : (cr.width / 2 - v.tx) / v.scale;
+    sess().lines.push({ x: Math.max(0, Math.min(canvas.width, x)), points: [], pristine: true });
     state.activeLineIndex = sess().lines.length - 1;
     state.mode = 'drag-line';
     render(); updateUI();
-};
+}
+
+btnAddLine.onclick = () => addLine();
 
 btnModeToggle.onclick = () => {
     if (state.mode === 'map-point') { state.mode = 'drag-line'; state.mapPointTarget = null; }
@@ -1269,7 +1276,7 @@ document.addEventListener('keydown', (e) => {
     // E — new line
     if (e.key === 'e' || e.key === 'E') {
         e.preventDefault();
-        btnAddLine.click();
+        addLine(true);
         return;
     }
 
@@ -2490,9 +2497,15 @@ function render() {
             ctx.shadowBlur  = (22 + 12 * pulse) * k;    // 10 … 34
         }
 
+        // The line stops at each point's ring, so the pixel under the point stays visible
+        const RING = 7 * k;
         ctx.beginPath();
-        ctx.moveTo(line.x, 0);
-        ctx.lineTo(line.x, canvas.height);
+        let from = 0;
+        line.points.map(pt => pt.y).sort((a, b) => a - b).forEach(y => {
+            if (y - RING > from) { ctx.moveTo(line.x, from); ctx.lineTo(line.x, y - RING); }
+            from = Math.max(from, y + RING);
+        });
+        if (from < canvas.height) { ctx.moveTo(line.x, from); ctx.lineTo(line.x, canvas.height); }
         ctx.strokeStyle = colour;
         ctx.lineWidth   = (line.pristine ? 3.5 : (active ? 2.5 : 1.5)) * k;
         ctx.setLineDash(active || line.pristine ? [] : [6 * k, 4 * k]);
@@ -2503,24 +2516,20 @@ function render() {
         line.points.forEach((pt, pIdx) => {
             const hasGeo = !!(pt.geo);
 
+            // Open ring; a point that is placed on the map gets two side arms
             ctx.beginPath();
-            ctx.moveTo(line.x - 8 * k, pt.y);
-            ctx.lineTo(line.x + 8 * k, pt.y);
+            ctx.arc(line.x, pt.y, RING, 0, Math.PI * 2);
+            if (hasGeo) {
+                ctx.moveTo(line.x - 15 * k, pt.y); ctx.lineTo(line.x - RING, pt.y);
+                ctx.moveTo(line.x + RING, pt.y);   ctx.lineTo(line.x + 15 * k, pt.y);
+            }
             ctx.strokeStyle = colour;
             ctx.lineWidth   = 2 * k;
-            ctx.stroke();
-
-            ctx.beginPath();
-            ctx.arc(line.x, pt.y, 6 * k, 0, Math.PI * 2);
-            ctx.fillStyle   = hasGeo ? colour : '#0a0a0a';
-            ctx.strokeStyle = colour;
-            ctx.lineWidth   = 2 * k;
-            ctx.fill();
             ctx.stroke();
 
             ctx.globalAlpha = 1;
             ctx.fillStyle   = '#fff';
-            ctx.fillText(`P${pIdx + 1}`, line.x + 10 * k, pt.y + 4 * k);
+            ctx.fillText(`P${pIdx + 1}`, line.x + (hasGeo ? 19 : 12) * k, pt.y + 4 * k);
             ctx.globalAlpha = alpha;
         });
 
