@@ -11,15 +11,44 @@ body {
     color: #e0e0e0;
 }
 
-#app { display: flex; height: 100vh; }
+#app { display: flex; height: 100vh; --split: 50%; }
 
 /* ---- PANELS ---- */
 #image-panel, #map-panel {
     flex: 1; min-width: 0;
     display: flex; flex-direction: column;
-    border-right: 1px solid #222;
     position: relative;
 }
+/* The photo side takes its share of the width minus the divider; the map takes the rest */
+#image-panel { flex: 0 0 calc(var(--split) - 3.5px); }
+#app.photo-collapsed #image-panel { display: none; }
+
+/* ---- DIVIDER between photo and map (width set by --split, see makeSplitter in script.js) ---- */
+#pane-splitter {
+    flex: 0 0 7px; position: relative; z-index: 30;
+    background: #151515; border-left: 1px solid #222; border-right: 1px solid #222;
+    cursor: col-resize; touch-action: none; outline: none;
+    transition: background 0.15s;
+}
+#pane-splitter:hover, #pane-splitter:focus-visible, #pane-splitter.dragging { background: #ffdc32; }
+#app.photo-collapsed #pane-splitter { cursor: default; background: #151515; }
+body.pane-resizing { cursor: col-resize; user-select: none; }
+body.pane-resizing canvas, body.pane-resizing #map-container { pointer-events: none; }
+
+/* Chevron on the divider: shows on hover, stays visible while the photo side is hidden */
+#btn-pane-collapse {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    width: 16px; height: 44px; padding: 0; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    background: #1e1e1e; border: 1px solid #383838; color: #ccc;
+    opacity: 0; transition: opacity 0.15s, background 0.15s, color 0.15s;
+}
+#btn-pane-collapse svg { width: 12px; height: 12px; }
+#pane-splitter:hover #btn-pane-collapse, #btn-pane-collapse:focus-visible,
+#app.photo-collapsed #btn-pane-collapse { opacity: 1; }
+#btn-pane-collapse:hover { background: #2a2000; color: #ffdc32; border-color: #ffdc32; }
+#app.photo-collapsed #btn-pane-collapse { left: 0; transform: translate(0, -50%); border-radius: 0 8px 8px 0; }
+#app.photo-collapsed #btn-pane-collapse svg { transform: scaleX(-1); }
 
 /* ---- HEADER ---- */
 .panel-header {
@@ -165,13 +194,17 @@ button:disabled     { opacity: 0.3; cursor: not-allowed; }
     0%, 100% { text-shadow: 0 0 2px rgba(255, 255, 255, 0.05); }
     50%       { text-shadow: 0 0 10px rgba(255, 255, 255, 0.18), 0 0 20px rgba(255, 255, 255, 0.08); }
 }
-#btn-browse {
+#btn-browse, #btn-demo-link {
     pointer-events: auto;
     background: #1a1a1a; color: #555; border: 1px solid #2e2e2e;
     padding: 5px 14px; border-radius: 4px; font-size: 11px;
     cursor: pointer; transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
-#btn-browse:hover { background: #222; color: #aaa; border-color: #444; }
+#btn-browse:hover, #btn-demo-link:hover { background: #222; color: #aaa; border-color: #444; }
+/* The demo is the side entrance: smaller and dimmer than Browse */
+#btn-demo-link { padding: 3px 10px; font-size: 10px; color: #444; border-color: #262626; background: #161616; }
+/* "or" between Browse and the demo button */
+.drop-or { font-size: 11px; color: #555; letter-spacing: 0; }
 #image-container.drag-active #drop-overlay { border-color: #ffdc32; color: #ffdc32; }
 
 /* GitHub button */
@@ -683,37 +716,60 @@ button.btn-primary:hover:not(:disabled) { background: #004a6e; color: #fff; }
 .exif-burger.active, .exif-burger.active:hover { color: #ffdc32; border-color: #ffdc32; }
 .adjust-card {
     position: absolute; top: 100%; left: 0; margin-top: 6px;
-    width: 260px; padding: 12px 14px; box-sizing: border-box;
+    width: 320px; max-width: calc(100vw - 24px); padding: 12px 14px; box-sizing: border-box;
     background: #151515; border: 1px solid #2a2a2a; border-radius: 6px;
     box-shadow: 0 4px 16px #000a; z-index: 1000;
 }
 .adjust-row {
     display: grid; grid-template-columns: 64px 1fr 38px; align-items: center; gap: 8px;
-    font-size: 11px; color: #bbb; margin-bottom: 10px;
+    font-size: 11px; color: #bbb; margin-bottom: 4px;
 }
 .adjust-val { text-align: right; font-variant-numeric: tabular-nums; color: #888; }
+/* The input is a 24 px tall band, far taller than the visible track: a press anywhere in it, also
+   beside the thumb, grabs the slider and jumps the thumb there. Track and thumb are drawn by the
+   pseudo-elements. */
 .adjust-row input[type="range"] {
-    width: 100%; height: 3px; margin: 0; cursor: pointer;
+    width: 100%; height: 24px; margin: 0; padding: 0; cursor: pointer;
     -webkit-appearance: none; appearance: none;
-    background: #333; border-radius: 2px; outline: none;
+    background: transparent; outline: none;
 }
+.adjust-row input[type="range"]::-webkit-slider-runnable-track { height: 4px; background: #333; border-radius: 2px; }
+.adjust-row input[type="range"]::-moz-range-track              { height: 4px; background: #333; border-radius: 2px; }
 .adjust-row input[type="range"]::-webkit-slider-thumb {
-    -webkit-appearance: none; width: 12px; height: 12px; border-radius: 50%;
+    -webkit-appearance: none; width: 12px; height: 12px; margin-top: -4px; border-radius: 50%;
     background: #ffdc32; border: none;
 }
 .adjust-row input[type="range"]::-moz-range-thumb {
     width: 12px; height: 12px; border-radius: 50%; background: #ffdc32; border: none;
 }
+.adjust-row input[type="range"]:hover::-webkit-slider-thumb, .adjust-row input[type="range"]:active::-webkit-slider-thumb { box-shadow: 0 0 0 4px #ffdc3233; }
+.adjust-row input[type="range"]:hover::-moz-range-thumb,     .adjust-row input[type="range"]:active::-moz-range-thumb     { box-shadow: 0 0 0 4px #ffdc3233; }
+.adjust-row input[type="range"]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 4px #ffdc3266; }
 .adjust-foot {
     display: flex; justify-content: space-between; align-items: center; gap: 8px;
     font-size: 10px; color: #666; border-top: 1px solid #2a2a2a; padding-top: 8px;
 }
 #btn-adjust-reset { font-size: 11px; padding: 3px 10px; }
-.adjust-check {
-    display: flex; align-items: center; gap: 6px; font-size: 11px; color: #bbb;
-    margin: 0 0 10px; cursor: pointer;
+/* Invert: an on/off switch in the same grid as the sliders (label | control | value) */
+.adjust-row-last { margin-bottom: 10px; min-height: 24px; }
+/* The input itself is the grab area (24 px tall, like the sliders); the small track and knob are drawn inside it */
+.adjust-switch {
+    -webkit-appearance: none; appearance: none; justify-self: start;
+    position: relative; width: 40px; height: 24px; margin: 0; cursor: pointer;
+    background: transparent; outline: none;
 }
-.adjust-check input { accent-color: #ffdc32; margin: 0; }
+.adjust-switch::before {
+    content: ""; position: absolute; top: 5px; left: 0; width: 26px; height: 14px; border-radius: 7px;
+    background: #333; transition: background 0.15s;
+}
+.adjust-switch::after {
+    content: ""; position: absolute; top: 7px; left: 2px; width: 10px; height: 10px; border-radius: 50%;
+    background: #999; transition: transform 0.15s, background 0.15s, box-shadow 0.15s;
+}
+.adjust-switch:checked::before { background: #5a4a00; }
+.adjust-switch:checked::after  { transform: translateX(12px); background: #ffdc32; }
+.adjust-switch:hover::after         { box-shadow: 0 0 0 4px #ffdc3233; }
+.adjust-switch:focus-visible::after { box-shadow: 0 0 0 4px #ffdc3266; }
 
 .exif-card {
     position: absolute; top: 100%; left: 0;
@@ -887,4 +943,24 @@ button.btn-primary:hover:not(:disabled) { background: #004a6e; color: #fff; }
 .toast-close {
     background: none; border: none; color: inherit;
     font-size: 16px; cursor: pointer; padding: 0 4px; flex-shrink: 0;
+}
+/* ---- PHOTO TOOLS: fit, show original ---- */
+.adjust-wrap { align-items: center; gap: 4px; }
+.adjust-foot { flex-wrap: wrap; }
+.adjust-foot-btns { display: flex; gap: 6px; margin-left: auto; }
+#btn-adjust-original { font-size: 11px; padding: 3px 10px; }
+/* Shown on the photo while the unadjusted original is on screen */
+#original-badge {
+    position: absolute; top: 10px; left: 50%; transform: translateX(-50%); z-index: 5;
+    padding: 3px 10px; border-radius: 10px; pointer-events: none;
+    background: #2a2000; color: #ffdc32; border: 1px solid #ffdc32;
+    font-size: 11px; font-weight: 600; letter-spacing: 0.3px;
+}
+#original-badge[hidden] { display: none; }
+
+/* ---- RENAME in the image list: the name turns into a text field ---- */
+.session-name-input {
+    flex: 1; min-width: 0; width: 100%;
+    background: #0a0a0a; color: #fff; border: 1px solid #ffdc32; border-radius: 3px;
+    padding: 2px 5px; margin: -3px 0; font: inherit; outline: none;
 }
