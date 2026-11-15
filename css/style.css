@@ -345,7 +345,7 @@ button:disabled     { opacity: 0.3; cursor: not-allowed; }
 }
 .tp-popup .maplibregl-popup-close-button:hover { color: #fff; background: none; }
 
-/* ---- MAP CONTROLS (dark theme for MapLibre's zoom/compass and attribution) ---- */
+/* ---- MAP CONTROLS (dark theme for MapLibre's compass and attribution) ---- */
 .maplibregl-ctrl-group {
     background: #151515; border: 1px solid #333;
     box-shadow: 0 2px 6px #0006;

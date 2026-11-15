@@ -241,9 +241,9 @@ const map = new maplibregl.Map({
     aroundCenter: false,
     rotateDegreesPerPixelMoved: ROTATE_DEG_PER_PX
 });
-// zoom bottom-left, compass bottom-right; search box and layer menu live in the map bar under the header
-map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-left');
-map.addControl(new maplibregl.NavigationControl({ showZoom: false, visualizePitch: true }), 'bottom-right');
+// The compass (reset bearing and tilt) is the only button on the map, bottom-left; zooming is done with the wheel,
+// double-click or the keyboard. Search box and map panel live in the map bar under the header.
+map.addControl(new maplibregl.NavigationControl({ showZoom: false, visualizePitch: true }), 'bottom-left');
 
 let mapReady = false;   // sources and layers can only be added once the style has loaded
 

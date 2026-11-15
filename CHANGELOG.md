@@ -6,6 +6,7 @@
 - Terrain: height exaggeration (1–3×) and hillshade, with or without 3D terrain
 - Camera: field of view (shown with its full-frame focal length), max tilt, min and max zoom, North up and Top down
 - Reset puts all sliders of the panel back to their defaults
+- Compass moved to the bottom-left of the map; the zoom buttons are gone (mouse wheel, double-click or `+` / `−` zoom)
 - Top down keeps the bearing, North up keeps the tilt
 - Map settings are remembered in this browser
 
