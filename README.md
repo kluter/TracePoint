@@ -41,7 +41,7 @@ The more lines you add, the more rays are generated and the more robustly the in
 
 > Start with the **☰** menu on the image panel and select **Demo — Potsdam** for a guided walkthrough. If the photo is tilted, use the **Level** button first to compensate before adding lines.
 
-1. **Load a photo:** Drop an image onto the left panel, or click **Browse**. To work on multiple images at once, open the **☰** image menu and click **+ Add image**.
+1. **Load a photo:** Drop an image onto the left panel, paste one with `Ctrl+V`, or click **Browse**. A pasted photo opens as `pasted_image_01`, `pasted_image_02`, … and has no EXIF data, because the clipboard hands over pixels only; drop the file if you need its GPS or camera data. To work on multiple images at once, open the **☰** image menu and click **+ Add image**.
 2. **Add a line:** Click **+ New Line** (or press `E`) and drag it over a recognisable object you can also find on the map: a building corner, tower, road junction.
 3. **Mark points:** Click the active line twice to place exactly two reference points. A drag still moves the line; a click on another line only selects it.
 4. **Place points on the map:** After the second point the map waits for the first one: click its real-world location, then the second. A tag next to the mouse says which point comes next. To place a point again later, click its **🌐 P1** pill or press `F` for the next unmapped point.
@@ -90,7 +90,7 @@ The more lines you add, the more rays are generated and the more robustly the in
 | `1` – `5` | Jump to line 1–5 |
 | `Esc` | Cancel / deselect |
 | `Ctrl+Z` | Undo a line or point edit; `Ctrl+Shift+Z` or `Ctrl+Y` redoes |
-| `Ctrl+V` | Paste coordinates → pin on map |
+| `Ctrl+V` | Paste a photo → new image; paste coordinates → pin on map |
 | `N` | Reset map to north |
 
 ---
@@ -268,7 +268,7 @@ The only outbound requests are map tile fetches from public servers (Esri, OpenS
 
 ### What stays in the browser
 
-- **Pasted coordinates.** TracePoint never reads your clipboard on its own. Text arrives only when you paste, it is parsed in the browser, and no geocoder or lookup service is contacted. Pins live in memory and disappear with the tab.
+- **Pasted coordinates and photos.** TracePoint never reads your clipboard on its own. Text or an image arrives only when you paste. Text is parsed in the browser, and no geocoder or lookup service is contacted. Pins live in memory and disappear with the tab. A pasted photo is handled like a dropped one: it stays in the browser and is covered by autosave.
 - **The URL hash.** Browsers never send the part after `#` to the server, so whoever hosts your copy does not see which places you look at. It holds the map view only.
 - **The right-click menu.** It only builds ordinary links. Nothing is contacted until you click one, and a link carries the clicked coordinate and zoom, never your image or session.
 

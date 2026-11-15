@@ -835,11 +835,14 @@ function buildCoordSearch() {
 }
 buildCoordSearch();
 
-/* Ctrl+V anywhere on the page (outside text fields) does the same as the search box.
-   Only the pasted text is read, on the paste itself — the page never reads the clipboard on its own. */
+/* Ctrl+V anywhere on the page (outside text fields): an image in the clipboard opens as a photo,
+   text does the same as the search box. An image wins over text ("Copy image" on a web page carries both).
+   Only what is pasted is read, on the paste itself — the page never reads the clipboard on its own. */
 document.addEventListener('paste', (e) => {
     const t = e.target;
     if (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable) return;
+    const image = [...(e.clipboardData?.files || [])].find(f => f.type.startsWith('image/'));
+    if (image) { e.preventDefault(); openPastedImage(image); return; }
     const text = e.clipboardData && e.clipboardData.getData('text');
     if (!text || !text.trim()) return;
     const c = parseCoordinates(text);
@@ -939,7 +942,7 @@ function guideStatus() {
     });
     const progress = Math.min(done / TOTAL, 1);
 
-    if (!s.imgElement) return { idx: 0, progress, hint: 'Drop a photo, or pick the demo from ☰' };
+    if (!s.imgElement) return { idx: 0, progress, hint: 'Drop or paste an image, or browse' };
     if (s.lines.length === 0) return { idx: 1, progress, hint: 'Press E for a new line' };
 
     // The first line that still needs work drives the guide
@@ -1550,8 +1553,9 @@ function updateDropOverlay() {
             `<button id="btn-browse" type="button">Browse</button>`;
     } else {
         overlay.innerHTML =
-            `Drop image here` +
-            `<button id="btn-browse" type="button">Browse</button>`;
+            `Drop / Paste image here` +
+            `<button id="btn-browse" type="button">Browse</button>` +
+            `<span class="drop-or">or</span><button id="btn-demo-link" type="button">Try the Demo</button>`;
     }
 }
 
@@ -1619,6 +1623,17 @@ function openImageFile(file, onReady) {
     loadImage(file, sess().imgElement ? null : sess(), false, onReady);
 }
 
+/* The clipboard calls every image "image.png" and hands over pixels only, without EXIF.
+   Pasted photos are numbered instead: pasted_image_01, pasted_image_02, … */
+function openPastedImage(file) {
+    const used = sessions.map(s => +(s.name.match(/^pasted_image_(\d+)$/)?.[1] || 0));
+    const name = `pasted_image_${String(Math.max(0, ...used) + 1).padStart(2, '0')}`;
+    const ext  = { 'image/jpeg': 'jpg', 'image/svg+xml': 'svg' }[file.type] || file.type.slice(6) || 'png';
+    if (photoCollapsed()) btnPaneCollapse.click();   // the photo side comes back before the photo is fitted into it
+    openImageFile(new File([file], `${name}.${ext}`, { type: file.type }),
+        () => showToast('Photo pasted. Clipboard images carry no EXIF data.', 'success'));
+}
+
 container.addEventListener('dragover',  (e) => { e.preventDefault(); container.classList.add('drag-active'); });
 container.addEventListener('dragleave', ()  => container.classList.remove('drag-active'));
 container.addEventListener('drop', (e) => {
@@ -1633,6 +1648,7 @@ window.addEventListener('drop',     (e) => e.preventDefault());
 const filePicker = document.getElementById('file-picker');
 overlay.addEventListener('click', (e) => {
     if (e.target.id === 'btn-browse') filePicker.click();
+    if (e.target.id === 'btn-demo-link') loadDemoImage();
 });
 filePicker.addEventListener('change', () => {
     const file = filePicker.files[0];
