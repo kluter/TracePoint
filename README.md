@@ -72,7 +72,7 @@ The more lines you add, the more rays are generated and the more robustly the in
 | Image sessions, export, import | ☰ button, right of the line bar |
 | Autosave on / off, clear saved work | Last row of the ☰ image menu. Off or **Clear** deletes the copy kept in the browser |
 | Image metadata | `</>` button, left of the line bar. **Show on map** places the EXIF GPS position |
-| Rotate / tilt map | Ctrl + drag, or right-click drag, tilt up to 90°. Click the compass (bottom-right) or press `N` to reset. The map bar shows bearing, tilt and zoom |
+| Rotate / tilt map | Ctrl + drag, or right-click drag, tilt up to 90°. Click the compass (bottom-left of the map) or press `N` to reset. The map bar shows bearing, tilt and zoom |
 | Map layers, terrain and camera | ☰ button, right of the map bar. One panel: **Basemap** (custom layers: **+ Add custom layer…**, then ✎ / × to edit or remove), **Terrain** (3D terrain, height 1–3×, hillshade) and **Camera** (field of view with its full-frame focal length, max tilt, min and max zoom, **North up**, **Top down**). **Reset** puts all sliders back to their defaults; double-click a slider to reset just that one |
 | Jump to coordinates | Paste into the search box in the map bar (or `Ctrl+V` anywhere) |
 | Pins | Click a row in the pin list at the top-left of the map to go back to it; × or **Clear all** removes |
