@@ -65,6 +65,7 @@ document.getElementById('session-menu').addEventListener('click', e => {
     const btn = e.target.closest('[data-action]');
     if (!btn) return;
     e.stopPropagation();
+    if (btn.dataset.action === 'rename-session') renameSession(+btn.dataset.idx);
     if (btn.dataset.action === 'export-session') exportSession(+btn.dataset.idx);
     if (btn.dataset.action === 'remove-session') removeSession(+btn.dataset.idx);
 });
@@ -126,6 +127,7 @@ const state = {
     activeLineIndex: -1,
     mapPointTarget:  null,  // { lineIndex, pointIndex }: the point the next map click places
     selectedPoint:   null,  // { lineIndex, pointIndex }: picked on the photo or on the map, highlighted on both
+    showOriginal:    false, // the photo is drawn without its display adjustments (see toggleOriginal)
     press:           null,  // { lineIndex, wasActive, x, y, imgY }: mouse down on a line, not yet a drag or a click
     isDragging:      false,
     pointDrag:       null,  // { line, pt, origY } while a point is slid along its line on the image
@@ -835,11 +837,14 @@ function buildCoordSearch() {
 }
 buildCoordSearch();
 
-/* Ctrl+V anywhere on the page (outside text fields) does the same as the search box.
-   Only the pasted text is read, on the paste itself — the page never reads the clipboard on its own. */
+/* Ctrl+V anywhere on the page (outside text fields): an image in the clipboard opens as a photo,
+   text does the same as the search box. An image wins over text ("Copy image" on a web page carries both).
+   Only what is pasted is read, on the paste itself — the page never reads the clipboard on its own. */
 document.addEventListener('paste', (e) => {
     const t = e.target;
     if (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable) return;
+    const image = [...(e.clipboardData?.files || [])].find(f => f.type.startsWith('image/'));
+    if (image) { e.preventDefault(); openPastedImage(image); return; }
     const text = e.clipboardData && e.clipboardData.getData('text');
     if (!text || !text.trim()) return;
     const c = parseCoordinates(text);
@@ -939,7 +944,7 @@ function guideStatus() {
     });
     const progress = Math.min(done / TOTAL, 1);
 
-    if (!s.imgElement) return { idx: 0, progress, hint: 'Drop a photo, or pick the demo from ☰' };
+    if (!s.imgElement) return { idx: 0, progress, hint: 'Drop or paste an image, or browse' };
     if (s.lines.length === 0) return { idx: 1, progress, hint: 'Press E for a new line' };
 
     // The first line that still needs work drives the guide
@@ -1174,6 +1179,7 @@ container.addEventListener('mouseleave', () => { photoCursor = null; });
 /* atCursor: the E key puts the line under the mouse when that is over the photo.
    Otherwise, and for the button and the step guide, it goes to the centre of the visible photo. */
 function addLine(atCursor = false) {
+    if (photoCollapsed()) return;   // nowhere to put it while the photo side is hidden
     if (!sess().imgElement) return showToast("Drop an image first.");
     if (sess().lines.length >= MAX_LINES) return showToast(`Maximum of ${MAX_LINES} lines per image.`);
     const v  = sess().view;
@@ -1207,6 +1213,9 @@ document.addEventListener('keydown', (e) => {
     // Ignore when typing in an actual text input
     const tag = e.target.tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+    // F2 — rename the active image in the ☰ list
+    if (e.key === 'F2') { e.preventDefault(); renameSession(activeSessionIndex); return; }
+
     // Ctrl+Z undoes, Ctrl+Shift+Z or Ctrl+Y redoes (text fields returned above and keep the browser's own undo)
     if ((e.ctrlKey || e.metaKey) && !e.altKey) {
         const k = e.key.toLowerCase();
@@ -1336,6 +1345,11 @@ function renderSessionMenu() {
         nameSpan.textContent = s.name;
         item.appendChild(dot);
         item.appendChild(nameSpan);
+        item.insertAdjacentHTML('beforeend',
+            `<button class="btn-session-export" title="Rename (F2)" data-action="rename-session" data-idx="${idx}">
+                 <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                     <path d="M1.2 8.8l.6-2.4L6.7 1.5l1.8 1.8-4.9 4.9z"/>
+                 </svg></button>`);
         if (s.imgElement) {
             item.insertAdjacentHTML('beforeend',
                 `<button class="btn-session-export" title="Export session" data-action="export-session" data-idx="${idx}">
@@ -1345,7 +1359,8 @@ function renderSessionMenu() {
         }
         item.insertAdjacentHTML('beforeend',
             `<button class="btn-delete" title="Remove image" data-action="remove-session" data-idx="${idx}">×</button>`);
-        item.onclick = () => {
+        item.onclick = (e) => {
+            if (e.target.closest('[data-action], input')) return;   // a button of the row or the name being edited, not the row
             switchToSession(idx);
             menu.style.display = 'none';
         };
@@ -1399,12 +1414,55 @@ function renderSessionMenu() {
     menu.appendChild(saveRow);
 }
 
+/* Rename an image in the ☰ list: the name becomes a text field. Enter or a click elsewhere saves,
+   Esc cancels, an empty name keeps the old one. From the pencil on the row and from F2 (active image).
+   After renameSessionTab in briatlon's sessionTabs.js. */
+const SESSION_NAME_MAX = 60;
+
+function renameSession(idx) {
+    const s = sessions[idx];
+    const menu = document.getElementById('session-menu');
+    if (!s || !menu) return;
+    renderSessionMenu();
+    menu.style.display = 'block';
+    const span = menu.querySelectorAll('.session-item:not(.session-demo) .session-name')[idx];
+    if (!span) return;
+    const input = document.createElement('input');
+    input.className = 'session-name-input';
+    input.value = s.name;
+    input.maxLength = SESSION_NAME_MAX;
+    input.spellcheck = false;
+    input.setAttribute('aria-label', 'Image name');
+    let finished = false;
+    const finish = (cancel) => {
+        if (finished) return;
+        finished = true;
+        const name = input.value.trim().slice(0, SESSION_NAME_MAX);
+        if (!cancel && name && name !== s.name) {
+            s.name = name;
+            s.renamed = true;   // a photo loaded into this image later no longer names it (see loadImage)
+            scheduleAutosave();
+        }
+        renderSessionMenu();
+    };
+    input.onkeydown = (e) => {
+        if (e.key !== 'Enter' && e.key !== 'Escape') return;
+        e.preventDefault();
+        finish(e.key === 'Escape');
+    };
+    input.onblur = () => finish(false);
+    span.replaceWith(input);
+    input.focus();
+    input.select();
+}
+
 function switchToSession(idx) {
     hideHelp();
     state.mode           = 'idle';
     state.activeLineIndex = -1;
     state.mapPointTarget  = null;
     state.selectedPoint   = null;
+    state.showOriginal    = false;
     state.press           = null;
     state.isDragging      = false;
     state.pointDrag       = null;
@@ -1549,8 +1607,9 @@ function updateDropOverlay() {
             `<button id="btn-browse" type="button">Browse</button>`;
     } else {
         overlay.innerHTML =
-            `Drop image here` +
-            `<button id="btn-browse" type="button">Browse</button>`;
+            `Drop / Paste image here` +
+            `<button id="btn-browse" type="button">Browse</button>` +
+            `<span class="drop-or">or</span><button id="btn-demo-link" type="button">Try the Demo</button>`;
     }
 }
 
@@ -1575,14 +1634,9 @@ function loadImage(file, s = sess(), fromStore = false, onReady = null) {
         s.imageFile = file;
         s.imageFilename = file.name || s.imageFilename;
         s.pendingImageFilename = null;
-        if (!isRestore && file.name) s.name = file.name.replace(/\.[^.]+$/, '');
+        if (!isRestore && file.name && !s.renamed) s.name = file.name.replace(/\.[^.]+$/, '');
         if (!fromStore) autosavePutImage(s);
-        if (!isRestore) {
-            const cr = container.getBoundingClientRect();
-            s.view.scale = Math.min(cr.width / img.width, cr.height / img.height, 1);
-            s.view.tx = (cr.width  - img.width  * s.view.scale) / 2;
-            s.view.ty = (cr.height - img.height * s.view.scale) / 2;
-        }
+        if (!isRestore) fitPhoto(s);
         if (s === sess()) {
             canvas.width  = img.width;
             canvas.height = img.height;
@@ -1618,6 +1672,17 @@ function openImageFile(file, onReady) {
     loadImage(file, sess().imgElement ? null : sess(), false, onReady);
 }
 
+/* The clipboard calls every image "image.png" and hands over pixels only, without EXIF.
+   Pasted photos are numbered instead: pasted_image_01, pasted_image_02, … */
+function openPastedImage(file) {
+    const used = sessions.map(s => +(s.name.match(/^pasted_image_(\d+)$/)?.[1] || 0));
+    const name = `pasted_image_${String(Math.max(0, ...used) + 1).padStart(2, '0')}`;
+    const ext  = { 'image/jpeg': 'jpg', 'image/svg+xml': 'svg' }[file.type] || file.type.slice(6) || 'png';
+    if (photoCollapsed()) btnPaneCollapse.click();   // the photo side comes back before the photo is fitted into it
+    openImageFile(new File([file], `${name}.${ext}`, { type: file.type }),
+        () => showToast('Photo pasted. Clipboard images carry no EXIF data.', 'success'));
+}
+
 container.addEventListener('dragover',  (e) => { e.preventDefault(); container.classList.add('drag-active'); });
 container.addEventListener('dragleave', ()  => container.classList.remove('drag-active'));
 container.addEventListener('drop', (e) => {
@@ -1632,6 +1697,7 @@ window.addEventListener('drop',     (e) => e.preventDefault());
 const filePicker = document.getElementById('file-picker');
 overlay.addEventListener('click', (e) => {
     if (e.target.id === 'btn-browse') filePicker.click();
+    if (e.target.id === 'btn-demo-link') loadDemoImage();
 });
 filePicker.addEventListener('change', () => {
     const file = filePicker.files[0];
@@ -1952,15 +2018,25 @@ const adjustWrap   = document.getElementById('adjust-wrap');
 const adjustCard   = document.getElementById('adjust-card');
 const btnAdjust    = document.getElementById('btn-adjust');
 const adjustInvert = document.getElementById('adjust-invert');
-const ADJUST_SLIDERS = ['contrast', 'brightness', 'saturation'].map(key => ({
-    key, input: document.getElementById(`adjust-${key}`), val: document.getElementById(`adjust-${key}-val`)
+const btnFit          = document.getElementById('btn-fit');
+const btnOriginal     = document.getElementById('btn-original');
+const btnCardOriginal = document.getElementById('btn-adjust-original');
+const originalBadge   = document.getElementById('original-badge');
+
+/* Each slider runs 0–200 with 100 % in the middle: the left half covers lo–100 %, the right half
+   100–hi %. So "normal" stays centred and small corrections stay easy although the range is wide.
+   Ranges after briatlon's imageAdjustments.js (25–300 %). */
+const ADJUST_SLIDERS = [['contrast', 25, 300], ['brightness', 25, 300], ['saturation', 0, 300]].map(([key, lo, hi]) => ({
+    key, input: document.getElementById(`adjust-${key}`), val: document.getElementById(`adjust-${key}-val`),
+    toValue: (pos) => Math.round(pos <= 100 ? lo + pos * (100 - lo) / 100 : 100 + (pos - 100) * (hi - 100) / 100),
+    toPos:   (v)   => v <= 100 ? (v - lo) * 100 / (100 - lo) : 100 + (v - 100) * 100 / (hi - 100)
 }));
 
 function isAdjusted(s) { return ADJUST_SLIDERS.some(sl => s.adjust[sl.key] !== 100) || s.adjust.invert; }
 
 function imageFilter(s) {
     const a = s.adjust;
-    return isAdjusted(s)
+    return isAdjusted(s) && !state.showOriginal
         ? `contrast(${a.contrast}%) brightness(${a.brightness}%) saturate(${a.saturation}%)` + (a.invert ? ' invert(1)' : '')
         : 'none';
 }
@@ -1992,18 +2068,63 @@ function photoLayer(s) {
 
 function updateAdjustUI() {
     const s = sess();
-    adjustWrap.style.display = s.imgElement ? 'block' : 'none';
-    ADJUST_SLIDERS.forEach(sl => { sl.input.value = s.adjust[sl.key]; sl.val.textContent = `${s.adjust[sl.key]}%`; });
+    const adjusted = !!s.imgElement && isAdjusted(s);
+    if (!adjusted) state.showOriginal = false;   // nothing to compare with
+    adjustWrap.style.display = s.imgElement ? 'flex' : 'none';
+    btnFit.style.display     = s.imgElement ? 'flex' : 'none';
+    ADJUST_SLIDERS.forEach(sl => {
+        if (document.activeElement !== sl.input) sl.input.value = sl.toPos(s.adjust[sl.key]);   // not under the dragging thumb
+        sl.val.textContent = `${s.adjust[sl.key]}%`;
+    });
     adjustInvert.checked = !!s.adjust.invert;
-    btnAdjust.classList.toggle('active', isAdjusted(s));
+    document.getElementById('adjust-invert-val').textContent = s.adjust.invert ? 'On' : 'Off';
+    btnAdjust.classList.toggle('active', adjusted);
+    // Show original: only offered while the photo is adjusted, yellow while it is on
+    btnOriginal.style.display = adjusted ? 'flex' : 'none';
+    btnOriginal.classList.toggle('active', state.showOriginal);
+    btnCardOriginal.disabled = !adjusted;
+    btnCardOriginal.classList.toggle('active-mode', state.showOriginal);
+    btnCardOriginal.textContent = state.showOriginal ? 'Show adjusted' : 'Show original';
+    originalBadge.hidden = !state.showOriginal;
 }
 
-ADJUST_SLIDERS.forEach(sl => sl.input.addEventListener('input', () => { sess().adjust[sl.key] = +sl.input.value; render(); updateAdjustUI(); }));
-adjustInvert.addEventListener('change', () => { sess().adjust.invert = adjustInvert.checked; render(); updateAdjustUI(); });
+/* Changing an adjustment switches back to the adjusted photo: that is what is being tuned */
+function setAdjust(change) {
+    change(sess().adjust);
+    state.showOriginal = false;
+    render(); updateAdjustUI();
+}
+
+ADJUST_SLIDERS.forEach(sl => {
+    sl.input.addEventListener('input',    () => setAdjust(a => { a[sl.key] = sl.toValue(+sl.input.value); }));
+    sl.input.addEventListener('dblclick', () => { sl.input.blur(); setAdjust(a => { a[sl.key] = 100; }); });   // this slider back to normal
+});
+adjustInvert.addEventListener('change', () => setAdjust(a => { a.invert = adjustInvert.checked; }));
 document.getElementById('btn-adjust-reset').addEventListener('click', () => {
     sess().adjust = { ...ADJUST_DEFAULTS };
-    render(); updateAdjustUI();
+    setAdjust(() => {});
 });
+
+/* Show original: a switch, on both buttons. Only the adjustments are dropped; the level rotation
+   stays, so lines and points keep matching the picture. */
+function toggleOriginal() {
+    if (!isAdjusted(sess())) return;
+    state.showOriginal = !state.showOriginal;
+    render(); updateAdjustUI();
+}
+btnOriginal.addEventListener('click', toggleOriginal);
+btnCardOriginal.addEventListener('click', toggleOriginal);
+
+/* Fit: the whole photo, centred in the panel, as right after loading (never enlarged past 100 %) */
+function fitPhoto(s = sess()) {
+    const img = s.imgElement;
+    if (!img) return;
+    const cr = container.getBoundingClientRect();
+    s.view.scale = Math.min(cr.width / img.width, cr.height / img.height, 1);
+    s.view.tx = (cr.width  - img.width  * s.view.scale) / 2;
+    s.view.ty = (cr.height - img.height * s.view.scale) / 2;
+}
+btnFit.addEventListener('click', () => { fitPhoto(); applyTransform(); render(); scheduleAutosave(); });
 
 btnAdjust.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -2079,13 +2200,19 @@ function downloadJSON(data, filename) {
     URL.revokeObjectURL(url);
 }
 
+/* An image name as part of a file name: the characters Windows refuses become "_".
+   The name inside the JSON stays as typed. */
+function fileSafe(name) {
+    return name.replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_');
+}
+
 function exportSession(idx) {
     const s  = sessions[idx];
     if (idx === activeSessionIndex) s.mapView = getMapView();
     const ts = new Date().toISOString().slice(0, 16).replace('T', '_').replace(/:/g, '-');
     downloadJSON(
         { json_version: JSON_VERSION, exported: new Date().toISOString(), sessions: [sessionToData(s)] },
-        `tracepoint_${s.name}_${ts}.json`
+        `tracepoint_${fileSafe(s.name)}_${ts}.json`
     );
     showToast('Session exported.', 'success');
 }
@@ -3083,6 +3210,79 @@ function intersectLines(p1, p2, p3, p4) {
         lng: x1 + t * (x2 - x1)
     };
 }
+
+/* ============================================================
+   DIVIDER – drag the handle between two panes to resize them
+   After briatlon's paneSplitter.js. The first pane's share is a percentage in a CSS variable on
+   `box`, so it scales with the window; each pane keeps `min` pixels. axis 'x': panes side by side,
+   'y': one above the other. The share is kept in localStorage under `key`.
+   ============================================================ */
+function makeSplitter(handle, box, { axis = 'x', cssVar, key, min = 320, start = 50, enabled = () => true }) {
+    let pct = start;
+    const size  = () => (axis === 'x' ? box.clientWidth : box.clientHeight) || 1;
+    const clamp = (p) => {
+        const lo = Math.min(50, min / size() * 100);   // a window too small for both minimums splits in half
+        return Math.max(lo, Math.min(100 - lo, p));
+    };
+    function set(p, save) {
+        pct = clamp(p);
+        box.style.setProperty(cssVar, `${pct.toFixed(2)}%`);
+        handle.setAttribute('aria-valuenow', Math.round(pct));
+        if (save) localStorage.setItem(key, pct.toFixed(2));
+    }
+
+    handle.addEventListener('pointerdown', (e) => {
+        if (e.button !== 0 || e.target.closest('button') || !enabled()) return;
+        handle.setPointerCapture(e.pointerId);
+        handle.classList.add('dragging');
+        document.body.classList.add('pane-resizing');
+        e.preventDefault();
+        handle.focus();
+    });
+    handle.addEventListener('pointermove', (e) => {
+        if (!handle.classList.contains('dragging')) return;
+        const r = box.getBoundingClientRect();
+        set(axis === 'x' ? (e.clientX - r.left) / r.width * 100 : (e.clientY - r.top) / r.height * 100, false);
+    });
+    const end = () => {
+        if (!handle.classList.contains('dragging')) return;
+        handle.classList.remove('dragging');
+        document.body.classList.remove('pane-resizing');
+        set(pct, true);
+    };
+    handle.addEventListener('pointerup', end);
+    handle.addEventListener('pointercancel', end);
+    handle.addEventListener('dblclick', (e) => { if (!e.target.closest('button') && enabled()) set(start, true); });
+    handle.addEventListener('keydown', (e) => {
+        if (e.target !== handle || !enabled()) return;
+        const back = axis === 'x' ? 'ArrowLeft' : 'ArrowUp', fwd = axis === 'x' ? 'ArrowRight' : 'ArrowDown';
+        if (e.key !== back && e.key !== fwd) return;
+        e.preventDefault();
+        set(pct + (e.key === fwd ? 1 : -1) * (e.shiftKey ? 10 : 1), true);
+    });
+    window.addEventListener('resize', () => set(pct, false));   // the pixel minimums follow the window
+
+    const saved = parseFloat(localStorage.getItem(key));
+    set(Number.isFinite(saved) ? saved : start, false);
+    return { set, get: () => pct };
+}
+
+/* Photo | map. The chevron on the handle folds the photo side away; that is not remembered, since the
+   logo, the line tools and the drop zone live there and a page loading without them would look broken. */
+const appEl = document.getElementById('app');
+const btnPaneCollapse = document.getElementById('btn-pane-collapse');
+const photoCollapsed = () => appEl.classList.contains('photo-collapsed');
+
+makeSplitter(document.getElementById('pane-splitter'), appEl,
+    { cssVar: '--split', key: 'tp-split', enabled: () => !photoCollapsed() });
+
+btnPaneCollapse.addEventListener('click', () => {
+    const on = appEl.classList.toggle('photo-collapsed');
+    const label = on ? 'Show the photo side' : 'Hide the photo side';
+    btnPaneCollapse.title = label;
+    btnPaneCollapse.setAttribute('aria-label', label);
+    btnPaneCollapse.blur();   // focus stays out of the way of the keyboard shortcuts
+});
 
 /* ============================================================
    START – bring back the autosaved work, if any

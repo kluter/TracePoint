@@ -1,5 +1,17 @@
 # Changelog
 
+## v2.6.0
+
+- Draggable divider between photo and map: drag to resize, double-click for 50/50, arrow keys when focused (Shift for bigger steps); the split is remembered
+- A chevron on the divider hides the photo side and brings it back
+- `Ctrl+V` with an image in the clipboard opens it as a photo, named `pasted_image_01`, `pasted_image_02`, …; clipboard images carry no EXIF data
+- Empty photo view reads "Drop / Paste image here" and has a "Try the Demo" button
+- Fit photo button in the line bar
+- Show original: a switch next to ☀ and in the adjust card, yellow while the unadjusted photo is on screen
+- Stronger adjustments: contrast and brightness 25–300% (was 50–150%), saturation 0–300%; sliders stay centred on 100%, double-click resets one
+- Rename an image with the pencil in the ☰ image list or with `F2`; the name is used in exports and autosave
+- Removing or exporting an image from the list no longer switches to it first
+
 ## v2.5.0
 
 - Undo and redo for lines and points, on the photo and on the map: `Ctrl+Z`, `Ctrl+Shift+Z` or `Ctrl+Y`, up to 100 steps per image
