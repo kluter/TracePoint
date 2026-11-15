@@ -4,6 +4,8 @@
 
 - Draggable divider between photo and map: drag to resize, double-click for 50/50, arrow keys when focused (Shift for bigger steps); the split is remembered
 - A chevron on the divider hides the photo side and brings it back
+- `Ctrl+V` with an image in the clipboard opens it as a photo, named `pasted_image_01`, `pasted_image_02`, …; clipboard images carry no EXIF data
+- Empty photo view reads "Drop / Paste image here" and has a "Try the Demo" button
 
 ## v2.5.0
 

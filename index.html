@@ -96,8 +96,10 @@
                 <canvas id="image-canvas"></canvas>
                 <div id="guide" title=""></div>
                 <div id="drop-overlay">
-                    Drop image here
+                    Drop / Paste image here
                     <button id="btn-browse" type="button">Browse</button>
+                    <span class="drop-or">or</span>
+                    <button id="btn-demo-link" type="button">Try the Demo</button>
                 </div>
                 <input type="file" id="file-picker" accept="image/*" style="display:none">
                 <input type="file" id="json-picker" accept=".json" style="display:none">
@@ -141,7 +143,7 @@
                     <button class="help-close" id="btn-help-close">×</button>
                 </div>
                 <ol class="help-steps">
-                    <li><b>Load an image</b> — drop a photo onto the left panel, or pick the demo from the image menu <span class="help-key">☰</span></li>
+                    <li><b>Load a photo</b> — drop it onto the left panel, paste it with <span class="help-key">Ctrl+V</span>, or choose a file. New here? Try the demo from the empty photo panel or the image menu <span class="help-key">☰</span></li>
                     <li><b>Level the image</b> (optional) — use the <span class="help-key">Level</span> tool to correct a tilted horizon before adding lines. Makes alignment more accurate. Dark or flat photo? The <span class="help-key">☀</span> button in the line bar adjusts contrast, brightness and saturation on screen only, or inverts the colours</li>
                     <li><b>Add a line</b> — click <span class="help-key">+ New Line</span>, then drag it to align with a direction visible in the scene (road, shadow, building edge pointing away from the subject)</li>
                     <li><b>Place 2 reference points</b> — click the active line twice. After the second click the map waits for the first point: click its real-world location, then the second one. <span class="help-key">F</span> or a point's <span class="help-key">🌐 P1</span> pill starts this again later</li>
@@ -161,7 +163,7 @@
                         <span class="help-key">Esc</span><span>Cancel / deselect</span>
                         <span class="help-key">Ctrl+Z</span><span>Undo a line or point edit; Ctrl+Shift+Z or Ctrl+Y redoes</span>
                         <span class="help-key">Scroll</span><span>Zoom the image; Space+drag or middle-drag pans it</span>
-                        <span class="help-key">Ctrl+V</span><span>Paste coordinates → pin on map</span>
+                        <span class="help-key">Ctrl+V</span><span>Paste a photo → new image; paste coordinates → pin on map</span>
                         <span class="help-key">Ctrl+drag</span><span>Rotate and tilt the map (right-drag works too); middle-drag pans</span>
                         <span class="help-key">N</span><span>Reset map to north and flat (same as the compass)</span>
                         <span class="help-key">Right-click</span><span>Copy map coordinates or open the spot in Google Maps, Street View, Earth and others</span>
