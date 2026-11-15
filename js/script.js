@@ -126,6 +126,7 @@ const state = {
     activeLineIndex: -1,
     mapPointTarget:  null,  // { lineIndex, pointIndex }: the point the next map click places
     selectedPoint:   null,  // { lineIndex, pointIndex }: picked on the photo or on the map, highlighted on both
+    showOriginal:    false, // the photo is drawn without its display adjustments (see toggleOriginal)
     press:           null,  // { lineIndex, wasActive, x, y, imgY }: mouse down on a line, not yet a drag or a click
     isDragging:      false,
     pointDrag:       null,  // { line, pt, origY } while a point is slid along its line on the image
@@ -1409,6 +1410,7 @@ function switchToSession(idx) {
     state.activeLineIndex = -1;
     state.mapPointTarget  = null;
     state.selectedPoint   = null;
+    state.showOriginal    = false;
     state.press           = null;
     state.isDragging      = false;
     state.pointDrag       = null;
@@ -1582,12 +1584,7 @@ function loadImage(file, s = sess(), fromStore = false, onReady = null) {
         s.pendingImageFilename = null;
         if (!isRestore && file.name) s.name = file.name.replace(/\.[^.]+$/, '');
         if (!fromStore) autosavePutImage(s);
-        if (!isRestore) {
-            const cr = container.getBoundingClientRect();
-            s.view.scale = Math.min(cr.width / img.width, cr.height / img.height, 1);
-            s.view.tx = (cr.width  - img.width  * s.view.scale) / 2;
-            s.view.ty = (cr.height - img.height * s.view.scale) / 2;
-        }
+        if (!isRestore) fitPhoto(s);
         if (s === sess()) {
             canvas.width  = img.width;
             canvas.height = img.height;
@@ -1969,15 +1966,25 @@ const adjustWrap   = document.getElementById('adjust-wrap');
 const adjustCard   = document.getElementById('adjust-card');
 const btnAdjust    = document.getElementById('btn-adjust');
 const adjustInvert = document.getElementById('adjust-invert');
-const ADJUST_SLIDERS = ['contrast', 'brightness', 'saturation'].map(key => ({
-    key, input: document.getElementById(`adjust-${key}`), val: document.getElementById(`adjust-${key}-val`)
+const btnFit          = document.getElementById('btn-fit');
+const btnOriginal     = document.getElementById('btn-original');
+const btnCardOriginal = document.getElementById('btn-adjust-original');
+const originalBadge   = document.getElementById('original-badge');
+
+/* Each slider runs 0–200 with 100 % in the middle: the left half covers lo–100 %, the right half
+   100–hi %. So "normal" stays centred and small corrections stay easy although the range is wide.
+   Ranges after briatlon's imageAdjustments.js (25–300 %). */
+const ADJUST_SLIDERS = [['contrast', 25, 300], ['brightness', 25, 300], ['saturation', 0, 300]].map(([key, lo, hi]) => ({
+    key, input: document.getElementById(`adjust-${key}`), val: document.getElementById(`adjust-${key}-val`),
+    toValue: (pos) => Math.round(pos <= 100 ? lo + pos * (100 - lo) / 100 : 100 + (pos - 100) * (hi - 100) / 100),
+    toPos:   (v)   => v <= 100 ? (v - lo) * 100 / (100 - lo) : 100 + (v - 100) * 100 / (hi - 100)
 }));
 
 function isAdjusted(s) { return ADJUST_SLIDERS.some(sl => s.adjust[sl.key] !== 100) || s.adjust.invert; }
 
 function imageFilter(s) {
     const a = s.adjust;
-    return isAdjusted(s)
+    return isAdjusted(s) && !state.showOriginal
         ? `contrast(${a.contrast}%) brightness(${a.brightness}%) saturate(${a.saturation}%)` + (a.invert ? ' invert(1)' : '')
         : 'none';
 }
@@ -2009,18 +2016,63 @@ function photoLayer(s) {
 
 function updateAdjustUI() {
     const s = sess();
-    adjustWrap.style.display = s.imgElement ? 'block' : 'none';
-    ADJUST_SLIDERS.forEach(sl => { sl.input.value = s.adjust[sl.key]; sl.val.textContent = `${s.adjust[sl.key]}%`; });
+    const adjusted = !!s.imgElement && isAdjusted(s);
+    if (!adjusted) state.showOriginal = false;   // nothing to compare with
+    adjustWrap.style.display = s.imgElement ? 'flex' : 'none';
+    btnFit.style.display     = s.imgElement ? 'flex' : 'none';
+    ADJUST_SLIDERS.forEach(sl => {
+        if (document.activeElement !== sl.input) sl.input.value = sl.toPos(s.adjust[sl.key]);   // not under the dragging thumb
+        sl.val.textContent = `${s.adjust[sl.key]}%`;
+    });
     adjustInvert.checked = !!s.adjust.invert;
-    btnAdjust.classList.toggle('active', isAdjusted(s));
+    document.getElementById('adjust-invert-val').textContent = s.adjust.invert ? 'On' : 'Off';
+    btnAdjust.classList.toggle('active', adjusted);
+    // Show original: only offered while the photo is adjusted, yellow while it is on
+    btnOriginal.style.display = adjusted ? 'flex' : 'none';
+    btnOriginal.classList.toggle('active', state.showOriginal);
+    btnCardOriginal.disabled = !adjusted;
+    btnCardOriginal.classList.toggle('active-mode', state.showOriginal);
+    btnCardOriginal.textContent = state.showOriginal ? 'Show adjusted' : 'Show original';
+    originalBadge.hidden = !state.showOriginal;
 }
 
-ADJUST_SLIDERS.forEach(sl => sl.input.addEventListener('input', () => { sess().adjust[sl.key] = +sl.input.value; render(); updateAdjustUI(); }));
-adjustInvert.addEventListener('change', () => { sess().adjust.invert = adjustInvert.checked; render(); updateAdjustUI(); });
+/* Changing an adjustment switches back to the adjusted photo: that is what is being tuned */
+function setAdjust(change) {
+    change(sess().adjust);
+    state.showOriginal = false;
+    render(); updateAdjustUI();
+}
+
+ADJUST_SLIDERS.forEach(sl => {
+    sl.input.addEventListener('input',    () => setAdjust(a => { a[sl.key] = sl.toValue(+sl.input.value); }));
+    sl.input.addEventListener('dblclick', () => { sl.input.blur(); setAdjust(a => { a[sl.key] = 100; }); });   // this slider back to normal
+});
+adjustInvert.addEventListener('change', () => setAdjust(a => { a.invert = adjustInvert.checked; }));
 document.getElementById('btn-adjust-reset').addEventListener('click', () => {
     sess().adjust = { ...ADJUST_DEFAULTS };
-    render(); updateAdjustUI();
+    setAdjust(() => {});
 });
+
+/* Show original: a switch, on both buttons. Only the adjustments are dropped; the level rotation
+   stays, so lines and points keep matching the picture. */
+function toggleOriginal() {
+    if (!isAdjusted(sess())) return;
+    state.showOriginal = !state.showOriginal;
+    render(); updateAdjustUI();
+}
+btnOriginal.addEventListener('click', toggleOriginal);
+btnCardOriginal.addEventListener('click', toggleOriginal);
+
+/* Fit: the whole photo, centred in the panel, as right after loading (never enlarged past 100 %) */
+function fitPhoto(s = sess()) {
+    const img = s.imgElement;
+    if (!img) return;
+    const cr = container.getBoundingClientRect();
+    s.view.scale = Math.min(cr.width / img.width, cr.height / img.height, 1);
+    s.view.tx = (cr.width  - img.width  * s.view.scale) / 2;
+    s.view.ty = (cr.height - img.height * s.view.scale) / 2;
+}
+btnFit.addEventListener('click', () => { fitPhoto(); applyTransform(); render(); scheduleAutosave(); });
 
 btnAdjust.addEventListener('click', (e) => {
     e.stopPropagation();
