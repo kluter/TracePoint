@@ -1,5 +1,14 @@
 # Changelog
 
+## v2.7.0
+
+- One map panel behind the ☰ button with three sections: Basemap, Terrain and Camera. It stays open while you use it
+- Terrain: height exaggeration (1–3×) and hillshade, with or without 3D terrain
+- Camera: field of view (shown with its full-frame focal length), max tilt, min and max zoom, North up and Top down
+- Reset puts all sliders of the panel back to their defaults
+- Top down keeps the bearing, North up keeps the tilt
+- Map settings are remembered in this browser
+
 ## v2.6.0
 
 - Draggable divider between photo and map: drag to resize, double-click for 50/50, arrow keys when focused (Shift for bigger steps); the split is remembered

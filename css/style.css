@@ -504,8 +504,6 @@ button:disabled     { opacity: 0.3; cursor: not-allowed; }
 .map-ctx-item:hover { background: #222; color: #fff; }
 .map-ctx-divider { height: 1px; background: #2a2a2a; margin: 2px 0; }
 
-.layer-terrain::after        { content: '  off'; color: #555; font-size: 11px; }
-.layer-terrain.active::after { content: '  on';  color: #ffdc32; }
 .layer-add       { color: #777; }
 .layer-add:hover { color: #fff; }
 
@@ -964,3 +962,24 @@ button.btn-primary:hover:not(:disabled) { background: #004a6e; color: #fff; }
     background: #0a0a0a; color: #fff; border: 1px solid #ffdc32; border-radius: 3px;
     padding: 2px 5px; margin: -3px 0; font: inherit; outline: none;
 }
+
+/* ---- MAP PANEL: basemap, terrain and camera (the ☰ button in the map bar) ---- */
+.layer-menu.map-panel {
+    width: 340px; max-width: calc(100vw - 24px);
+    max-height: calc(100vh - 130px); overflow-y: auto;
+    scrollbar-width: thin; scrollbar-color: #333 transparent;
+}
+.map-panel-title {
+    padding: 9px 14px 5px; font-size: 10px; font-weight: 600; letter-spacing: 0.8px;
+    text-transform: uppercase; color: #777; border-top: 1px solid #2a2a2a;
+}
+.map-panel-title:first-child { border-top: none; }
+.map-panel-body { padding: 2px 14px 10px; }
+.map-panel-body.map-panel-list { padding: 0 0 4px; }
+/* Same rows as the photo adjust card, with room for longer labels and values */
+.map-panel .adjust-row { grid-template-columns: 82px 1fr 74px; margin-bottom: 2px; min-height: 24px; }
+.map-panel .adjust-row.disabled { opacity: 0.35; }
+.map-panel .adjust-row.disabled input { cursor: not-allowed; }
+.map-panel-actions { display: flex; gap: 6px; margin-top: 8px; }
+.map-panel-actions button { font-size: 11px; padding: 4px 10px; }
+.map-panel-actions .map-panel-reset { margin-left: auto; color: #888; }
