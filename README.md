@@ -42,8 +42,8 @@ The more lines you add, the more rays are generated and the more robustly the in
 
 1. **Load a photo:** Drop an image onto the left panel, or click **Browse**. To work on multiple images at once, open the **☰** image menu and click **+ Add image**.
 2. **Add a line:** Click **+ New Line** (or press `E`) and drag it over a recognisable object you can also find on the map: a building corner, tower, road junction.
-3. **Mark points:** Switch to **Add Point** mode (or press `Tab`) and click on the line twice to place exactly two reference points.
-4. **Place points on the map:** Click the **🌐 P1** pill next to each point (or press `F` to jump straight to the next unmapped point), then click its real-world location on the map.
+3. **Mark points:** Click the active line twice to place exactly two reference points. A drag still moves the line; a click on another line only selects it.
+4. **Place points on the map:** After the second point the map waits for the first one: click its real-world location, then the second. A tag next to the mouse says which point comes next. To place a point again later, click its **🌐 P1** pill or press `F` for the next unmapped point.
 5. **Read the result:** Once two lines each have two geo points, rays appear and the intersection is calculated. The pulsing yellow marker shows the estimated camera origin. With 3 or more lines, a confidence ellipse appears around the intersection: the tighter the ellipse, the more consistent your bearings.
 6. **Add more images:** Use the **☰** image menu to add further sessions. Each session shows its own rays and intersection on the map simultaneously.
 7. **Save your work:** Click the **↓** button on any session row to export it as JSON, or use **↓ Export all sessions** to save everything at once. To restore, click **↑ Import session** and reload the image when prompted.
@@ -85,9 +85,10 @@ The more lines you add, the more rays are generated and the more robustly the in
 | `R` | Delete active line |
 | `F` | Map next unmapped point of active line |
 | `X` | Toggle help card |
-| `Tab` | Toggle Drag Line / Add Point mode |
+| `Del` / `Backspace` | Delete the selected point, or the active line if no point is selected |
 | `1` – `5` | Jump to line 1–5 |
 | `Esc` | Cancel / deselect |
+| `Ctrl+Z` | Undo a line or point edit; `Ctrl+Shift+Z` or `Ctrl+Y` redoes |
 | `Ctrl+V` | Paste coordinates → pin on map |
 | `N` | Reset map to north |
 
@@ -222,7 +223,7 @@ python3 -m http.server
 
 ## Changelog
 
-Current version: **v2.4.1**. All releases are listed in [CHANGELOG.md](CHANGELOG.md).
+Current version: **v2.5.0**. All releases are listed in [CHANGELOG.md](CHANGELOG.md).
 
 ---
 
