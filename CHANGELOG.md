@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.5.0
+
+- Undo and redo for lines and points, on the photo and on the map: `Ctrl+Z`, `Ctrl+Shift+Z` or `Ctrl+Y`, up to 100 steps per image
+
 ## v2.4.1
 
 - Fixed: restore and import overwrote images that had no lines yet
