@@ -7,7 +7,6 @@ const ctx         = canvas.getContext("2d");
 const container   = document.getElementById("image-container");
 const overlay     = document.getElementById("drop-overlay");
 const btnAddLine    = document.getElementById("btn-add-line");
-const btnModeToggle = document.getElementById("btn-mode-toggle");
 const btnHorizon    = document.getElementById("btn-horizon");
 const toolbar       = document.getElementById("toolbar");
 const lineBar       = document.getElementById("line-bar");
@@ -123,9 +122,11 @@ let autosaveOwner = !navigator.locks; // only one tab writes the store (see clai
 
 /* ---- INTERACTION STATE (not per-session) ---- */
 const state = {
-    mode: 'idle',         // 'idle' | 'drag-line' | 'add-point' | 'map-point' | 'horizon'
+    mode: 'idle',         // 'idle' | 'drag-line' | 'map-point' | 'horizon'
     activeLineIndex: -1,
-    mapPointTarget:  null,  // { lineIndex, pointIndex }
+    mapPointTarget:  null,  // { lineIndex, pointIndex }: the point the next map click places
+    selectedPoint:   null,  // { lineIndex, pointIndex }: picked on the photo or on the map, highlighted on both
+    press:           null,  // { lineIndex, wasActive, x, y, imgY }: mouse down on a line, not yet a drag or a click
     isDragging:      false,
     pointDrag:       null,  // { line, pt, origY } while a point is slid along its line on the image
     _horizonMouse:   null
@@ -174,6 +175,7 @@ function historyApply(s, snap) {
     s.history.now = snap;
     // Line numbers may have shifted: a pending map point is dropped, the active line kept if it still exists
     state.mapPointTarget  = null;
+    state.selectedPoint   = null;
     state.activeLineIndex = Math.min(state.activeLineIndex, s.lines.length - 1);
     if (state.mode !== 'horizon') state.mode = state.activeLineIndex === -1 ? 'idle' : 'drag-line';
     s.lines.forEach((_, lIdx) => rebuildMapForLine(lIdx));
@@ -886,34 +888,9 @@ sessions = [createSession('Image 1')];
    UI HELPERS
    ============================================================ */
 function updateUI() {
-    btnModeToggle.removeAttribute('style');
-    if (state.activeLineIndex !== -1) {
-        const c = activeLineColour(state.activeLineIndex);
-        btnModeToggle.disabled = false;
-        if (state.mode === 'drag-line') {
-            const line = sess().lines[state.activeLineIndex];
-            btnModeToggle.textContent = 'Mode: Drag Line';
-            btnModeToggle.title = (line && line.points.length >= 2)
-                ? '2 points placed — delete one to add another' : '';
-            btnModeToggle.className = '';
-        }
-        if (state.mode === 'add-point') {
-            btnModeToggle.textContent = 'Mode: Add Point';
-            btnModeToggle.className = 'active-mode';
-            btnModeToggle.style.cssText = `background:${c}22; color:${c}; border-color:${c};`;
-        }
-        if (state.mode === 'map-point') {
-            btnModeToggle.textContent = 'Mode: Map Point';
-            btnModeToggle.className = 'active-mode map-mode';
-            btnModeToggle.style.cssText = `background:${c}22; color:${c}; border-color:${c};`;
-        }
-    } else {
-        btnModeToggle.disabled = true;
-        btnModeToggle.textContent = 'Mode: Idle';
-        btnModeToggle.className = '';
-    }
-
     map.getCanvas().style.cursor = (state.mode === 'map-point') ? 'crosshair' : '';
+    updatePlacingTag();
+    syncMarkerSelection();
 
     if (state.mode === 'horizon') {
         btnHorizon.classList.add('active-mode');
@@ -941,7 +918,7 @@ const GUIDE_STEPS = [
     { title: 'Load an image',            key: '',    icon: '<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-8 8"/>' },
     { title: 'Add a line',               key: 'E',   icon: '<line x1="12" y1="3" x2="12" y2="21"/>' },
     { title: 'Drag the line onto a feature', key: '', icon: '<line x1="12" y1="3" x2="12" y2="21"/><path d="M4 12h5M15 12h5"/><path d="M6 9l-3 3 3 3M18 9l3 3-3 3"/>' },
-    { title: 'Place P1 and P2 on the line', key: 'Tab', icon: '<line x1="12" y1="3" x2="12" y2="21"/><circle cx="12" cy="8" r="2.5"/><circle cx="12" cy="16" r="2.5"/>' },
+    { title: 'Click the line to place P1 and P2', key: '', icon: '<line x1="12" y1="3" x2="12" y2="21"/><circle cx="12" cy="8" r="2.5"/><circle cx="12" cy="16" r="2.5"/>' },
     { title: 'Mark the points on the map', key: 'F', icon: '<path d="M12 21s-6-5.5-6-10a6 6 0 0 1 12 0c0 4.5-6 10-6 10z"/><circle cx="12" cy="11" r="2"/>' },
     { title: 'Add a second line',         key: 'E',   icon: '<line x1="8" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="16" y2="21"/>' },
     { title: 'Position found',            key: '',    icon: '<circle cx="12" cy="12" r="7"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/>' }
@@ -962,30 +939,29 @@ function guideStatus() {
     });
     const progress = Math.min(done / TOTAL, 1);
 
-    if (!s.imgElement) return { idx: 0, progress, hint: 'Drop a photo here, or pick the demo from the ☰ menu' };
-    if (s.lines.length === 0) return { idx: 1, progress, hint: 'Press E or click + New Line' };
+    if (!s.imgElement) return { idx: 0, progress, hint: 'Drop a photo, or pick the demo from ☰' };
+    if (s.lines.length === 0) return { idx: 1, progress, hint: 'Press E for a new line' };
 
     // The first line that still needs work drives the guide
     const lIdx = s.lines.findIndex(l => l.points.length < 2 || l.points.some(p => !p.geo));
     if (lIdx !== -1) {
         const line = s.lines[lIdx], L = `L${lIdx + 1}`;
-        if (line.pristine) return { idx: 2, progress, hint: `Drag ${L} onto a road, shadow or edge pointing away from the camera` };
+        if (line.pristine) return { idx: 2, progress, hint: `Drag ${L} onto a road, shadow or edge` };
         if (line.points.length < 2) {
-            const n = line.points.length + 1;
-            return state.mode === 'add-point' && state.activeLineIndex === lIdx
-                ? { idx: 3, progress, pressed: true, hint: `Click ${L} on a known feature to place P${n}` }
-                : { idx: 3, progress, hint: `Select ${L} · press Tab or click Mode for Add Point` };
+            return state.activeLineIndex === lIdx
+                ? { idx: 3, progress, hint: `Click ${L} to place P${line.points.length + 1}` }
+                : { idx: 3, progress, hint: `Click ${L} to select it` };
         }
         const pIdx = line.points.findIndex(p => !p.geo);
         if (state.mode === 'map-point' && state.mapPointTarget) {
             const t = state.mapPointTarget;
-            return { idx: 4, progress, pressed: true, hint: `Click the map to place L${t.lineIndex + 1} P${t.pointIndex + 1} · Esc to cancel` };
+            return { idx: 4, progress, pressed: true, hint: `Click the map to place L${t.lineIndex + 1} · P${t.pointIndex + 1}` };
         }
-        return { idx: 4, progress, hint: `Press F or click 🌐 P${pIdx + 1} of ${L}, then click the map` };
+        return { idx: 4, progress, hint: `Press F to place ${L} · P${pIdx + 1} on the map` };
     }
-    if (s.lines.length < 2) return { idx: 5, progress, hint: 'Press E for a second line: two rays give the position' };
-    if (s.lines.length === 2) return { idx: 6, progress, hint: 'Position found. A third line adds a confidence ellipse' };
-    return { idx: 6, progress, hint: 'Done. More lines tighten the ellipse' };
+    if (s.lines.length < 2) return { idx: 5, progress, hint: 'Press E for a second line' };
+    if (s.lines.length === 2) return { idx: 6, progress, hint: 'Position found · a third line adds an ellipse' };
+    return { idx: 6, progress, hint: 'Done · more lines tighten the ellipse' };
 }
 
 function buildGuide() {
@@ -1007,15 +983,15 @@ function guideAction(i) {
     const { idx } = guideStatus();
     if (i !== idx) return;
     if (i === 1 || i === 5) { btnAddLine.click(); return; }
-    if (i === 3 && state.activeLineIndex !== -1 && state.mode === 'drag-line') { btnModeToggle.click(); return; }
+    const s = sess();
+    if (i === 3) {   // select the line that still needs points; the points themselves are clicks on the line
+        const lIdx = s.lines.findIndex(l => l.points.length < 2);
+        if (lIdx !== -1) selectLine(lIdx);
+        return;
+    }
     if (i === 4) {
-        const s = sess();
         const lIdx = s.lines.findIndex(l => l.points.length >= 2 && l.points.some(p => !p.geo));
-        if (lIdx === -1) return;
-        state.activeLineIndex = lIdx;
-        state.mode = 'map-point';
-        state.mapPointTarget = { lineIndex: lIdx, pointIndex: s.lines[lIdx].points.findIndex(p => !p.geo) };
-        render(); updateUI();
+        if (lIdx !== -1) startMapPoint(lIdx, s.lines[lIdx].points.findIndex(p => !p.geo));
     }
 }
 
@@ -1065,11 +1041,7 @@ function updateLineManager() {
             `<span class="line-label">L${lIdx + 1}</span>` +
             bearingLabel +
             `<button class="btn-delete" title="Delete line" data-action="delete-line" data-idx="${lIdx}">×</button>`;
-        header.onclick = () => {
-            state.activeLineIndex = lIdx;
-            if (state.mode !== 'add-point') state.mode = 'drag-line';   // from idle too, so the mode toggle works
-            render(); updateUI();
-        };
+        header.onclick = () => selectLine(lIdx);
         item.appendChild(header);
 
         if (active && line.points.length > 0) {
@@ -1079,7 +1051,9 @@ function updateLineManager() {
             line.points.forEach((pt, pIdx) => {
                 const hasGeo = !!(pt.geo);
                 const ptItem = document.createElement('div');
-                ptItem.className = 'point-item' + (hasGeo ? ' has-geo' : '');
+                const sel = state.selectedPoint;
+                ptItem.className = 'point-item' + (hasGeo ? ' has-geo' : '') +
+                                   (sel && sel.lineIndex === lIdx && sel.pointIndex === pIdx ? ' selected' : '');
 
                 const isTarget = state.mode === 'map-point'
                     && state.mapPointTarget
@@ -1101,7 +1075,7 @@ function updateLineManager() {
                     `<span class="pt-label">P${pIdx + 1}</span>` +
                     geoIcon +
                     `<button class="btn-delete" data-action="delete-point" data-lidx="${lIdx}" data-pidx="${pIdx}">×</button>`;
-                ptItem.onclick = () => startMapPoint(lIdx, pIdx);
+                ptItem.onclick = () => { state.selectedPoint = { lineIndex: lIdx, pointIndex: pIdx }; startMapPoint(lIdx, pIdx); };
                 ptBox.appendChild(ptItem);
             });
 
@@ -1134,6 +1108,7 @@ function deleteLine(idx) {
         state.mapPointTarget = null;
         if (state.mode === 'map-point') state.mode = 'drag-line';
     }
+    state.selectedPoint = null;
     if (idx < state.activeLineIndex) state.activeLineIndex--;   // keep the same line active
     state.activeLineIndex = Math.min(state.activeLineIndex, sess().lines.length - 1);
     if (state.activeLineIndex === -1 && state.mode !== 'horizon') state.mode = 'idle';
@@ -1146,18 +1121,49 @@ function deletePoint(lIdx, pIdx) {
     sess().lines[lIdx].points.splice(pIdx, 1);
     if (state.mode === 'map-point' && state.mapPointTarget &&
         state.mapPointTarget.lineIndex === lIdx) {
-        state.mode = 'add-point';
+        state.mode = 'drag-line';
         state.mapPointTarget = null;
     }
+    state.selectedPoint = null;
     rebuildMapForLine(lIdx);
     recomputeIntersection();
     render(); updateUI();
 }
 
+/* The next map click places this point. Runs by itself once a line has its second point,
+   and from F, the point pills and the step guide. */
 function startMapPoint(lIdx, pIdx) {
+    state.activeLineIndex = lIdx;
     state.mode = 'map-point';
     state.mapPointTarget = { lineIndex: lIdx, pointIndex: pIdx };
-    updateUI();
+    render(); updateUI();
+}
+
+/* Work on the line whose point is waiting for its map click keeps the placement going;
+   turning to another line, or clicking the photo next to the lines, cancels it. */
+function keepPlacement(lIdx) {
+    if (state.mode === 'map-point' && state.mapPointTarget && state.mapPointTarget.lineIndex === lIdx) return;
+    state.mapPointTarget = null;
+    if (state.mode === 'map-point') state.mode = 'drag-line';
+}
+
+function selectLine(lIdx) {
+    keepPlacement(lIdx);
+    state.activeLineIndex = lIdx;
+    state.selectedPoint = null;
+    if (state.mode !== 'map-point') state.mode = 'drag-line';
+    render(); updateUI();
+}
+
+/* A click on the active line: P1, then P2. With P2 the map placement starts by itself. */
+function addPhotoPoint(lIdx, y) {
+    const line = sess().lines[lIdx];
+    if (!line || line.points.length >= 2) return;
+    line.points.push({ y: Math.max(0, Math.min(canvas.height, y)), geo: null });
+    line.pristine = false;
+    const unplaced = line.points.findIndex(p => !p.geo);
+    if (line.points.length === 2 && unplaced !== -1) return startMapPoint(lIdx, unplaced);
+    render(); updateUI();
 }
 
 /* Where the mouse is over the photo panel, or null when it is elsewhere (see addLine) */
@@ -1181,19 +1187,10 @@ function addLine(atCursor = false) {
 
 btnAddLine.onclick = () => addLine();
 
-btnModeToggle.onclick = () => {
-    if (state.mode === 'map-point') { state.mode = 'drag-line'; state.mapPointTarget = null; }
-    else {
-        const line = sess().lines[state.activeLineIndex];
-        const lineFull = line && line.points.length >= 2;
-        state.mode = (state.mode === 'drag-line' && !lineFull) ? 'add-point' : 'drag-line';
-    }
-    updateUI();
-};
-
 btnHorizon.onclick = () => {
     if (!sess().imgElement) return;
     state.mapPointTarget = null;
+    state.selectedPoint  = null;
     sess().horizonPoints = [];
     if (sess().view.rotation !== 0) {
         sess().view.rotation = 0;
@@ -1237,24 +1234,30 @@ document.addEventListener('keydown', (e) => {
             sess().horizonPoints = [];
         } else {
             state.activeLineIndex = -1;
+            state.selectedPoint = null;
             state.mode = 'idle';
         }
         render(); updateUI();
         return;
     }
 
-    // F — map-point mode for the next unmapped point: of the active line, else of the first line that has one
+    // Delete / Backspace — the selected point (or the one waiting for its map click), else the active line
+    if (e.key === 'Delete' || e.key === 'Backspace') {
+        e.preventDefault();
+        if (state.mode === 'horizon') return;
+        const pt = state.selectedPoint || (state.mode === 'map-point' ? state.mapPointTarget : null);
+        if (pt && sess().lines[pt.lineIndex]?.points[pt.pointIndex]) deletePoint(pt.lineIndex, pt.pointIndex);
+        else if (state.activeLineIndex !== -1) deleteLine(state.activeLineIndex);
+        return;
+    }
+
+    // F — map placement for the next unmapped point: of the active line, else of the first line that has one
     if (e.key === 'f' || e.key === 'F') {
         e.preventDefault();
         const s = sess();
         const hasUnmapped = (l) => !!l && l.points.some(p => !p.geo);
         const lIdx = hasUnmapped(s.lines[state.activeLineIndex]) ? state.activeLineIndex : s.lines.findIndex(hasUnmapped);
-        if (lIdx !== -1) {
-            state.activeLineIndex = lIdx;
-            state.mode = 'map-point';
-            state.mapPointTarget = { lineIndex: lIdx, pointIndex: s.lines[lIdx].points.findIndex(p => !p.geo) };
-            render(); updateUI();
-        }
+        if (lIdx !== -1) startMapPoint(lIdx, s.lines[lIdx].points.findIndex(p => !p.geo));
         return;
     }
 
@@ -1294,27 +1297,12 @@ document.addEventListener('keydown', (e) => {
         return;
     }
 
-    // Tab — toggle Drag Line / Add Point
-    if (e.key === 'Tab') {
-        e.preventDefault();
-        if (sess().imgElement && sess().lines.length > 0 &&
-            (state.mode === 'drag-line' || state.mode === 'add-point')) {
-            btnModeToggle.click();
-        }
-        return;
-    }
-
     // 1–5 — jump to line
     const lineNum = parseInt(e.key);
     if (lineNum >= 1 && lineNum <= MAX_LINES) {
         e.preventDefault();
         const idx = lineNum - 1;
-        if (idx < sess().lines.length) {
-            state.activeLineIndex = idx;
-            if (state.mode === 'map-point') state.mapPointTarget = null;
-            if (state.mode !== 'add-point') state.mode = 'drag-line';   // from idle too, so the mode toggle works
-            render(); updateUI();
-        }
+        if (idx < sess().lines.length && state.mode !== 'horizon') selectLine(idx);
     }
 });
 
@@ -1416,6 +1404,8 @@ function switchToSession(idx) {
     state.mode           = 'idle';
     state.activeLineIndex = -1;
     state.mapPointTarget  = null;
+    state.selectedPoint   = null;
+    state.press           = null;
     state.isDragging      = false;
     state.pointDrag       = null;
     state._horizonMouse   = null;
@@ -2417,6 +2407,7 @@ container.addEventListener('wheel', (e) => {
    PAN  (middle-click drag  OR  space + left-drag)
    ============================================================ */
 let spaceDown = false;
+const CLICK_SLOP = 4;   // screen px the mouse may move between press and release and still count as a click
 document.addEventListener('keydown', (e) => {
     const tag = e.target.tagName;
     if (e.code === 'Space' && tag !== 'INPUT' && tag !== 'TEXTAREA' && tag !== 'SELECT') {
@@ -2441,10 +2432,12 @@ container.addEventListener('mousedown', (e) => {
 });
 window.addEventListener('mouseup', () => {
     if (isPanning) { isPanning = false; container.style.cursor = ''; }
-    const wasLineDrag = state.isDragging;
+    const wasLineDrag = state.isDragging, press = state.press;
     state.isDragging = false;
+    state.press = null;
     if (state.pointDrag) { state.pointDrag = null; updateUI(); }
     else if (wasLineDrag) historyCommit();   // a finished line drag is one undo step
+    else if (press && press.wasActive) addPhotoPoint(press.lineIndex, press.imgY);   // a click on the active line
 });
 window.addEventListener('mousemove', (e) => {
     if (isPanning && e.buttons === 0) { isPanning = false; container.style.cursor = ''; }   // released outside the window
@@ -2457,6 +2450,12 @@ window.addEventListener('mousemove', (e) => {
         state.pointDrag.pt.y = Math.max(0, Math.min(canvas.height, clientToImage(e).y));
         render();
         return;
+    }
+    // A press on a line becomes a drag once the mouse has travelled a little; until then it may still be a click
+    if (state.press && Math.hypot(e.clientX - state.press.x, e.clientY - state.press.y) > CLICK_SLOP) {
+        const line = sess().lines[state.press.lineIndex];
+        state.press = null;
+        if (line) { state.isDragging = true; line.pristine = false; }
     }
     if (state.isDragging && state.activeLineIndex !== -1) {
         sess().lines[state.activeLineIndex].x = Math.max(0, Math.min(canvas.width, clientToImage(e).x));   // stays on the image
@@ -2480,6 +2479,8 @@ function render() {
 
     let needsRerender = false;
     ctx.font = `bold ${11 * k}px monospace`;
+    const sel    = state.selectedPoint;
+    const target = state.mode === 'map-point' ? state.mapPointTarget : null;
 
     s.lines.forEach((line, idx) => {
         const active    = idx === state.activeLineIndex;
@@ -2516,6 +2517,29 @@ function render() {
         line.points.forEach((pt, pIdx) => {
             const hasGeo = !!(pt.geo);
 
+            const isSel    = !!sel && sel.lineIndex === idx && sel.pointIndex === pIdx;
+            const isTarget = !!target && target.lineIndex === idx && target.pointIndex === pIdx;
+            if (isSel || isTarget) ctx.globalAlpha = 1;
+
+            // Waiting for its map click: the ring breathes (filled, fading in and out) and sends out
+            // a second ring that grows and fades, once every 1.2 s
+            if (isTarget) {
+                needsRerender = true;
+                const phase = (Date.now() % 1200) / 1200;   // 0 … 1
+                ctx.beginPath();
+                ctx.arc(line.x, pt.y, RING, 0, Math.PI * 2);
+                ctx.fillStyle   = colour;
+                ctx.globalAlpha = 0.25 + 0.25 * Math.sin(phase * 2 * Math.PI);   // 0 … 0.5
+                ctx.fill();
+                ctx.beginPath();
+                ctx.arc(line.x, pt.y, RING + 14 * k * phase, 0, Math.PI * 2);
+                ctx.strokeStyle = colour;
+                ctx.lineWidth   = 2.5 * k;
+                ctx.globalAlpha = 0.9 * (1 - phase);
+                ctx.stroke();
+                ctx.globalAlpha = 1;
+            }
+
             // Open ring; a point that is placed on the map gets two side arms
             ctx.beginPath();
             ctx.arc(line.x, pt.y, RING, 0, Math.PI * 2);
@@ -2524,8 +2548,17 @@ function render() {
                 ctx.moveTo(line.x + RING, pt.y);   ctx.lineTo(line.x + 15 * k, pt.y);
             }
             ctx.strokeStyle = colour;
-            ctx.lineWidth   = 2 * k;
+            ctx.lineWidth   = (isSel ? 3.5 : 2) * k;
             ctx.stroke();
+
+            // Selected (here or on the map): a faint second ring around it
+            if (isSel) {
+                ctx.beginPath();
+                ctx.arc(line.x, pt.y, RING + 5 * k, 0, Math.PI * 2);
+                ctx.globalAlpha = 0.45;
+                ctx.lineWidth   = 1.5 * k;
+                ctx.stroke();
+            }
 
             ctx.globalAlpha = 1;
             ctx.fillStyle   = '#fff';
@@ -2571,42 +2604,39 @@ function render() {
 canvas.addEventListener('mousedown', (e) => {
     if (isPanning || spaceDown || e.button !== 0) return;
     if (state.mode === 'horizon') return;
-    const { x: mx } = clientToImage(e);
+    const { x: mx, y: my } = clientToImage(e);
     const THRESH = 12 / sess().view.scale;
 
-    if (state.mode === 'add-point') {
-        let hit = -1;
-        sess().lines.forEach((line, idx) => { if (Math.abs(line.x - mx) < THRESH) hit = idx; });
-        if (hit === -1) { state.activeLineIndex = -1; state.mode = 'idle'; render(); updateUI(); }
-        else sess().lines[hit].pristine = false;   // used without ever being dragged: the "grab me" glow is done
-        return;
-    }
-
-    // A point's circle grabs the point (slide along its line); otherwise the line itself
-    const { y: my } = clientToImage(e);
+    // A point's ring selects the point and grabs it (slide along its line); otherwise the line itself
     let ptHit = null;
-    const PT_THRESH = Math.max(THRESH, 7);   // zoomed in, the circle is 6 image px and larger than the 12 screen px
-    sess().lines.forEach((line, idx) => line.points.forEach((pt) => {
-        if (Math.hypot(line.x - mx, pt.y - my) < PT_THRESH) ptHit = { line, pt, idx };
+    const PT_THRESH = Math.max(THRESH, 8);   // zoomed in, the ring is 7 image px and larger than the 12 screen px
+    sess().lines.forEach((line, idx) => line.points.forEach((pt, pIdx) => {
+        if (Math.hypot(line.x - mx, pt.y - my) < PT_THRESH) ptHit = { line, pt, idx, pIdx };
     }));
     if (ptHit) {
+        keepPlacement(ptHit.idx);
         state.activeLineIndex = ptHit.idx;
-        state.mode = 'drag-line';
+        state.selectedPoint = { lineIndex: ptHit.idx, pointIndex: ptHit.pIdx };
+        if (state.mode !== 'map-point') state.mode = 'drag-line';
         state.pointDrag = { line: ptHit.line, pt: ptHit.pt, origY: ptHit.pt.y };
         ptHit.line.pristine = false;
         render(); updateUI();
         return;
     }
 
+    // A line: the active one wins where two lie close together. Whether this press moves the line or,
+    // on the active line, places a point is decided by the mouse travel (see mousemove and mouseup).
     let hit = -1;
     sess().lines.forEach((line, idx) => { if (Math.abs(line.x - mx) < THRESH) hit = idx; });
+    const active = sess().lines[state.activeLineIndex];
+    if (active && Math.abs(active.x - mx) < THRESH) hit = state.activeLineIndex;
     if (hit !== -1) {
-        state.activeLineIndex = hit;
-        state.isDragging = true;
-        state.mode = 'drag-line';
-        sess().lines[hit].pristine = false;
-        render(); updateUI();
+        state.press = { lineIndex: hit, wasActive: hit === state.activeLineIndex, x: e.clientX, y: e.clientY, imgY: my };
+        selectLine(hit);
     } else {
+        // Next to the lines: nothing is selected, and a point waiting for its map click stops waiting
+        state.mapPointTarget = null;
+        state.selectedPoint = null;
         state.activeLineIndex = -1;
         state.mode = 'idle';
         render(); updateUI();
@@ -2635,24 +2665,7 @@ canvas.addEventListener('click', (e) => {
             state._horizonMouse = null;
         }
         render(); updateUI();
-        return;
     }
-
-    if (state.mode !== 'add-point' || state.activeLineIndex === -1) return;
-    const { x: mx, y: my } = clientToImage(e);
-    const THRESH = 12 / sess().view.scale;
-    const line = sess().lines[state.activeLineIndex];
-    if (Math.abs(line.x - mx) > THRESH) {
-        state.activeLineIndex = -1;
-        state.mode = 'idle';
-        render(); updateUI();
-        return;
-    }
-    if (line.points.length >= 2) return;
-    line.points.push({ y: my, geo: null });
-    line.pristine = false;
-    if (line.points.length === 2) state.mode = 'drag-line';
-    render(); updateUI();
 });
 
 /* Copy coordinates button inside intersection popup */
@@ -2848,6 +2861,17 @@ function rebuildMapForLine(lIdx) {
         dot.style.borderColor = colour;
         dot.style.color       = colour;   // hover halo uses currentColor
         node.title = `L${lIdx + 1} P${pIdx + 1}`;
+        node.dataset.line  = lIdx;
+        node.dataset.point = pIdx;
+        // Pressing a marker selects its point, here and on the photo (another image's markers are fixed)
+        node.addEventListener('mousedown', (e) => {
+            if (e.button !== 0 || s !== sess() || state.mode === 'horizon') return;
+            keepPlacement(lIdx);
+            state.activeLineIndex = lIdx;
+            state.selectedPoint = { lineIndex: lIdx, pointIndex: pIdx };
+            if (state.mode !== 'map-point') state.mode = 'drag-line';
+            render(); updateUI();
+        });
         const marker = new maplibregl.Marker({ element: node, draggable: true })
             .setLngLat([pt.geo.lng, pt.geo.lat]).addTo(map);
         attachMarkerDrag(marker, pt);
@@ -2856,6 +2880,50 @@ function rebuildMapForLine(lIdx) {
     // Markers only. The rays are redrawn by recomputeIntersection(), which every caller runs next:
     // once for all lines instead of once per line.
 }
+
+/* The selected point's marker gets a halo */
+function syncMarkerSelection() {
+    const sel = state.selectedPoint;
+    sess().mapObjects.geoMarkers.forEach(list => (list || []).forEach(m => {
+        const d = m.getElement().dataset;
+        m.getElement().classList.toggle('geo-point-selected',
+            !!sel && +d.line === sel.lineIndex && +d.point === sel.pointIndex);
+    }));
+}
+
+/* ---- PLACING TAG ----
+   A small tag next to the mouse while a point waits for its map click, so it is obvious that the
+   next click on the map places it. After briatlon's placingCursor.js. */
+const mapBox     = document.getElementById('map-container');
+const placingTag = el('div', '', mapBox);
+placingTag.id = 'placing-tag';
+placingTag.hidden = true;
+const placingMouse = { x: 0, y: 0, inside: false };
+
+function updatePlacingTag() {
+    const t = state.mode === 'map-point' ? state.mapPointTarget : null;
+    placingTag.hidden = !(t && placingMouse.inside);
+    if (placingTag.hidden) return;
+    const text = `Place L${t.lineIndex + 1} · P${t.pointIndex + 1}`;
+    if (placingTag.textContent !== text) placingTag.textContent = text;
+    placingTag.style.borderColor = activeLineColour(t.lineIndex);
+    // Level with the pointer, to its right; flips to the left near the right edge
+    const box = mapBox.getBoundingClientRect();
+    const w = placingTag.offsetWidth, h = placingTag.offsetHeight;
+    const left = placingMouse.x + 18 + w > box.width ? placingMouse.x - 14 - w : placingMouse.x + 18;
+    const top  = Math.max(0, Math.min(box.height - h, placingMouse.y - h / 2));
+    placingTag.style.transform = `translate(${Math.max(0, left)}px, ${top}px)`;
+}
+
+mapBox.addEventListener('pointermove', (e) => {
+    const box = mapBox.getBoundingClientRect();
+    placingMouse.x = e.clientX - box.left;
+    placingMouse.y = e.clientY - box.top;
+    // Not over the map's own controls, menus or markers
+    placingMouse.inside = !e.target.closest?.('button, a, input, label, .maplibregl-ctrl, .map-ctx-menu, .geo-point');
+    updatePlacingTag();
+}, true);
+mapBox.addEventListener('pointerleave', () => { placingMouse.inside = false; updatePlacingTag(); });
 
 /* Dragging a geo marker: the ray follows live, intersection and ellipse recompute on release.
    Esc while dragging snaps the point back (see the keyboard handler). Only the active session's

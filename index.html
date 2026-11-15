@@ -29,7 +29,6 @@
                 </div>
                 <div class="toolbar" id="toolbar">
                     <button id="btn-add-line">+ New Line</button>
-                    <button id="btn-mode-toggle" disabled>Mode: Idle</button>
                 </div>
                 <div class="navbar-right">
                     <button id="btn-horizon" title="Set horizon correction">
@@ -104,7 +103,7 @@
                 <input type="file" id="json-picker" accept=".json" style="display:none">
                 <div id="zoom-hint">
                     <span class="step-hint" id="image-hint"></span>
-                    <span class="hint-pill">v2.4.1</span>
+                    <span class="hint-pill">v2.5.0</span>
                 </div>
             </div>
         </div>
@@ -137,8 +136,8 @@
                     <li><b>Load an image</b> — drop a photo onto the left panel, or pick the demo from the image menu <span class="help-key">☰</span></li>
                     <li><b>Level the image</b> (optional) — use the <span class="help-key">Level</span> tool to correct a tilted horizon before adding lines. Makes alignment more accurate. Dark or flat photo? The <span class="help-key">☀</span> button in the line bar adjusts contrast, brightness and saturation on screen only, or inverts the colours</li>
                     <li><b>Add a line</b> — click <span class="help-key">+ New Line</span>, then drag it to align with a direction visible in the scene (road, shadow, building edge pointing away from the subject)</li>
-                    <li><b>Place 2 reference points</b> — switch to <span class="help-key">Add Point</span> mode, click the line twice. Then click each point's <span class="help-key">🌐 P1</span> pill and mark its real-world location on the map</li>
-                    <li><b>Fine-tune</b> — drag a point's marker on the map to adjust it; the ray follows. <span class="help-key">Esc</span> while dragging snaps it back</li>
+                    <li><b>Place 2 reference points</b> — click the active line twice. After the second click the map waits for the first point: click its real-world location, then the second one. <span class="help-key">F</span> or a point's <span class="help-key">🌐 P1</span> pill starts this again later</li>
+                    <li><b>Fine-tune</b> — slide a point along its line, or drag its marker on the map; the ray follows. <span class="help-key">Esc</span> while dragging snaps it back. A point picked on the photo is highlighted on the map, and the other way round</li>
                     <li><b>Repeat</b> for a second line — once two rays are drawn their intersection marks the estimated camera position. Add a third or more for a confidence ellipse around the result</li>
                 </ol>
                 <div class="help-shortcuts">
@@ -149,7 +148,7 @@
                         <span class="help-key">R</span><span>Delete active line</span>
                         <span class="help-key">F</span><span>Map next unmapped point</span>
                         <span class="help-key">X</span><span>Toggle this help card</span>
-                        <span class="help-key">Tab</span><span>Toggle Drag / Add Point mode</span>
+                        <span class="help-key">Del</span><span>Delete the selected point, or the active line if no point is selected (Backspace works too)</span>
                         <span class="help-key">1–5</span><span>Jump to line</span>
                         <span class="help-key">Esc</span><span>Cancel / deselect</span>
                         <span class="help-key">Ctrl+Z</span><span>Undo a line or point edit; Ctrl+Shift+Z or Ctrl+Y redoes</span>
