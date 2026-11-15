@@ -102,7 +102,8 @@ function createSession(name) {
            markers are DOM elements owned here. */
         mapObjects:       { geoMarkers: [], intersectionMarker: null, intersectionLatLng: null, ellipseRing: null },
         exifGpsMarker:    null,
-        adjust:           { ...ADJUST_DEFAULTS }   // display only, never exported
+        adjust:           { ...ADJUST_DEFAULTS },  // display only, never exported
+        history:          { past: [], future: [], now: { lines: [], key: '[]' } }   // undo / redo, see below; not saved
     };
 }
 
@@ -129,6 +130,70 @@ const state = {
     pointDrag:       null,  // { line, pt, origY } while a point is slid along its line on the image
     _horizonMouse:   null
 };
+let markerDrag = null;   // { marker, pt, origin: {lat, lng}, cancelled } while a geo marker is dragged on the map
+
+/* ---- UNDO / REDO for lines and points ----
+   Every image has its own history: snapshots of its lines, taken when an edit is finished
+   (historyCommit runs from updateUI and on mouse release, never in the middle of a drag).
+   `now` is the state on screen; past and future hold the steps around it. The history lives in
+   memory only: it is neither autosaved nor exported. */
+const HISTORY_LIMIT = 100;
+
+function historySnap(s) {
+    const lines = s.lines.map(l => ({
+        x: l.x, colour: l.colour || null, source: l.source || null, pristine: !!l.pristine,
+        points: l.points.map(p => ({ y: p.y, geo: p.geo ? { lat: p.geo.lat, lng: p.geo.lng } : null }))
+    }));
+    // The "grab me" glow is not an edit: it is restored with a step but never makes one
+    return { lines, key: JSON.stringify(lines, (k, v) => (k === 'pristine' ? undefined : v)) };
+}
+
+function historyBusy() { return state.isDragging || !!state.pointDrag || !!markerDrag; }
+
+function historyCommit() {
+    const s = sess();
+    if (!s || historyBusy()) return;
+    const h = s.history, snap = historySnap(s);
+    if (snap.key !== h.now.key) {   // selection changes and clicks without movement are not edits
+        h.past.push(h.now);
+        if (h.past.length > HISTORY_LIMIT) h.past.shift();
+        h.future = [];
+    }
+    h.now = snap;
+}
+
+/* Imported or restored work is the new starting point */
+function historyReset(s) {
+    s.history = { past: [], future: [], now: historySnap(s) };
+}
+
+function historyApply(s, snap) {
+    s.lines.forEach((_, lIdx) => clearMapObjectsForLine(lIdx));
+    s.mapObjects.geoMarkers = [];
+    s.lines = snap.lines.map(l => ({ ...l, points: l.points.map(p => ({ y: p.y, geo: p.geo ? { ...p.geo } : null })) }));
+    s.history.now = snap;
+    // Line numbers may have shifted: a pending map point is dropped, the active line kept if it still exists
+    state.mapPointTarget  = null;
+    state.activeLineIndex = Math.min(state.activeLineIndex, s.lines.length - 1);
+    if (state.mode !== 'horizon') state.mode = state.activeLineIndex === -1 ? 'idle' : 'drag-line';
+    s.lines.forEach((_, lIdx) => rebuildMapForLine(lIdx));
+    recomputeIntersection();
+    render(); updateUI();
+}
+
+function undo() {
+    const s = sess(), h = s.history;
+    if (historyBusy() || h.past.length === 0) return;
+    h.future.push(h.now);
+    historyApply(s, h.past.pop());
+}
+
+function redo() {
+    const s = sess(), h = s.history;
+    if (historyBusy() || h.future.length === 0) return;
+    h.past.push(h.now);
+    historyApply(s, h.future.pop());
+}
 
 /* ---- ZOOM / PAN helpers ---- */
 let isPanning = false, panStart = { x: 0, y: 0 }, panOrigin = { tx: 0, ty: 0 };
@@ -862,6 +927,7 @@ function updateUI() {
         btnHorizon.title = 'Set horizon correction';
     }
 
+    historyCommit();
     updateLineManager();
     updateGuide();
     scheduleAutosave();
@@ -1137,6 +1203,12 @@ document.addEventListener('keydown', (e) => {
     // Ignore when typing in an actual text input
     const tag = e.target.tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+    // Ctrl+Z undoes, Ctrl+Shift+Z or Ctrl+Y redoes (text fields returned above and keep the browser's own undo)
+    if ((e.ctrlKey || e.metaKey) && !e.altKey) {
+        const k = e.key.toLowerCase();
+        if (k === 'z') { e.preventDefault(); if (e.shiftKey) redo(); else undo(); return; }
+        if (k === 'y' && !e.shiftKey) { e.preventDefault(); redo(); return; }
+    }
     // Browser shortcuts (Ctrl+R reload, Ctrl+F find, ...) are not ours; Ctrl+V arrives as a paste event
     if (e.ctrlKey || e.metaKey || e.altKey) return;
 
@@ -2113,6 +2185,7 @@ function applySessionData(list, keepView = false) {
         // A session that had not found its position yet may still zoom to it later
         if (keepView) s.hasAutoZoomed = !!s.mapObjects.intersectionLatLng;
         updateUI();
+        historyReset(s);
         return s;
     });
 }
@@ -2361,8 +2434,10 @@ container.addEventListener('mousedown', (e) => {
 });
 window.addEventListener('mouseup', () => {
     if (isPanning) { isPanning = false; container.style.cursor = ''; }
+    const wasLineDrag = state.isDragging;
     state.isDragging = false;
     if (state.pointDrag) { state.pointDrag = null; updateUI(); }
+    else if (wasLineDrag) historyCommit();   // a finished line drag is one undo step
 });
 window.addEventListener('mousemove', (e) => {
     if (isPanning && e.buttons === 0) { isPanning = false; container.style.cursor = ''; }   // released outside the window
@@ -2776,8 +2851,6 @@ function rebuildMapForLine(lIdx) {
 /* Dragging a geo marker: the ray follows live, intersection and ellipse recompute on release.
    Esc while dragging snaps the point back (see the keyboard handler). Only the active session's
    markers are draggable (setMarkersDraggable on session switch). */
-let markerDrag = null;   // { marker, pt, origin: {lat, lng}, cancelled }
-
 function attachMarkerDrag(marker, pt) {
     marker.on('dragstart', () => {
         markerDrag = { marker, pt, origin: { ...pt.geo }, cancelled: false };
