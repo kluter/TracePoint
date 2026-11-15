@@ -245,6 +245,37 @@ const map = new maplibregl.Map({
 // double-click or the keyboard. Search box and map panel live in the map bar under the header.
 map.addControl(new maplibregl.NavigationControl({ showZoom: false, visualizePitch: true }), 'bottom-left');
 
+/* With 3D terrain, dragging and wheel zooming work on the ground point under the mouse. Near the horizon
+   of a tilted view, or over terrain that has not loaded yet, that point is far away or wrong, and one
+   step then throws the map kilometres off or changes the zoom by many levels. While the mouse drags or
+   the wheel turns, a single camera update may not move the centre further than the view is large or
+   change the zoom by more than 1.5 levels; a bigger step is dropped and the map stays put for that
+   frame. Flights and jumps made by the app are not touched. */
+let mapMouseDown = false, mapLastWheel = 0;
+{
+    const box = map.getCanvasContainer();
+    box.addEventListener('mousedown', () => { mapMouseDown = true; }, true);
+    box.addEventListener('wheel', () => { mapLastWheel = performance.now(); }, { capture: true, passive: true });
+    window.addEventListener('mouseup', () => { mapMouseDown = false; }, true);
+    window.addEventListener('blur',    () => { mapMouseDown = false; });
+}
+let mapGuardWarned = 0;
+map.transformCameraUpdate = (next) => {
+    const byHand = mapMouseDown || performance.now() - mapLastWheel < 500;   // the wheel zoom glides on for a moment
+    if (!byHand || !map.getTerrain()) return {};
+    const cur = map.getCenter(), zoom = map.getZoom();
+    const metresPerPixel = 40075016.686 * Math.cos(cur.lat * Math.PI / 180) / (512 * Math.pow(2, zoom));
+    const c = map.getCanvas();
+    const limit = Math.hypot(c.clientWidth, c.clientHeight) * metresPerPixel;
+    const moved = cur.distanceTo(next.center);
+    if (moved <= limit && Math.abs(next.zoom - zoom) <= 1.5) return {};
+    if (performance.now() - mapGuardWarned > 2000) {   // a trace for bug reports, at most every 2 s
+        mapGuardWarned = performance.now();
+        console.warn(`TracePoint: dropped a map step with 3D terrain (zoom ${zoom.toFixed(2)} → ${next.zoom.toFixed(2)}, ${(moved / 1000).toFixed(1)} km)`);
+    }
+    return { center: cur, zoom };
+};
+
 let mapReady = false;   // sources and layers can only be added once the style has loaded
 
 /* Middle-button drag pans the map (MapLibre ignores button 1; without this the browser autoscrolls).
@@ -550,13 +581,14 @@ const MAP_SETTING_RANGES = {   // [min, max, default]
     fov:          [10, 90, 37],     // vertical field of view in degrees; MapLibre's own default is 36.87
     maxPitch:     [0, 90, 90],
     minZoom:      [0, 20, 0],
-    maxZoom:      [0, 20, 20]
+    maxZoom:      [0, 20, 20],
+    buildingsOpacity: [20, 100, 80]   // percent
 };
 
 function loadMapSettings() {
     let saved = {};
     try { saved = JSON.parse(localStorage.getItem(MAP_SETTINGS_KEY)) || {}; } catch (err) { /* start from the defaults */ }
-    const s = { hillshade: saved.hillshade === true };
+    const s = { hillshade: saved.hillshade === true, buildings: saved.buildings === true };
     Object.entries(MAP_SETTING_RANGES).forEach(([key, [min, max, def]]) => {
         s[key] = finite(saved[key]) ? Math.min(max, Math.max(min, saved[key])) : def;
     });
@@ -576,6 +608,39 @@ function applyMapSettings() {
     if (!mapReady) return;        // terrain and hillshade need the style; applied again from the map's load handler
     map.setTerrain(terrainOn ? { source: 'dem', exaggeration: s.exaggeration } : null);
     map.setLayoutProperty('hillshade', 'visibility', s.hillshade ? 'visible' : 'none');
+    applyBuildings();
+}
+
+/* ---- 3D BUILDINGS ----
+   OpenStreetMap buildings as blocks on top of any basemap, to line up rooflines and skylines on the
+   tilted map. Vector tiles from OpenFreeMap (keyless, OpenMapTiles schema). Source and layer exist
+   only while the switch is on: off removes them, so that server is not contacted at all. */
+const BUILDINGS_TILEJSON = 'https://tiles.openfreemap.org/planet';
+const BUILDINGS_MIN_ZOOM = 13;   // the tiles carry buildings from here on
+const BUILDING_FALLBACK_HEIGHT = 5;   // metres, for the rare building without a height in the tiles
+
+function applyBuildings() {
+    const s = mapSettings;
+    if (!s.buildings) {
+        if (map.getLayer('buildings'))  map.removeLayer('buildings');
+        if (map.getSource('buildings')) map.removeSource('buildings');
+        return;
+    }
+    if (!map.getSource('buildings')) map.addSource('buildings', { type: 'vector', url: BUILDINGS_TILEJSON });
+    if (!map.getLayer('buildings')) {
+        map.addLayer({
+            id: 'buildings', type: 'fill-extrusion', source: 'buildings', 'source-layer': 'building',
+            minzoom: BUILDINGS_MIN_ZOOM,
+            filter: ['!=', ['get', 'hide_3d'], true],   // outlines that only repeat the parts of a detailed building
+            paint: {
+                'fill-extrusion-color':  '#d9d9d6',
+                'fill-extrusion-height': ['coalesce', ['get', 'render_height'], BUILDING_FALLBACK_HEIGHT],
+                'fill-extrusion-base':   ['coalesce', ['get', 'render_min_height'], 0],
+                'fill-extrusion-vertical-gradient': true   // sides a little darker than the roofs
+            }
+        }, 'ellipse');   // above basemap and hillshade, below rays and ellipse
+    }
+    map.setPaintProperty('buildings', 'fill-extrusion-opacity', s.buildingsOpacity / 100);
 }
 
 function setMapSetting(key, value) {
@@ -668,6 +733,13 @@ function buildLayerSwitcher() {
     addSwitch(terrain, 'Hillshade', 'Shades the slopes on top of the basemap, with or without 3D terrain. Uses the same elevation tiles.',
         () => mapSettings.hillshade, on => setMapSetting('hillshade', on));
 
+    // Buildings
+    const buildings = section('Buildings');
+    addSwitch(buildings, '3D buildings', `OpenStreetMap buildings as 3D blocks, from zoom ${BUILDINGS_MIN_ZOOM}. Loaded from OpenFreeMap while this is on. Tilt the map (Ctrl+drag) to see them rise.`,
+        () => mapSettings.buildings, on => setMapSetting('buildings', on));
+    addSlider(buildings, 'Opacity', 'How much of the basemap shows through the blocks',
+        'buildingsOpacity', 5, v => `${v}%`, () => mapSettings.buildings);
+
     // Camera
     const camera = section('Camera');
     addSlider(camera, 'Field of view', 'Strength of the perspective when the map is tilted. The focal length is the full-frame lens with the same vertical angle.',
@@ -685,7 +757,7 @@ function buildLayerSwitcher() {
     };
     action('North up', 'Turn the map to north; the tilt stays',  () => map.easeTo({ bearing: 0 }));
     action('Top down', 'Look straight down; the bearing stays', () => map.easeTo({ pitch: 0 }));
-    action('Reset', 'All sliders back to their defaults: terrain height, field of view and the camera limits', () => {
+    action('Reset', 'All sliders back to their defaults: terrain height, buildings opacity, field of view and the camera limits', () => {
         Object.keys(MAP_SETTING_RANGES).forEach(key => { mapSettings[key] = MAP_SETTING_RANGES[key][2]; });
         setMapSetting('fov', mapSettings.fov);
     }).classList.add('map-panel-reset');
