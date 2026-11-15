@@ -1,5 +1,10 @@
 # Changelog
 
+## v2.6.0
+
+- Draggable divider between photo and map: drag to resize, double-click for 50/50, arrow keys when focused (Shift for bigger steps); the split is remembered
+- A chevron on the divider hides the photo side and brings it back
+
 ## v2.5.0
 
 - Undo and redo for lines and points, on the photo and on the map: `Ctrl+Z`, `Ctrl+Shift+Z` or `Ctrl+Y`, up to 100 steps per image

@@ -1174,6 +1174,7 @@ container.addEventListener('mouseleave', () => { photoCursor = null; });
 /* atCursor: the E key puts the line under the mouse when that is over the photo.
    Otherwise, and for the button and the step guide, it goes to the centre of the visible photo. */
 function addLine(atCursor = false) {
+    if (photoCollapsed()) return;   // nowhere to put it while the photo side is hidden
     if (!sess().imgElement) return showToast("Drop an image first.");
     if (sess().lines.length >= MAX_LINES) return showToast(`Maximum of ${MAX_LINES} lines per image.`);
     const v  = sess().view;
@@ -3083,6 +3084,79 @@ function intersectLines(p1, p2, p3, p4) {
         lng: x1 + t * (x2 - x1)
     };
 }
+
+/* ============================================================
+   DIVIDER – drag the handle between two panes to resize them
+   After briatlon's paneSplitter.js. The first pane's share is a percentage in a CSS variable on
+   `box`, so it scales with the window; each pane keeps `min` pixels. axis 'x': panes side by side,
+   'y': one above the other. The share is kept in localStorage under `key`.
+   ============================================================ */
+function makeSplitter(handle, box, { axis = 'x', cssVar, key, min = 320, start = 50, enabled = () => true }) {
+    let pct = start;
+    const size  = () => (axis === 'x' ? box.clientWidth : box.clientHeight) || 1;
+    const clamp = (p) => {
+        const lo = Math.min(50, min / size() * 100);   // a window too small for both minimums splits in half
+        return Math.max(lo, Math.min(100 - lo, p));
+    };
+    function set(p, save) {
+        pct = clamp(p);
+        box.style.setProperty(cssVar, `${pct.toFixed(2)}%`);
+        handle.setAttribute('aria-valuenow', Math.round(pct));
+        if (save) localStorage.setItem(key, pct.toFixed(2));
+    }
+
+    handle.addEventListener('pointerdown', (e) => {
+        if (e.button !== 0 || e.target.closest('button') || !enabled()) return;
+        handle.setPointerCapture(e.pointerId);
+        handle.classList.add('dragging');
+        document.body.classList.add('pane-resizing');
+        e.preventDefault();
+        handle.focus();
+    });
+    handle.addEventListener('pointermove', (e) => {
+        if (!handle.classList.contains('dragging')) return;
+        const r = box.getBoundingClientRect();
+        set(axis === 'x' ? (e.clientX - r.left) / r.width * 100 : (e.clientY - r.top) / r.height * 100, false);
+    });
+    const end = () => {
+        if (!handle.classList.contains('dragging')) return;
+        handle.classList.remove('dragging');
+        document.body.classList.remove('pane-resizing');
+        set(pct, true);
+    };
+    handle.addEventListener('pointerup', end);
+    handle.addEventListener('pointercancel', end);
+    handle.addEventListener('dblclick', (e) => { if (!e.target.closest('button') && enabled()) set(start, true); });
+    handle.addEventListener('keydown', (e) => {
+        if (e.target !== handle || !enabled()) return;
+        const back = axis === 'x' ? 'ArrowLeft' : 'ArrowUp', fwd = axis === 'x' ? 'ArrowRight' : 'ArrowDown';
+        if (e.key !== back && e.key !== fwd) return;
+        e.preventDefault();
+        set(pct + (e.key === fwd ? 1 : -1) * (e.shiftKey ? 10 : 1), true);
+    });
+    window.addEventListener('resize', () => set(pct, false));   // the pixel minimums follow the window
+
+    const saved = parseFloat(localStorage.getItem(key));
+    set(Number.isFinite(saved) ? saved : start, false);
+    return { set, get: () => pct };
+}
+
+/* Photo | map. The chevron on the handle folds the photo side away; that is not remembered, since the
+   logo, the line tools and the drop zone live there and a page loading without them would look broken. */
+const appEl = document.getElementById('app');
+const btnPaneCollapse = document.getElementById('btn-pane-collapse');
+const photoCollapsed = () => appEl.classList.contains('photo-collapsed');
+
+makeSplitter(document.getElementById('pane-splitter'), appEl,
+    { cssVar: '--split', key: 'tp-split', enabled: () => !photoCollapsed() });
+
+btnPaneCollapse.addEventListener('click', () => {
+    const on = appEl.classList.toggle('photo-collapsed');
+    const label = on ? 'Show the photo side' : 'Hide the photo side';
+    btnPaneCollapse.title = label;
+    btnPaneCollapse.setAttribute('aria-label', label);
+    btnPaneCollapse.blur();   // focus stays out of the way of the keyboard shortcuts
+});
 
 /* ============================================================
    START – bring back the autosaved work, if any

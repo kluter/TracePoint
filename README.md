@@ -27,6 +27,7 @@ The more lines you add, the more rays are generated and the more robustly the in
 - **Bearing display:** each line shows its outward bearing once an intersection is found
 - **Confidence ellipse:** with 3 or more lines (up to 5 per image), a dashed ellipse around the intersection shows the spread of ray crossings. A tighter ellipse means higher confidence
 - **Session export and import:** save and restore lines, geo points, bearings, and map view as JSON
+- **Resizable layout:** drag the divider between photo and map, double-click it for 50/50, or fold the photo side away with the chevron on it
 - **Autosave:** work and images are kept in this browser, so a refresh does not lose them. Switch it off or clear it in the ☰ image menu
 - **EXIF metadata viewer:** camera, lens, capture settings, GPS, altitude, and camera direction read from the image. GPS can be placed on the map as a reference marker
 - **Map layers:** Esri Satellite, Sentinel-2 2024, OpenStreetMap, Esri Dark Gray, Esri Topo, Esri Streets, optional 3D terrain, plus [custom XYZ layers](#custom-map-layers) by URL
@@ -289,6 +290,7 @@ Photo adjustments and coordinate pins are not saved. Besides that, `localStorage
 //                 { "tp-terrain": "0" }         ← 3D terrain on/off
 //                 { "tp-custom-layers": [...] } ← name + URL of custom layers, if you added any
 //                 { "tp-autosave": "1" }        ← autosave on/off
+//                 { "tp-split": "50.00" }       ← width of the photo side in percent
 // IndexedDB:      tracepoint → autosave         ← "session" (same JSON as the export) + one "img:…" per image
 //                                                 empty while autosave is off
 // sessionStorage: empty
