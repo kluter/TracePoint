@@ -513,7 +513,7 @@ function setTileSet(id) {
         map.addLayer({
             id: lid, type: 'raster', source: lid,
             paint: { 'raster-opacity': l.opts.opacity ?? 1, 'raster-fade-duration': 0 }
-        }, map.getLayer('ellipse') ? 'ellipse' : undefined);   // base imagery stays below the work layers (ellipse is the lowest)
+        }, map.getLayer('hillshade') ? 'hillshade' : undefined);   // base imagery stays below the hillshade and the work layers
         activeTileLayerIds.push(lid);
     });
 }
@@ -530,59 +530,187 @@ map.on('error', (e) => {
 setTileSet(localStorage.getItem('tp-tileset') || 'esri-sat');
 
 /* ---- 3D TERRAIN ---- */
-/* Mapzen Terrarium DEM tiles from AWS (keyless, CORS ok). The source is registered at map load but
-   no tile is requested until terrain is switched on. Independent of the chosen imagery. */
+/* Mapzen Terrarium DEM tiles from AWS (keyless, CORS ok). The sources are registered at map load but
+   no tile is requested until terrain or hillshade is switched on. Independent of the chosen imagery. */
 const TERRAIN_TILES = 'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png';
 let terrainOn = localStorage.getItem('tp-terrain') === '1';
 
 function setTerrain(on) {
     terrainOn = on;
     localStorage.setItem('tp-terrain', on ? '1' : '0');
-    if (!mapReady) return;   // applied again from the map's load handler
-    map.setTerrain(on ? { source: 'dem', exaggeration: 1 } : null);
+    applyMapSettings();
 }
 
-/* ---- LAYER SWITCHER CONTROL ---- */
-/* Lives in the map bar under the map header, not on the map itself */
+/* ---- MAP SETTINGS: how the terrain looks and what the camera may do ----
+   Kept in this browser, for the map as a whole: not per image and not exported.
+   Field of view and camera limits after briatlon's map options. */
+const MAP_SETTINGS_KEY = 'tp-map-settings';
+const MAP_SETTING_RANGES = {   // [min, max, default]
+    exaggeration: [1, 3, 1],
+    fov:          [10, 90, 37],     // vertical field of view in degrees; MapLibre's own default is 36.87
+    maxPitch:     [0, 90, 90],
+    minZoom:      [0, 20, 0],
+    maxZoom:      [0, 20, 20]
+};
+
+function loadMapSettings() {
+    let saved = {};
+    try { saved = JSON.parse(localStorage.getItem(MAP_SETTINGS_KEY)) || {}; } catch (err) { /* start from the defaults */ }
+    const s = { hillshade: saved.hillshade === true };
+    Object.entries(MAP_SETTING_RANGES).forEach(([key, [min, max, def]]) => {
+        s[key] = finite(saved[key]) ? Math.min(max, Math.max(min, saved[key])) : def;
+    });
+    if (s.minZoom > s.maxZoom) { s.minZoom = MAP_SETTING_RANGES.minZoom[2]; s.maxZoom = MAP_SETTING_RANGES.maxZoom[2]; }
+    return s;
+}
+
+let mapSettings = loadMapSettings();
+
+function applyMapSettings() {
+    const s = mapSettings;
+    map.setVerticalFieldOfView(s.fov);
+    map.setMaxPitch(s.maxPitch);
+    map.setMinZoom(0);            // out of the way first: a new maximum below the old minimum would be refused
+    map.setMaxZoom(s.maxZoom);
+    map.setMinZoom(s.minZoom);
+    if (!mapReady) return;        // terrain and hillshade need the style; applied again from the map's load handler
+    map.setTerrain(terrainOn ? { source: 'dem', exaggeration: s.exaggeration } : null);
+    map.setLayoutProperty('hillshade', 'visibility', s.hillshade ? 'visible' : 'none');
+}
+
+function setMapSetting(key, value) {
+    mapSettings[key] = value;
+    // The zoom limits push each other instead of crossing
+    if (key === 'minZoom' && value > mapSettings.maxZoom) mapSettings.maxZoom = value;
+    if (key === 'maxZoom' && value < mapSettings.minZoom) mapSettings.minZoom = value;
+    localStorage.setItem(MAP_SETTINGS_KEY, JSON.stringify(mapSettings));
+    applyMapSettings();
+    syncMapPanel();
+}
+
+/* Full-frame focal length with the same vertical field of view (24 mm sensor height, landscape):
+   set it to the lens in a photo's EXIF and the tilted map shows the scene with that perspective. */
+function fovToFocal(fov) { return 12 / Math.tan(fov * DEG / 2); }
+
+/* ---- MAP PANEL: basemap, terrain and camera in one place ---- */
+/* Opens from the ☰ button in the map bar under the map header. It stays open while its controls are
+   used; a click on the map or outside it, Esc or the button closes it. */
+let layerMenu = null;      // the panel
+let layerList = null;      // its basemap list, redrawn by renderLayerMenu
+const mapPanelSync = [];   // one function per control: bring it in line with the settings
+
+function syncMapPanel() { mapPanelSync.forEach(fn => fn()); }
+
 function buildLayerSwitcher() {
     const wrap = document.getElementById('layer-switcher-wrap');
 
     const btn = el('button', 'layer-burger', wrap);
     btn.type = 'button';
-    btn.title = 'Switch map layer';
+    btn.title = 'Map layers, terrain and camera';
     btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
         <rect y="2"  width="16" height="2" rx="1"/>
         <rect y="7"  width="16" height="2" rx="1"/>
         <rect y="12" width="16" height="2" rx="1"/>
     </svg>`;
 
-    const menu = el('div', 'layer-menu', wrap);
+    const menu = el('div', 'layer-menu map-panel', wrap);
     menu.style.display = 'none';
     layerMenu = menu;
-    renderLayerMenu();
 
-    btn.onclick = () => {
-        menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+    const section = (title) => {
+        el('div', 'map-panel-title', menu).textContent = title;
+        return el('div', 'map-panel-body', menu);
+    };
+    const row = (parent, label, title) => {
+        const r = el('div', 'adjust-row', parent);
+        if (title) r.title = title;
+        const id = `map-opt-${label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+        const l = el('label', '', r);
+        l.textContent = label;
+        l.htmlFor = id;
+        return { r, id };
+    };
+    const addSwitch = (parent, label, title, get, set) => {
+        const { r, id } = row(parent, label, title);
+        const input = el('input', 'adjust-switch', r);
+        input.type = 'checkbox'; input.id = id; input.setAttribute('role', 'switch');
+        const val = el('span', 'adjust-val', r);
+        input.onchange = () => set(input.checked);
+        mapPanelSync.push(() => { input.checked = get(); val.textContent = get() ? 'On' : 'Off'; });
+    };
+    /* A slider for one map setting; double-click puts it back to its default */
+    const addSlider = (parent, label, title, key, step, fmt, enabled = () => true) => {
+        const [min, max, def] = MAP_SETTING_RANGES[key];
+        const { r, id } = row(parent, label, title);
+        const input = el('input', '', r);
+        input.type = 'range'; input.id = id; input.min = min; input.max = max; input.step = step;
+        const val = el('span', 'adjust-val', r);
+        input.oninput    = () => setMapSetting(key, +input.value);
+        input.ondblclick = () => { input.blur(); setMapSetting(key, def); };
+        mapPanelSync.push(() => {
+            if (document.activeElement !== input) input.value = mapSettings[key];   // not under the dragging thumb
+            val.textContent = fmt(mapSettings[key]);
+            input.disabled = !enabled();
+            r.classList.toggle('disabled', !enabled());
+        });
     };
 
-    map.on('click', () => { menu.style.display = 'none'; });
+    // Basemap
+    layerList = section('Basemap');
+    layerList.classList.add('map-panel-list');
+
+    // Terrain
+    const terrain = section('Terrain');
+    addSwitch(terrain, '3D terrain', 'Elevation tiles from AWS. Tilt the map (Ctrl+drag) to see the relief.',
+        () => terrainOn, setTerrain);
+    addSlider(terrain, 'Height', 'How much the relief is exaggerated. Needs 3D terrain.',
+        'exaggeration', 0.1, v => `${v.toFixed(1)}×`, () => terrainOn);
+    addSwitch(terrain, 'Hillshade', 'Shades the slopes on top of the basemap, with or without 3D terrain. Uses the same elevation tiles.',
+        () => mapSettings.hillshade, on => setMapSetting('hillshade', on));
+
+    // Camera
+    const camera = section('Camera');
+    addSlider(camera, 'Field of view', 'Strength of the perspective when the map is tilted. The focal length is the full-frame lens with the same vertical angle.',
+        'fov', 1, v => `${v}° · ${Math.round(fovToFocal(v))} mm`);
+    addSlider(camera, 'Max tilt', 'How far the map can be tilted', 'maxPitch', 1, v => `${v}°`);
+    addSlider(camera, 'Min zoom', 'How far out the map can zoom', 'minZoom', 1, v => `${v}`);
+    addSlider(camera, 'Max zoom', 'How far in the map can zoom', 'maxZoom', 1, v => `${v}`);
+
+    const actions = el('div', 'map-panel-actions', camera);
+    const action = (label, title, fn) => {
+        const b = el('button', '', actions);
+        b.type = 'button'; b.textContent = label; b.title = title;
+        b.onclick = fn;
+        return b;
+    };
+    action('North up', 'Turn the map to north; the tilt stays',  () => map.easeTo({ bearing: 0 }));
+    action('Top down', 'Look straight down; the bearing stays', () => map.easeTo({ pitch: 0 }));
+    action('Reset', 'All sliders back to their defaults: terrain height, field of view and the camera limits', () => {
+        Object.keys(MAP_SETTING_RANGES).forEach(key => { mapSettings[key] = MAP_SETTING_RANGES[key][2]; });
+        setMapSetting('fov', mapSettings.fov);
+    }).classList.add('map-panel-reset');
+
+    renderLayerMenu();
+    syncMapPanel();
+
+    const close = () => { menu.style.display = 'none'; };
+    btn.onclick = () => { menu.style.display = menu.style.display === 'none' ? 'block' : 'none'; };
+    map.on('click', close);
+    document.addEventListener('click', (e) => { if (!wrap.contains(e.target) && e.target.isConnected) close(); });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
+    menu.addEventListener('wheel', (e) => e.stopPropagation());   // scrolling the panel must not zoom anything under it
 }
 
-let layerMenu = null;
-
+/* The basemap list: built-in layers, then the custom ones with edit and remove, then "add" */
 function renderLayerMenu() {
-    const menu = layerMenu;
-    menu.innerHTML = '';
+    const list = layerList;
+    list.innerHTML = '';
 
     const addItem = (set) => {
-        const item = el('div', 'layer-item', menu);
+        const item = el('div', 'layer-item', list);
         item.dataset.id = set.id;
         if (set.id === activeTileSetId) item.classList.add('active');
-        item.onclick = () => {
-            setTileSet(set.id);
-            renderLayerMenu();
-            menu.style.display = 'none';
-        };
+        item.onclick = () => { setTileSet(set.id); renderLayerMenu(); };
         if (!set.custom) { item.textContent = set.label; return; }
 
         item.classList.add('layer-item-custom');
@@ -591,7 +719,7 @@ function renderLayerMenu() {
         const edit = el('button', 'layer-action', item);
         edit.title = 'Edit layer';
         edit.textContent = '✎';
-        edit.onclick = (e) => { e.stopPropagation(); menu.style.display = 'none'; openLayerModal(set.id); };
+        edit.onclick = (e) => { e.stopPropagation(); layerMenu.style.display = 'none'; openLayerModal(set.id); };
         const del = el('button', 'layer-action layer-action-delete', item);
         del.title = 'Remove layer';
         del.textContent = '×';
@@ -599,25 +727,12 @@ function renderLayerMenu() {
     };
 
     TILE_SETS.forEach(addItem);
-
-    el('div', 'layer-divider', menu);
-    const terrain = el('div', 'layer-item layer-terrain', menu);
-    terrain.textContent = '⛰ Terrain';
-    terrain.title = 'Elevation tiles from AWS. Tilt the map (Ctrl+drag) to see the relief.';
-    if (terrainOn) terrain.classList.add('active');
-    terrain.onclick = () => {
-        setTerrain(!terrainOn);
-        renderLayerMenu();
-        menu.style.display = 'none';
-    };
-
-    el('div', 'layer-divider', menu);
+    if (customLayers.length) el('div', 'layer-divider', list);
     allTileSets().filter(s => s.custom).forEach(addItem);
-    if (customLayers.length) el('div', 'layer-divider', menu);
 
-    const add = el('div', 'layer-item layer-add', menu);
+    const add = el('div', 'layer-item layer-add', list);
     add.textContent = '＋ Add custom layer…';
-    add.onclick = () => { menu.style.display = 'none'; openLayerModal(null); };
+    add.onclick = () => { layerMenu.style.display = 'none'; openLayerModal(null); };
 }
 
 function removeCustomLayer(id) {
@@ -628,6 +743,7 @@ function removeCustomLayer(id) {
 }
 
 buildLayerSwitcher();
+applyMapSettings();   // camera settings now; terrain and hillshade follow when the style has loaded
 
 /* ---- CUSTOM LAYER POPUP ---- */
 const layerModal      = document.getElementById('layer-modal');
@@ -2918,9 +3034,19 @@ map.on('load', () => {
         type: 'raster-dem', tiles: [TERRAIN_TILES], encoding: 'terrarium', tileSize: 256, maxzoom: 15,
         attribution: 'Terrain: <a href="https://github.com/tilezen/joerd/blob/master/docs/attribution.md" target="_blank" rel="noopener">Mapzen Terrarium</a> via AWS'
     });
+    /* Hillshade gets a DEM source of its own (same tiles): sharing one with the 3D terrain makes
+       MapLibre render both from a lower-resolution copy. Hidden layers request nothing. */
+    map.addSource('dem-shade', {
+        type: 'raster-dem', tiles: [TERRAIN_TILES], encoding: 'terrarium', tileSize: 256, maxzoom: 15,
+        attribution: 'Terrain: <a href="https://github.com/tilezen/joerd/blob/master/docs/attribution.md" target="_blank" rel="noopener">Mapzen Terrarium</a> via AWS'
+    });
+    map.addLayer({
+        id: 'hillshade', type: 'hillshade', source: 'dem-shade', layout: { visibility: 'none' },
+        paint: { 'hillshade-exaggeration': 0.45, 'hillshade-shadow-color': '#000', 'hillshade-highlight-color': '#fff', 'hillshade-accent-color': '#000' }
+    }, 'ellipse');   // above the basemap, below rays and ellipse
     mapReady = true;
     setTileSet(activeTileSetId);
-    setTerrain(terrainOn);
+    applyMapSettings();
     rebuildWorkSource();
 });
 

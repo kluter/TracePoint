@@ -30,7 +30,8 @@ The more lines you add, the more rays are generated and the more robustly the in
 - **Resizable layout:** drag the divider between photo and map, double-click it for 50/50, or fold the photo side away with the chevron on it
 - **Autosave:** work and images are kept in this browser, so a refresh does not lose them. Switch it off or clear it in the ☰ image menu
 - **EXIF metadata viewer:** camera, lens, capture settings, GPS, altitude, and camera direction read from the image. GPS can be placed on the map as a reference marker
-- **Map layers:** Esri Satellite, Sentinel-2 2024, OpenStreetMap, Esri Dark Gray, Esri Topo, Esri Streets, optional 3D terrain, plus [custom XYZ layers](#custom-map-layers) by URL
+- **Map panel:** basemap, terrain and camera settings in one place; match the field of view to a photo's lens and compare skylines on the tilted map
+- **Map layers:** Esri Satellite, Sentinel-2 2024, OpenStreetMap, Esri Dark Gray, Esri Topo, Esri Streets, optional 3D terrain with adjustable height and hillshade, plus [custom XYZ layers](#custom-map-layers) by URL
 - **[Coordinate search](#coordinate-search):** paste coordinates (decimal, degrees-minutes-seconds or a Google Maps link) to drop numbered pins on the map
 - Horizon correction for tilted images
 - Built-in Potsdam demo with step-by-step guide
@@ -72,7 +73,7 @@ The more lines you add, the more rays are generated and the more robustly the in
 | Autosave on / off, clear saved work | Last row of the ☰ image menu. Off or **Clear** deletes the copy kept in the browser |
 | Image metadata | `</>` button, left of the line bar. **Show on map** places the EXIF GPS position |
 | Rotate / tilt map | Ctrl + drag, or right-click drag, tilt up to 90°. Click the compass (bottom-right) or press `N` to reset. The map bar shows bearing, tilt and zoom |
-| Map layers and 3D terrain | ☰ button, right of the map bar. Custom layers: **+ Add custom layer…**, then ✎ / × to edit or remove |
+| Map layers, terrain and camera | ☰ button, right of the map bar. One panel: **Basemap** (custom layers: **+ Add custom layer…**, then ✎ / × to edit or remove), **Terrain** (3D terrain, height 1–3×, hillshade) and **Camera** (field of view with its full-frame focal length, max tilt, min and max zoom, **North up**, **Top down**). **Reset** puts all sliders back to their defaults; double-click a slider to reset just that one |
 | Jump to coordinates | Paste into the search box in the map bar (or `Ctrl+V` anywhere) |
 | Pins | Click a row in the pin list at the top-left of the map to go back to it; × or **Clear all** removes |
 | Copy a spot / open it elsewhere | Right-click the map: copy coordinates, or open the spot in Google Maps, Street View, Google Earth, Apple, Bing or Yandex Maps |
@@ -256,7 +257,7 @@ A polished interface is not the same as a safe one. This section explains exactl
 
 Photos are loaded directly into an HTML5 `<canvas>` element and processed in the browser. No upload, no base64 POST, no fetch call carries image data anywhere. To verify, open **DevTools → Network** (`F12`) and load an image: no request involving it appears.
 
-The only outbound requests are map tile fetches from public servers (Esri, OpenStreetMap, EOX), elevation tiles from AWS while 3D terrain is switched on, plus the servers of any [custom map layer](#custom-map-layers) you add yourself. They contain no session data, no coordinates from your work, and no image content.
+The only outbound requests are map tile fetches from public servers (Esri, OpenStreetMap, EOX), elevation tiles from AWS while 3D terrain or hillshade is switched on, plus the servers of any [custom map layer](#custom-map-layers) you add yourself. They contain no session data, no coordinates from your work, and no image content.
 
 ```javascript
 // The full extent of network activity in TracePoint:
@@ -264,7 +265,7 @@ The only outbound requests are map tile fetches from public servers (Esri, OpenS
 // GET https://tile.openstreetmap.org/z/x/y.png
 // GET https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2024_3857/default/g/z/y/x.jpg
 // GET <your custom layer URL>   ← only if you add one and select it
-// GET https://s3.amazonaws.com/elevation-tiles-prod/terrarium/z/x/y.png   ← only while terrain is on
+// GET https://s3.amazonaws.com/elevation-tiles-prod/terrarium/z/x/y.png   ← only while 3D terrain or hillshade is on
 // No other requests.
 ```
 
@@ -290,6 +291,7 @@ Photo adjustments and coordinate pins are not saved. Besides that, `localStorage
 // Verify in DevTools → Application → Storage
 // localStorage:   { "tp-tileset": "esri-sat" }  ← your map layer choice
 //                 { "tp-terrain": "0" }         ← 3D terrain on/off
+//                 { "tp-map-settings": {...} }  ← terrain height, hillshade, field of view, camera limits
 //                 { "tp-custom-layers": [...] } ← name + URL of custom layers, if you added any
 //                 { "tp-autosave": "1" }        ← autosave on/off
 //                 { "tp-split": "50.00" }       ← width of the photo side in percent
