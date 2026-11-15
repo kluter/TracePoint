@@ -7,6 +7,8 @@
 - Camera: field of view (shown with its full-frame focal length), max tilt, min and max zoom, North up and Top down
 - Reset puts all sliders of the panel back to their defaults
 - Compass moved to the bottom-left of the map; the zoom buttons are gone (mouse wheel, double-click or `+` / `−` zoom)
+- 3D buildings: OpenStreetMap buildings as blocks on top of any basemap, with an opacity slider. Off by default; the shapes come from OpenFreeMap (no key) and that server is only contacted while the switch is on
+- Fixed: with 3D terrain, dragging or wheel-zooming near the horizon or over tiles that had not loaded yet could throw the map kilometres away or change the zoom by many levels
 - Top down keeps the bearing, North up keeps the tilt
 - Map settings are remembered in this browser
 
