@@ -66,7 +66,8 @@ The more lines you add, the more rays are generated and the more robustly the in
 | Deselect / cancel | Click blank canvas, or `Esc` |
 | Place point on map | Click the map pill, then click the map |
 | Move a point | Drag its marker on the map, or slide it along its line on the image. `Esc` while dragging snaps it back |
-| Adjust the photo on screen | ☀ button in the line bar: contrast, brightness, saturation, invert. Display only: the photo, lines and exports are untouched |
+| Adjust the photo on screen | ☀ button in the line bar: contrast and brightness 25–300%, saturation 0–300%, invert. Double-click a slider to reset it. The button next to ☀ switches between the original and the adjusted photo. Display only: the photo, lines and exports are untouched |
+| Fit the photo | Corner-brackets button in the line bar: the whole photo, centred in the panel |
 | Image sessions, export, import | ☰ button, right of the line bar |
 | Autosave on / off, clear saved work | Last row of the ☰ image menu. Off or **Clear** deletes the copy kept in the browser |
 | Image metadata | `</>` button, left of the line bar. **Show on map** places the EXIF GPS position |
