@@ -77,7 +77,7 @@ The more lines you add, the more rays are generated and the more robustly the in
 | Jump to coordinates | Paste into the search box in the map bar (or `Ctrl+V` anywhere) |
 | Measure a distance | Ruler button next to the compass, `M`, or right-click → **Measure distance from here**. Click two points for the straight-line ground distance; a third click starts over, `Esc` clears. Not saved or exported |
 | Pins | Click a row in the pin list at the top-left of the map to go back to it; × or **Clear all** removes |
-| Copy a spot / open it elsewhere | Right-click the map: copy coordinates, or open the spot in Google Maps, Street View, Google Earth, Apple, Bing or Yandex Maps |
+| Copy a spot / open it elsewhere | Right-click the map: copy coordinates, measure from there, or open the spot in Google Maps, Street View, Google Earth or OpenStreetMap. **Open in…** adds Apple Maps, Lookmap, Bing Maps, Mapillary, Yandex Maps and Baidu Maps. Nothing is requested from any of them until you click |
 | Share or bookmark a view | Copy the URL: the map view is in the `#` part, nothing else |
 
 ### Keyboard shortcuts
@@ -119,8 +119,19 @@ Paste coordinates into the search box in the bar under the map header, or press 
 | Labelled | `lat 52.4012 lon 13.0645` |
 | Google Maps link (map view) | `https://www.google.com/maps/@52.4012,13.0645,15z` |
 | Google Maps link (query) | `https://maps.google.com/?q=52.4012,13.0645` |
+| Google Earth link | `https://earth.google.com/web/@52.4012,13.0645,35a,1000d,35y,0h,0t,0r` |
+| Apple Maps link | `https://maps.apple.com/?ll=52.4012,13.0645` |
+| Bing Maps link | `https://www.bing.com/maps?cp=52.4012~13.0645&lvl=15` |
+| Yandex Maps link (longitude first) | `https://yandex.com/maps/?ll=13.0645,52.4012&z=15` |
+| OpenStreetMap link | `https://www.openstreetmap.org/#map=15/52.4012/13.0645` |
+| Lookmap link | `https://lookmap.skzk.dev/#c=15/52.4012/13.0645` |
+| Baidu Maps link (approximate) | `https://map.baidu.com/@12959219,4825334,15z` |
+| Any link with `lat=` and `lon=` or `lng=` | `https://example.com/?lat=52.4012&lon=13.0645` |
+| Web Mercator metres (x, y) | `1454336, 6872995` |
 
 The first number is read as latitude, unless N/S/E/W letters or a value above 90 say otherwise.
+
+A link's zoom level is ignored: a pasted link drops a pin like any other paste. Short links such as `maps.app.goo.gl/…` contain no coordinates and cannot be read without asking their server, so TracePoint asks you to open them and copy the full address. Baidu uses its own shifted coordinate system; its links are converted in the browser and land within some metres.
 
 ---
 
@@ -229,7 +240,7 @@ python3 -m http.server
 
 ## Changelog
 
-Current version: **v2.6.0**. All releases are listed in [CHANGELOG.md](CHANGELOG.md).
+Current version: **v2.7.0**. All releases are listed in [CHANGELOG.md](CHANGELOG.md).
 
 ---
 
