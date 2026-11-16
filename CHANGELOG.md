@@ -1,5 +1,22 @@
 # Changelog
 
+## v2.8.0
+
+- Export with photos: an "Include photos" switch in the ☰ menu of the photo side, off by default and remembered. With it on, exported files carry each photo, and import restores it without asking for the image. The photo goes in unchanged, with its GPS and camera data, and the file gets about a third bigger than the photo
+- `Ctrl+S` exports all sessions, with or without photos as the switch says
+- Street-level imagery: a button in the map bar opens a panel above the map with the photo nearest to the map centre, or to a spot picked with right-click → "Street-level imagery here". Drag the divider to resize the panel
+- Walk from photo to photo: click in the photo towards where you want to go, or use the arrow keys (up and down along the view, left and right sideways). The map follows to where each photo was taken
+- 360° photos can be looked around in (drag, wheel zooms); a marker on the map shows where the photo was taken and which way the view points
+- Coverage overlay for Panoramax: lines and dots on the map show where photos exist (solid lines for 360°, dashed for ordinary photos); click one to load the photo there. The Coverage button in the panel switches it off
+- Sources: Panoramax (no key) and Mapillary (your own free token, kept in this browser only). HD loads the full resolution. The servers are only contacted while the panel is open
+- Images are tabs in the photo header: click to switch, double-click the name or `F2` to rename, × to remove, + to add
+- New line is a + button in the line bar, and Level sits there too, left of the ☰ menu; the "+ New Line" and "Level" buttons in the header are gone
+- The ☰ menu of the photo side has sections like the map panel: File (Import…, Export this image, Export all, Include photos), This browser (Autosave, Clear) and Demo
+- Basemap dropdown in the map header, in place of the "Map View" title: it shows the active basemap and lists the built-in and custom layers. The map panel keeps terrain, buildings and camera and opens from a sliders button
+- Opening the map panel, the basemap list or the help card closes the other two
+- Help card is much shorter: six one-line steps and a compact key list, with a link to the full controls in the README
+- Map bar readout (bearing, tilt, zoom) is slimmer, with more room around it
+
 ## v2.7.0
 
 - One map panel behind the ☰ button with three sections: Basemap, Terrain and Camera. It stays open while you use it
