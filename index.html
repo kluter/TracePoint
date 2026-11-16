@@ -27,21 +27,14 @@
                     <div class="logo-wrap"><img src="assets/logo.svg" alt="TracePoint Logo" id="logo"></div>
                     <h1>TracePoint</h1>
                 </div>
-                <div class="toolbar" id="toolbar">
-                    <button id="btn-add-line">+ New Line</button>
-                </div>
-                <div class="navbar-right">
-                    <button id="btn-horizon" title="Set horizon correction">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                            <line x1="4" y1="15" x2="20" y2="9"/>
-                            <path d="M16 6 a7 7 0 0 1 4 4"/>
-                            <polyline points="16 6 20 10 16 11"/>
-                        </svg>
-                        <span>Level</span>
-                    </button>
-                </div>
+                <!-- The images as tabs; "+" adds one (renderImageTabs in script.js) -->
+                <div class="image-tabs" id="image-tabs" role="tablist" aria-label="Images"></div>
             </div>
             <div id="line-bar">
+                <button class="exif-burger" id="btn-add-line" title="New line (E)" aria-label="New line">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+                </button>
+                <div id="line-bar-end">
                 <div class="exif-wrap" id="exif-wrap" style="display:none">
                     <button class="exif-burger" id="btn-exif" title="Image metadata">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
@@ -96,8 +89,15 @@
                         </div>
                     </div>
                 </div>
+                <button class="exif-burger" id="btn-horizon" title="Set horizon correction" aria-label="Level the image">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="4" y1="15" x2="20" y2="9"/>
+                        <path d="M16 6 a7 7 0 0 1 4 4"/>
+                        <polyline points="16 6 20 10 16 11"/>
+                    </svg>
+                </button>
                 <div class="session-manager-wrap" id="session-manager-wrap">
-                    <button class="session-burger" id="btn-session-burger" title="Manage images">
+                    <button class="session-burger" id="btn-session-burger" title="File: import, export, autosave, demo" aria-label="File menu">
                         <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
                             <rect y="2"  width="16" height="2" rx="1"/>
                             <rect y="7"  width="16" height="2" rx="1"/>
@@ -105,6 +105,7 @@
                         </svg>
                     </button>
                     <div class="session-menu" id="session-menu" style="display:none"></div>
+                </div>
                 </div>
             </div>
             <div id="image-container">
@@ -121,7 +122,7 @@
                 <input type="file" id="json-picker" accept=".json" style="display:none">
                 <div id="zoom-hint">
                     <span class="step-hint" id="image-hint"></span>
-                    <span class="hint-pill">v2.7.0</span>
+                    <span class="hint-pill">v2.8.0</span>
                 </div>
             </div>
         </div>
@@ -137,7 +138,13 @@
         <!-- RIGHT: MAP -->
         <div id="map-panel">
             <div class="panel-header">
-                <h3 style="margin:0; font-size:15px; font-weight:600;">Map View</h3>
+                <div class="basemap-wrap" id="basemap-wrap">
+                    <button type="button" id="btn-basemap" class="basemap-btn" title="Basemap" aria-haspopup="true" aria-expanded="false">
+                        <span id="basemap-name">Map</span>
+                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="2.5,4.5 6,8 9.5,4.5"/></svg>
+                    </button>
+                    <div class="layer-menu basemap-menu" id="basemap-menu" style="display:none"></div>
+                </div>
                 <div class="header-actions">
                     <a id="btn-github" href="https://github.com/kluter/TracePoint" target="_blank" rel="noopener" title="View on GitHub">
                         <svg viewBox="0 0 24 24" fill="currentColor">
@@ -150,43 +157,79 @@
             <div id="map-bar">
                 <div class="coord-search" id="coord-search"></div>
                 <div id="map-readout" title="Map bearing, tilt and zoom"></div>
+                <button class="layer-burger" id="btn-street" type="button" aria-pressed="false"
+                        title="Street-level imagery (Panoramax or Mapillary; their server is only contacted while this is open)" aria-label="Street-level imagery">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M3 6c6 2 12 2 18 0v12c-6-2-12-2-18 0z"/><path d="M7 14.5l3-3.5 2.5 3 2-2 2.5 3"/>
+                    </svg>
+                </button>
                 <div class="layer-switcher-wrap" id="layer-switcher-wrap"></div>
             </div>
-            <div id="map-container"></div>
+            <!-- Street-level panel above the map; hidden until the button in the map bar opens it -->
+            <div id="map-stack">
+                <div id="street-panel" hidden>
+                    <div id="street-bar">
+                        <select id="street-source" title="Where the imagery comes from" aria-label="Imagery source">
+                            <option value="panoramax">Panoramax</option>
+                            <option value="mapillary">Mapillary</option>
+                        </select>
+                        <input id="street-token" type="password" autocomplete="off" spellcheck="false" placeholder="Mapillary token" hidden
+                               title="Your Mapillary client token (free, from mapillary.com/dashboard/developers). Kept in this browser only, never exported.">
+                        <span id="street-info"></span>
+                        <button type="button" id="btn-street-here" title="Load the image nearest to the map centre">Map centre</button>
+                        <button type="button" id="btn-street-cover" title="Show on the map where Panoramax has photos: lines are sequences (dashed = ordinary photos, solid = 360°), dots are single photos. Click one to load it">Coverage</button>
+                        <button type="button" id="btn-street-hd" title="Load this image in full resolution" disabled>HD</button>
+                        <button type="button" id="btn-street-close" class="help-close" title="Close" aria-label="Close street-level imagery">×</button>
+                    </div>
+                    <div id="street-view" tabindex="0" aria-label="Street-level image: click or use the arrow keys to walk, drag to look around" title="Click to walk that way · drag to look around · wheel zooms · arrow keys walk">
+                        <canvas id="street-canvas" hidden></canvas>
+                        <img id="street-flat" alt="" draggable="false" hidden>
+                        <div id="street-status"></div>
+                    </div>
+                </div>
+                <div id="street-splitter" role="separator" aria-orientation="horizontal" aria-label="Resize street-level imagery and map" tabindex="0"
+                     title="Drag to resize · double-click to reset · arrow keys when focused" hidden></div>
+                <div id="map-container"></div>
+            </div>
             <div id="help-card" style="display:none">
                 <div class="help-header">
                     <span>How TracePoint works</span>
                     <button class="help-close" id="btn-help-close">×</button>
                 </div>
                 <ol class="help-steps">
-                    <li><b>Load a photo</b> — drop it onto the left panel, paste it with <span class="help-key">Ctrl+V</span>, or choose a file. New here? Try the demo from the empty photo panel or the image menu <span class="help-key">☰</span></li>
-                    <li><b>Level the image</b> (optional) — use the <span class="help-key">Level</span> tool to correct a tilted horizon before adding lines. Makes alignment more accurate. Dark or flat photo? The <span class="help-key">☀</span> button in the line bar adjusts contrast, brightness and saturation on screen only, or inverts the colours; the half-moon button next to it switches to the original and back. The corner-brackets button fits the photo into the panel</li>
-                    <li><b>Add a line</b> — click <span class="help-key">+ New Line</span>, then drag it to align with a direction visible in the scene (road, shadow, building edge pointing away from the subject)</li>
-                    <li><b>Place 2 reference points</b> — click the active line twice. After the second click the map waits for the first point: click its real-world location, then the second one. <span class="help-key">F</span> or a point's <span class="help-key">🌐 P1</span> pill starts this again later</li>
-                    <li><b>Fine-tune</b> — slide a point along its line, or drag its marker on the map; the ray follows. <span class="help-key">Esc</span> while dragging snaps it back. A point picked on the photo is highlighted on the map, and the other way round</li>
-                    <li><b>Repeat</b> for a second line — once two rays are drawn their intersection marks the estimated camera position. Add a third or more for a confidence ellipse around the result</li>
+                    <li><b>Load a photo:</b> drop it, paste it, or browse</li>
+                    <li><b>Level it</b> (optional): fix a tilted horizon with the level button</li>
+                    <li><b>Add a line:</b> drag it onto a road, shadow or building edge</li>
+                    <li><b>Place 2 points:</b> click the line twice, then both spots on the map</li>
+                    <li><b>Fine-tune:</b> drag a point, or its marker on the map</li>
+                    <li><b>Repeat:</b> two rays cross at the camera; a third adds an ellipse</li>
                 </ol>
                 <div class="help-shortcuts">
-                    <div class="help-shortcuts-title">Keyboard shortcuts</div>
+                    <div class="help-shortcuts-title">Keys</div>
                     <div class="help-shortcuts-grid">
-                        <span class="help-key">W</span><span>Toggle level tool / reset rotation</span>
                         <span class="help-key">E</span><span>New line</span>
-                        <span class="help-key">R</span><span>Delete active line</span>
-                        <span class="help-key">F</span><span>Map next unmapped point</span>
-                        <span class="help-key">X</span><span>Toggle this help card</span>
-                        <span class="help-key">Del</span><span>Delete the selected point, or the active line if no point is selected (Backspace works too)</span>
+                        <span class="help-key">R</span><span>Delete line</span>
                         <span class="help-key">1–5</span><span>Jump to line</span>
-                        <span class="help-key">Esc</span><span>Cancel / deselect</span>
-                        <span class="help-key">F2</span><span>Rename the active image (or use the pencil in the image menu <span class="help-key">☰</span>)</span>
-                        <span class="help-key">Ctrl+Z</span><span>Undo a line or point edit; Ctrl+Shift+Z or Ctrl+Y redoes</span>
-                        <span class="help-key">Scroll</span><span>Zoom the image; Space+drag or middle-drag pans it</span>
-                        <span class="help-key">Ctrl+V</span><span>Paste a photo → new image; paste coordinates or a map link (Google, Apple, Bing, Yandex, OpenStreetMap and others) → pin on map</span>
-                        <span class="help-key">Ctrl+drag</span><span>Rotate and tilt the map (right-drag works too); middle-drag pans</span>
-                        <span class="help-key">N</span><span>Reset map to north and flat (same as the compass, bottom-left of the map)</span>
-                        <span class="help-key">M</span><span>Measure a distance on the map: click two points. Also the ruler button next to the compass, or right-click → Measure distance from here. Esc clears</span>
-                        <span class="help-key">☰</span><span>Map panel: basemap, terrain height and hillshade, 3D buildings, field of view, camera limits, North up and Top down</span>
-                        <span class="help-key">Right-click</span><span>Copy map coordinates, measure from there, or open the spot in Google Maps, Street View, Earth, OpenStreetMap and, under Open in…, six more services</span>
+                        <span class="help-key">F</span><span>Map next point</span>
+                        <span class="help-key">Del</span><span>Delete point or line</span>
+                        <span class="help-key">W</span><span>Level tool</span>
+                        <span class="help-key">Ctrl+Z</span><span>Undo; Ctrl+Y redo</span>
+                        <span class="help-key">Esc</span><span>Cancel</span>
+                        <span class="help-key">Ctrl+V</span><span>Paste photo / coordinates</span>
+                        <span class="help-key">Ctrl+S</span><span>Export all</span>
+                        <span class="help-key">F2</span><span>Rename image</span>
+                        <span class="help-key">N</span><span>Map north and flat</span>
+                        <span class="help-key">M</span><span>Measure distance</span>
+                        <span class="help-key">X</span><span>This help</span>
                     </div>
+                    <div class="help-shortcuts-title help-shortcuts-more">Mouse</div>
+                    <div class="help-shortcuts-grid">
+                        <span class="help-key">Scroll</span><span>Zoom</span>
+                        <span class="help-key">Space+drag</span><span>Pan the photo</span>
+                        <span class="help-key">Ctrl+drag</span><span>Rotate / tilt map</span>
+                        <span class="help-key">Right-click</span><span>Map menu</span>
+                    </div>
+                    <a class="help-more" href="https://github.com/kluter/TracePoint#controls" target="_blank" rel="noopener">All controls in the README</a>
                 </div>
                 <p class="help-demo-note" id="help-demo-note" style="display:none">
                     💡 You loaded the Potsdam demo. Try adding a line along the road or a building edge, then find that same feature on the map.

@@ -23,14 +23,16 @@ The more lines you add, the more rays are generated and the more robustly the in
 ## Features
 
 - **Fully client-side:** no server, no uploads, no tracking
-- **Multi-image session manager:** all sessions visible on the map simultaneously, each with its own intersection result
+- **Images as tabs:** each image is a tab in the photo header; all sessions visible on the map simultaneously, each with its own intersection result
 - **Bearing display:** each line shows its outward bearing once an intersection is found
 - **Confidence ellipse:** with 3 or more lines (up to 5 per image), a dashed ellipse around the intersection shows the spread of ray crossings. A tighter ellipse means higher confidence
-- **Session export and import:** save and restore lines, geo points, bearings, and map view as JSON
+- **Session export and import:** save and restore lines, geo points, bearings, and map view as JSON, with the photos inside the file if you switch that on
+- **Street-level imagery:** a panel above the map shows the nearest Panoramax or Mapillary photo, 360° ones to look around in, with a marker for position and view direction
 - **Resizable layout:** drag the divider between photo and map, double-click it for 50/50, or fold the photo side away with the chevron on it
-- **Autosave:** work and images are kept in this browser, so a refresh does not lose them. Switch it off or clear it in the ☰ image menu
+- **Autosave:** work and images are kept in this browser, so a refresh does not lose them. Switch it off or clear it in the ☰ menu of the photo side
 - **EXIF metadata viewer:** camera, lens, capture settings, GPS, altitude, and camera direction read from the image. GPS can be placed on the map as a reference marker
-- **Map panel:** basemap, terrain, 3D buildings and camera settings in one place; match the field of view to a photo's lens and compare skylines on the tilted map
+- **Basemap dropdown:** the map header shows the active basemap; click it to switch or to add a custom layer
+- **Map panel:** terrain, 3D buildings and camera settings in one place; match the field of view to a photo's lens and compare skylines on the tilted map
 - **Map layers:** Esri Satellite, Sentinel-2 2024, OpenStreetMap, Esri Dark Gray, Esri Topo, Esri Streets, optional 3D terrain with adjustable height and hillshade, plus [custom XYZ layers](#custom-map-layers) by URL
 - **[Coordinate search](#coordinate-search):** paste coordinates (decimal, degrees-minutes-seconds or a Google Maps link) to drop numbered pins on the map
 - Horizon correction for tilted images
@@ -40,15 +42,15 @@ The more lines you add, the more rays are generated and the more robustly the in
 
 ## How to Use
 
-> Start with the **☰** menu on the image panel and select **Demo — Potsdam** for a guided walkthrough. If the photo is tilted, use the **Level** button first to compensate before adding lines.
+> Start with the **☰** menu on the photo side and select **Potsdam, Germany** in its Demo section for a guided walkthrough. If the photo is tilted, use the level button (left of that menu) first to compensate before adding lines.
 
 1. **Load a photo:** Drop an image onto the left panel, paste one with `Ctrl+V`, or click **Browse**. A pasted photo opens as `pasted_image_01`, `pasted_image_02`, … and has no EXIF data, because the clipboard hands over pixels only; drop the file if you need its GPS or camera data. To work on multiple images at once, open the **☰** image menu and click **+ Add image**.
-2. **Add a line:** Click **+ New Line** (or press `E`) and drag it over a recognisable object you can also find on the map: a building corner, tower, road junction.
+2. **Add a line:** Click the **+** button at the left of the line bar (or press `E`) and drag it over a recognisable object you can also find on the map: a building corner, tower, road junction.
 3. **Mark points:** Click the active line twice to place exactly two reference points. A drag still moves the line; a click on another line only selects it.
 4. **Place points on the map:** After the second point the map waits for the first one: click its real-world location, then the second. A tag next to the mouse says which point comes next. To place a point again later, click its **🌐 P1** pill or press `F` for the next unmapped point.
 5. **Read the result:** Once two lines each have two geo points, rays appear and the intersection is calculated. The pulsing yellow marker shows the estimated camera origin. With 3 or more lines, a confidence ellipse appears around the intersection: the tighter the ellipse, the more consistent your bearings.
-6. **Add more images:** Use the **☰** image menu to add further sessions. Each session shows its own rays and intersection on the map simultaneously.
-7. **Save your work:** Click the **↓** button on any session row to export it as JSON, or use **↓ Export all sessions** to save everything at once. To restore, click **↑ Import session** and reload the image when prompted.
+6. **Add more images:** Click **+** after the image tabs in the photo header. Each session shows its own rays and intersection on the map simultaneously.
+7. **Save your work:** Open the **☰** menu of the photo side: **↓ Export this image** saves the image on screen as JSON, **↓ Export all** saves everything at once. To restore, click **↑ Import…** and reload the image when prompted. With **Include photos** switched on in the same menu, the exported file carries the photos and the import needs no reloading; `Ctrl+S` exports everything with the current setting.
 
 > **Tips:** Use objects spread across different depths for a more accurate bearing. Press `Esc` to deselect or cancel at any time. Press `X` to toggle the help card from anywhere on the page.
 
@@ -63,19 +65,24 @@ The more lines you add, the more rays are generated and the more robustly the in
 | Action | How |
 |---|---|
 | Pan image | Space + drag, or middle-click drag |
-| Level image | Level button, then click two points on a horizontal reference. Click it again to reset |
+| Level image | Level button in the line bar, in the button group left of the ☰ menu, then click two points on a horizontal reference. Click it again to reset |
 | Deselect / cancel | Click blank canvas, or `Esc` |
 | Place point on map | Click the map pill, then click the map |
 | Move a point | Drag its marker on the map, or slide it along its line on the image. `Esc` while dragging snaps it back |
 | Adjust the photo on screen | ☀ button in the line bar: contrast and brightness 25–300%, saturation 0–300%, invert. Double-click a slider to reset it. The button next to ☀ switches between the original and the adjusted photo. Display only: the photo, lines and exports are untouched |
 | Fit the photo | Corner-brackets button in the line bar: the whole photo, centred in the panel |
-| Image sessions, export, import | ☰ button, right of the line bar |
-| Autosave on / off, clear saved work | Last row of the ☰ image menu. Off or **Clear** deletes the copy kept in the browser |
-| Image metadata | `</>` button, left of the line bar. **Show on map** places the EXIF GPS position |
+| Images | Tabs in the photo header: click to switch, double-click the name or `F2` to rename, × to remove, **+** to add |
+| New line | **+** button at the left of the line bar, or `E` |
+| Export, import, demo | ☰ button, right of the line bar |
+| Export with photos | **Include photos** switch in the ☰ menu of the photo side, off by default. On: every export stores each photo inside the JSON, unchanged, with its GPS and camera data; the file gets about a third bigger than the photo. Import then restores the photo by itself |
+| Autosave on / off, clear saved work | **This browser** section of the ☰ menu of the photo side. Off or **Clear** deletes the copy kept in the browser |
+| Image metadata | `</>` button in the line bar. **Show on map** places the EXIF GPS position |
 | Rotate / tilt map | Ctrl + drag, or right-click drag, tilt up to 90°. Click the compass (bottom-left of the map) or press `N` to reset. The map bar shows bearing, tilt and zoom |
-| Map layers, terrain and camera | ☰ button, right of the map bar. One panel: **Basemap** (custom layers: **+ Add custom layer…**, then ✎ / × to edit or remove), **Terrain** (3D terrain, height 1–3×, hillshade), **Buildings** (OpenStreetMap buildings as 3D blocks from zoom 13, with opacity) and **Camera** (field of view with its full-frame focal length, max tilt, min and max zoom, **North up**, **Top down**). **Reset** puts all sliders back to their defaults; double-click a slider to reset just that one |
+| Basemap | The name in the map header: click it for the list. The active one is highlighted. Custom layers: **+ Add custom layer…**, then ✎ / × to edit or remove |
+| Terrain, buildings and camera | Sliders button, right of the map bar. One panel: **Terrain** (3D terrain, height 1–3×, hillshade), **Buildings** (OpenStreetMap buildings as 3D blocks from zoom 13, with opacity) and **Camera** (field of view with its full-frame focal length, max tilt, min and max zoom, **North up**, **Top down**). **Reset** puts all sliders back to their defaults; double-click a slider to reset just that one |
 | Jump to coordinates | Paste into the search box in the map bar (or `Ctrl+V` anywhere) |
 | Measure a distance | Ruler button next to the compass, `M`, or right-click → **Measure distance from here**. Click two points for the straight-line ground distance; a third click starts over, `Esc` clears. Not saved or exported |
+| Street-level imagery | Panorama button in the map bar, or right-click → **Street-level imagery here**. A panel above the map shows the nearest photo; drag the divider under it to resize. Pick **Panoramax** (no key) or **Mapillary** (paste your own free client token). The map moves to where the photo was taken. Click in the photo to walk towards that side, or use the arrow keys (up and down walk along the view, left and right step sideways). 360° photos: drag to look around, wheel zooms. **Map centre** looks up the middle of the map, **HD** loads the full resolution. With Panoramax, **Coverage** draws on the map where photos exist: lines along the sequences (solid for 360°, dashed for ordinary photos) and, zoomed in close, a dot per photo; click a line or dot to load the photo there. The yellow marker on the map is the photo's position and view direction |
 | Pins | Click a row in the pin list at the top-left of the map to go back to it; × or **Clear all** removes |
 | Copy a spot / open it elsewhere | Right-click the map: copy coordinates, measure from there, or open the spot in Google Maps, Street View, Google Earth or OpenStreetMap. **Open in…** adds Apple Maps, Lookmap, Bing Maps, Mapillary, Yandex Maps and Baidu Maps. Nothing is requested from any of them until you click |
 | Share or bookmark a view | Copy the URL: the map view is in the `#` part, nothing else |
@@ -94,6 +101,7 @@ The more lines you add, the more rays are generated and the more robustly the in
 | `Esc` | Cancel / deselect |
 | `F2` | Rename the active image |
 | `Ctrl+Z` | Undo a line or point edit; `Ctrl+Shift+Z` or `Ctrl+Y` redoes |
+| `Ctrl+S` | Export all sessions (with photos if **Include photos** is on) |
 | `Ctrl+V` | Paste a photo → new image; paste coordinates → pin on map |
 | `N` | Reset map to north |
 | `M` | Measure a distance on the map (again or `Esc` to clear) |
@@ -143,7 +151,7 @@ The address bar follows the map: `#lat,lon,zoom`, plus `,bearing,pitch` when the
 
 ## Custom Map Layers
 
-Besides the built-in layers you can add any tile server that uses the standard XYZ URL format, the same format QGIS uses for its "XYZ Tiles" connections. Open the **☰** map menu, click **+ Add custom layer…**, give it a name and paste the URL template. The template must start with `https://` and contain `{x}`, `{y}` and `{z}`:
+Besides the built-in layers you can add any tile server that uses the standard XYZ URL format, the same format QGIS uses for its "XYZ Tiles" connections. Click the basemap name in the map header, then **+ Add custom layer…**, give it a name and paste the URL template. The template must start with `https://` and contain `{x}`, `{y}` and `{z}`:
 
 ```
 https://example.com/tiles/{z}/{x}/{y}.png
@@ -240,7 +248,7 @@ python3 -m http.server
 
 ## Changelog
 
-Current version: **v2.7.0**. All releases are listed in [CHANGELOG.md](CHANGELOG.md).
+Current version: **v2.8.0**. All releases are listed in [CHANGELOG.md](CHANGELOG.md).
 
 ---
 
@@ -272,6 +280,8 @@ Photos are loaded directly into an HTML5 `<canvas>` element and processed in the
 
 The only outbound requests are map tile fetches from public servers (Esri, OpenStreetMap, EOX), elevation tiles from AWS while 3D terrain or hillshade is switched on, building shapes from OpenFreeMap while 3D buildings is switched on, plus the servers of any [custom map layer](#custom-map-layers) you add yourself. They contain no session data, no coordinates from your work, and no image content.
 
+Street-level imagery is the one feature that sends a position on purpose: while its panel is open, Panoramax or Mapillary (whichever you picked) receives a small box around the spot you look up, and serves the photo. The panel is closed on every start, and nothing is sent until you open it. Your own photo is never part of it.
+
 ```javascript
 // The full extent of network activity in TracePoint:
 // GET https://server.arcgisonline.com/ArcGIS/rest/services/.../tile/z/y/x
@@ -280,6 +290,9 @@ The only outbound requests are map tile fetches from public servers (Esri, OpenS
 // GET <your custom layer URL>   ← only if you add one and select it
 // GET https://s3.amazonaws.com/elevation-tiles-prod/terrarium/z/x/y.png   ← only while 3D terrain or hillshade is on
 // GET https://tiles.openfreemap.org/planet/...                          ← only while 3D buildings is on
+// GET https://api.panoramax.xyz/api/search?bbox=... + the photo it names ← only while the street-level panel is open (Panoramax)
+// GET https://api.panoramax.xyz/api/map/z/x/y.mvt                         ← coverage overlay, only while the panel is open with Coverage on
+// GET https://graph.mapillary.com/images?bbox=... + the photo it names   ← only while the street-level panel is open (Mapillary, your token)
 // No other requests.
 ```
 
@@ -294,7 +307,7 @@ The only outbound requests are map tile fetches from public servers (Esri, OpenS
 So that a refresh does not lose work, TracePoint saves the open sessions and their images in this browser's `IndexedDB`. Nothing is uploaded and nothing is synced: the saved copy exists only in this browser profile on this machine. Anyone who can use that profile can open TracePoint and see it.
 
 - **It survives** closing the tab, restarting the browser and a hard reload (`Ctrl+F5`, `Ctrl+Shift+R`). A hard reload only skips the cache.
-- **Clear** in the ☰ image menu deletes the saved copy and empties the workspace.
+- **Clear** in the ☰ menu of the photo side deletes the saved copy and empties the workspace.
 - **Autosave off** in the same menu deletes the saved copy at once and stores nothing from then on. Use this for sensitive material; closing the tab then leaves no trace of the investigation.
 - A private window works as usual; the browser deletes the saved copy when that window closes.
 - Two tabs share one saved copy; the last change wins.
@@ -309,6 +322,11 @@ Photo adjustments and coordinate pins are not saved. Besides that, `localStorage
 //                 { "tp-custom-layers": [...] } ← name + URL of custom layers, if you added any
 //                 { "tp-autosave": "1" }        ← autosave on/off
 //                 { "tp-split": "50.00" }       ← width of the photo side in percent
+//                 { "tp-export-photos": "1" }   ← "Include photos" on/off
+//                 { "tp-street-source": "…" }   ← Panoramax or Mapillary
+//                 { "tp-street-token": "…" }    ← your Mapillary token, if you entered one (never exported)
+//                 { "tp-street-cover": "1" }    ← coverage overlay on/off
+//                 { "tp-street-split": "45.00" } ← height of the street-level panel in percent
 // IndexedDB:      tracepoint → autosave         ← "session" (same JSON as the export) + one "img:…" per image
 //                                                 empty while autosave is off
 // sessionStorage: empty
