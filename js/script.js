@@ -1081,7 +1081,7 @@ sessions = [createSession('Image 1')];
    UI HELPERS
    ============================================================ */
 function updateUI() {
-    map.getCanvas().style.cursor = (state.mode === 'map-point') ? 'crosshair' : '';
+    map.getCanvas().style.cursor = (state.mode === 'map-point' || measuring()) ? 'crosshair' : '';
     updatePlacingTag();
     syncMarkerSelection();
 
@@ -1326,6 +1326,7 @@ function deletePoint(lIdx, pIdx) {
 /* The next map click places this point. Runs by itself once a line has its second point,
    and from F, the point pills and the step guide. */
 function startMapPoint(lIdx, pIdx) {
+    clearMeasure();   // the next map click belongs to the point, not to a measurement
     state.activeLineIndex = lIdx;
     state.mode = 'map-point';
     state.mapPointTarget = { lineIndex: lIdx, pointIndex: pIdx };
@@ -1417,6 +1418,7 @@ document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
         // A drag in progress snaps back instead of deselecting
         if (cancelMarkerDrag()) return;
+        if (measure.active) { clearMeasure(); return; }
         if (state.pointDrag) {
             const { line, pt, origY } = state.pointDrag;
             pt.y = origY; state.pointDrag = null; line.pristine = false;
@@ -1484,6 +1486,13 @@ document.addEventListener('keydown', (e) => {
     if (e.key === 'r' || e.key === 'R') {
         e.preventDefault();
         if (state.activeLineIndex !== -1) deleteLine(state.activeLineIndex);
+        return;
+    }
+
+    // M — measure a distance on the map (again to clear)
+    if (e.key === 'm' || e.key === 'M') {
+        e.preventDefault();
+        if (!e.repeat) { if (measure.active) clearMeasure(); else startMeasure(); }
         return;
     }
 
@@ -3032,6 +3041,11 @@ map.on('contextmenu', (e) => {
             .catch(() => showToast('Could not copy to clipboard.'));
     };
 
+    const measureItem = el('button', 'map-ctx-item', ctxMenu);
+    measureItem.type = 'button';
+    measureItem.textContent = 'Measure distance from here';
+    measureItem.onclick = () => { hideCtxMenu(); startMeasure({ lat: e.lngLat.lat, lng: e.lngLat.lng }); };
+
     el('div', 'map-ctx-divider', ctxMenu);
     CTX_LINKS.forEach(([label, url]) => {
         const a = el('a', 'map-ctx-item', ctxMenu);
@@ -3061,6 +3075,7 @@ document.addEventListener('mousedown', (e) => { if (!ctxMenu.contains(e.target))
    MAP INTERACTION – place geo points
    ============================================================ */
 map.on('click', (e) => {
+    if (measure.active) { measureClick(e.lngLat); return; }   // a map click never both measures and places
     if (state.mode !== 'map-point' || !state.mapPointTarget) return;
     if (e.originalEvent?.target?.closest?.('.geo-point')) return;   // clicking an existing marker never places a point
     const { lineIndex, pointIndex } = state.mapPointTarget;
@@ -3101,6 +3116,16 @@ map.on('load', () => {
     map.addLayer({
         id: 'rays', type: 'line', source: 'work', filter: ['==', ['get', 'kind'], 'ray'],
         paint: { 'line-color': ['get', 'colour'], 'line-width': 2, 'line-opacity': 0.85, 'line-dasharray': [3, 2] }
+    });
+    // Distance measurement: on top of everything else drawn on the map
+    map.addSource('measure', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+    map.addLayer({
+        id: 'measure-line', type: 'line', source: 'measure', filter: ['==', ['geometry-type'], 'LineString'],
+        paint: { 'line-color': '#fff', 'line-width': 2, 'line-dasharray': [3, 3] }
+    });
+    map.addLayer({
+        id: 'measure-points', type: 'circle', source: 'measure', filter: ['==', ['geometry-type'], 'Point'],
+        paint: { 'circle-radius': 5, 'circle-color': '#fff', 'circle-stroke-color': '#111', 'circle-stroke-width': 1.5 }
     });
     map.addSource('dem', {
         type: 'raster-dem', tiles: [TERRAIN_TILES], encoding: 'terrarium', tileSize: 256, maxzoom: 15,
@@ -3408,6 +3433,104 @@ function intersectLines(p1, p2, p3, p4) {
         lng: x1 + t * (x2 - x1)
     };
 }
+
+/* ============================================================
+   DISTANCE MEASUREMENT – two clicks on the map, straight-line ground distance
+   After briatlon's distanceMeasure.js. Starts from the ruler button next to the compass, the M key
+   or the right-click menu; Esc or M clears it. A third click starts a new measurement. While a
+   measurement waits for a click, map clicks belong to it; starting a point placement ends it and
+   the other way round. Nothing of it is saved, exported or undone.
+   ============================================================ */
+const measure = { active: false, points: [], hover: null, label: null, button: null };
+
+/* Waiting for a map click (the first or the second point) */
+function measuring() { return measure.active && measure.points.length < 2; }
+
+function formatDistance(metres) {
+    return metres >= 1000
+        ? `${(metres / 1000).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} km`
+        : `${metres.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })} m`;
+}
+
+/* Great-circle distance in metres */
+function distanceMetres(a, b) {
+    const lat1 = a.lat * DEG, lat2 = b.lat * DEG, dLat = lat2 - lat1, dLng = (b.lng - a.lng) * DEG;
+    const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+    return 2 * R * 1000 * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+
+function drawMeasure() {
+    if (measure.button) measure.button.classList.toggle('active', measure.active);
+    if (!mapReady) return;
+    const [a, b] = measure.points;
+    const end = b || (a ? measure.hover : null);   // the second point, or the mouse while it is still open
+    const features = measure.points.map(p => ({ type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: [p.lng, p.lat] } }));
+    if (a && end) features.push({ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: [[a.lng, a.lat], [end.lng, end.lat]] } });
+    map.getSource('measure').setData({ type: 'FeatureCollection', features });
+
+    // The distance sits at the middle of the line
+    if (a && end) {
+        if (!measure.label) measure.label = new maplibregl.Marker({ element: el('div', 'measure-label') });
+        measure.label.getElement().textContent = formatDistance(distanceMetres(a, end));
+        measure.label.setLngLat([(a.lng + end.lng) / 2, (a.lat + end.lat) / 2]).addTo(map);
+    } else if (measure.label) {
+        measure.label.remove();
+    }
+}
+
+function startMeasure(first = null) {
+    // A point waiting for its map click stops waiting: the next click is the measurement's
+    if (state.mode === 'map-point') {
+        state.mode = state.activeLineIndex !== -1 ? 'drag-line' : 'idle';
+        state.mapPointTarget = null;
+    }
+    measure.active = true;
+    measure.points = first ? [first] : [];
+    measure.hover = null;
+    drawMeasure();
+    render(); updateUI();
+}
+
+function clearMeasure() {
+    if (!measure.active) return;
+    measure.active = false;
+    measure.points = [];
+    measure.hover = null;
+    drawMeasure();
+    updateUI();
+}
+
+function measureClick(lngLat) {
+    if (measure.points.length >= 2) measure.points = [];   // a third click starts a new measurement
+    measure.points.push({ lat: lngLat.lat, lng: lngLat.lng });
+    measure.hover = null;
+    drawMeasure();
+    updateUI();
+}
+
+/* After the first click the line and the distance follow the mouse */
+map.on('mousemove', (e) => {
+    if (!measure.active || measure.points.length !== 1) return;
+    measure.hover = { lat: e.lngLat.lat, lng: e.lngLat.lng };
+    drawMeasure();
+});
+
+/* The ruler button sits right of the compass, bottom-left on the map */
+map.addControl({
+    onAdd() {
+        const box = el('div', 'maplibregl-ctrl maplibregl-ctrl-group measure-ctrl');
+        const btn = el('button', 'measure-btn', box);
+        btn.type = 'button';
+        btn.title = 'Measure distance (M)';
+        btn.setAttribute('aria-label', 'Measure distance');
+        btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 17 17 3l4 4L7 21z"/><path d="m7.5 12.5 2 2M10.5 9.5l2 2M13.5 6.5l2 2"/></svg>`;
+        btn.onclick = () => { if (measure.active) clearMeasure(); else startMeasure(); };
+        measure.button = btn;
+        return box;
+    },
+    onRemove() { measure.button = null; }
+}, 'bottom-left');
 
 /* ============================================================
    DIVIDER – drag the handle between two panes to resize them

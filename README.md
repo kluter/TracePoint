@@ -75,6 +75,7 @@ The more lines you add, the more rays are generated and the more robustly the in
 | Rotate / tilt map | Ctrl + drag, or right-click drag, tilt up to 90°. Click the compass (bottom-left of the map) or press `N` to reset. The map bar shows bearing, tilt and zoom |
 | Map layers, terrain and camera | ☰ button, right of the map bar. One panel: **Basemap** (custom layers: **+ Add custom layer…**, then ✎ / × to edit or remove), **Terrain** (3D terrain, height 1–3×, hillshade), **Buildings** (OpenStreetMap buildings as 3D blocks from zoom 13, with opacity) and **Camera** (field of view with its full-frame focal length, max tilt, min and max zoom, **North up**, **Top down**). **Reset** puts all sliders back to their defaults; double-click a slider to reset just that one |
 | Jump to coordinates | Paste into the search box in the map bar (or `Ctrl+V` anywhere) |
+| Measure a distance | Ruler button next to the compass, `M`, or right-click → **Measure distance from here**. Click two points for the straight-line ground distance; a third click starts over, `Esc` clears. Not saved or exported |
 | Pins | Click a row in the pin list at the top-left of the map to go back to it; × or **Clear all** removes |
 | Copy a spot / open it elsewhere | Right-click the map: copy coordinates, or open the spot in Google Maps, Street View, Google Earth, Apple, Bing or Yandex Maps |
 | Share or bookmark a view | Copy the URL: the map view is in the `#` part, nothing else |
@@ -95,6 +96,7 @@ The more lines you add, the more rays are generated and the more robustly the in
 | `Ctrl+Z` | Undo a line or point edit; `Ctrl+Shift+Z` or `Ctrl+Y` redoes |
 | `Ctrl+V` | Paste a photo → new image; paste coordinates → pin on map |
 | `N` | Reset map to north |
+| `M` | Measure a distance on the map (again or `Esc` to clear) |
 
 ---
 
