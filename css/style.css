@@ -424,23 +424,23 @@ button:disabled     { opacity: 0.3; cursor: not-allowed; }
 
 /* Live bearing, tilt and zoom of the map, right of the search box */
 #map-readout {
-    margin-left: auto; display: flex; align-items: stretch; height: 32px; box-sizing: border-box;
-    background: #151515; border: 1px solid #333; border-radius: 4px; box-shadow: 0 2px 6px #0006;
+    margin-left: auto; margin-right: 10px; display: flex; align-items: stretch; height: 24px; box-sizing: border-box;
+    background: #151515; border: 1px solid #333; border-radius: 4px;
     white-space: nowrap; overflow: hidden; flex-shrink: 0;
 }
 /* on a narrow map panel the search box gives way, not the readout */
 #map-bar .coord-search { flex: 0 1 230px; min-width: 70px; }
 #map-readout span {
-    display: flex; align-items: center; gap: 5px; padding: 0 8px;
+    display: flex; align-items: center; gap: 4px; padding: 0 7px;
     border-left: 1px solid #2a2a2a;
 }
 #map-readout span:first-child { border-left: none; }
 #map-readout i {
-    font-style: normal; font-size: 10px; letter-spacing: 0.5px; text-transform: uppercase; color: #777;
+    font-style: normal; font-size: 9px; letter-spacing: 0.5px; text-transform: uppercase; color: #777;
 }
 #map-readout b {
-    font-size: 12px; font-weight: 600; color: #ffdc32;
-    font-variant-numeric: tabular-nums; min-width: 30px; text-align: right;
+    font-size: 11px; font-weight: 600; color: #ffdc32;
+    font-variant-numeric: tabular-nums; min-width: 27px; text-align: right;
 }
 #map-readout + .layer-switcher-wrap { margin-left: 0; }
 
@@ -681,8 +681,8 @@ button.btn-primary:hover:not(:disabled) { background: #004a6e; color: #fff; }
 }
 .help-shortcuts-grid {
     display: grid;
-    grid-template-columns: auto 1fr;
-    gap: 5px 10px;
+    grid-template-columns: auto 1fr auto 1fr;   /* two key/text pairs per row */
+    gap: 5px 8px;
     font-size: 11px; color: #888;
     align-items: center;
 }
@@ -901,6 +901,11 @@ button.btn-primary:hover:not(:disabled) { background: #004a6e; color: #fff; }
 .autosave-switch:hover { color: #fff; }
 .autosave-switch input { accent-color: #ffdc32; margin: 0; }
 .btn-clear-saved { font-size: 11px; padding: 3px 10px; }
+/* What "Include photos" means for the exported file; shown only while the switch is on */
+.session-note {
+    padding: 0 12px 7px 31px; max-width: 230px;
+    font-size: 11px; line-height: 1.35; color: #8a7a2a; white-space: normal;
+}
 .btn-clear-saved:not(:disabled):hover { color: #e03c3c; border-color: #e03c3c; }
 
 .drop-restored-title {
@@ -1006,3 +1011,180 @@ button.btn-primary:hover:not(:disabled) { background: #004a6e; color: #fff; }
 .map-ctx-more { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 .map-ctx-more::after { content: "›"; color: #777; font-size: 14px; line-height: 1; }
 .map-ctx-sub { min-width: 150px; z-index: 1001; }
+
+/* ---- STREET-LEVEL IMAGERY: panel above the map (see STREET-LEVEL IMAGERY in script.js) ---- */
+#map-bar .layer-switcher-wrap { margin-left: 0; }
+#btn-street { flex-shrink: 0; }
+#btn-street[aria-pressed="true"] { background: #2a2000; color: #ffdc32; border-color: #ffdc32; }
+
+/* Street panel, its divider and the map share the height under the map bar; --street is the panel's share */
+#map-stack { flex: 1; min-height: 0; display: flex; flex-direction: column; position: relative; --street: 45%; }
+#street-panel {
+    flex: 0 0 calc(var(--street) - 3.5px); min-height: 0;
+    display: flex; flex-direction: column; background: #0c0c0c;
+}
+#street-panel[hidden], #street-splitter[hidden] { display: none; }
+#street-splitter {
+    flex: 0 0 7px; box-sizing: border-box; z-index: 5;
+    background: #151515; border-top: 1px solid #222; border-bottom: 1px solid #222;
+    cursor: row-resize; touch-action: none; outline: none; transition: background 0.15s;
+}
+#street-splitter:hover, #street-splitter:focus-visible, #street-splitter.dragging { background: #ffdc32; }
+body.pane-resizing-y { cursor: row-resize; }
+body.pane-resizing #street-view { pointer-events: none; }
+
+#street-bar {
+    display: flex; align-items: center; gap: 6px; flex-shrink: 0;
+    padding: 4px 8px; min-height: 32px; box-sizing: border-box;
+    background: #111; border-bottom: 1px solid #2a2a2a; font-size: 11px; color: #999;
+}
+#street-bar select, #street-bar input, #street-bar button:not(.help-close) {
+    height: 22px; box-sizing: border-box; padding: 0 7px; font-size: 11px;
+    background: #151515; border: 1px solid #333; border-radius: 4px; color: #ccc;
+}
+#street-bar input { width: 130px; min-width: 60px; flex-shrink: 1; }
+#street-bar input:focus, #street-bar select:focus { border-color: #ffdc32; outline: none; }
+#street-bar button:not(.help-close) { cursor: pointer; flex-shrink: 0; }
+#street-bar button:not(.help-close):not(:disabled):hover { background: #222; color: #fff; }
+#street-bar button:disabled { color: #555; cursor: default; }
+#street-bar button.active { background: #2a2000; color: #ffdc32; border-color: #ffdc32; }
+#street-info { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#street-info a { color: #999; }
+#street-info a:hover { color: #ffdc32; }
+
+#street-view { flex: 1; min-height: 0; position: relative; overflow: hidden; background: #0c0c0c; }
+#street-view:focus { outline: none; }
+#street-view:focus-visible { box-shadow: inset 0 0 0 1px #ffdc3266; }
+#street-canvas { position: absolute; inset: 0; width: 100%; height: 100%; cursor: grab; touch-action: none; }
+#street-canvas.dragging, #street-flat.dragging { cursor: grabbing; }
+#street-flat {
+    position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain;
+    cursor: grab; touch-action: none; user-select: none; transform-origin: 50% 50%;
+}
+#street-canvas[hidden], #street-flat[hidden] { display: none; }
+#street-status {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    max-width: 80%; padding: 8px 12px; border-radius: 4px; text-align: center;
+    background: #111c; color: #bbb; font-size: 12px; line-height: 1.4; pointer-events: none;
+}
+#street-status:empty { display: none; }
+
+/* Where the shown image was taken, with the direction of view */
+.street-marker { width: 44px; height: 44px; pointer-events: none; }
+.street-marker svg { display: block; width: 100%; height: 100%; overflow: visible; }
+
+/* ---- IMAGE MENU sections (titles as in the map panel) ---- */
+.session-title { padding: 9px 12px 4px; }
+.session-add.disabled { color: #444; cursor: default; }
+.session-add.disabled:hover { background: none; color: #444; }
+.session-add.disabled:hover .export-icon { background: #1a1a1a; color: #555; border-color: #333; }
+.session-key { margin-left: auto; padding-left: 14px; font-size: 10px; color: #555; letter-spacing: 0.3px; }
+.session-menu > :last-child { padding-bottom: 9px; }
+.session-menu .session-import, .session-menu .session-export-all { color: #777; }
+.session-menu .session-import:hover, .session-menu .session-export-all:hover { color: #fff; }
+.session-menu .session-add.disabled, .session-menu .session-add.disabled:hover { color: #444; }
+/* Include photos is a switch, as in the map panel; its note lines up with the row text */
+.session-export-photos .adjust-switch { width: 26px; flex-shrink: 0; }
+.session-menu .session-note { padding-left: 12px; }
+/* A photo or sequence of the street-level coverage under the mouse: it can be clicked */
+.street-cover-hover .maplibregl-canvas { cursor: pointer; }
+#btn-street-cover[hidden] { display: none; }
+/* Help card: second key group and the link to the full list */
+.help-steps { gap: 6px; padding-top: 12px; padding-bottom: 12px; }
+.help-shortcuts-more { margin-top: 10px; }
+.help-more { display: inline-block; margin-top: 10px; font-size: 11px; color: #777; }
+.help-more:hover { color: #ffdc32; }
+/* Same gap under the burger button as the map panel has */
+.session-menu { margin-top: 6px; }
+.session-menu .session-demo { font-style: normal; color: #777; }
+/* Autosave row: Clear, then the switch, at the right edge like Include photos */
+.session-row-end { display: flex; align-items: center; gap: 10px; }
+.session-autosave .adjust-switch { width: 26px; flex-shrink: 0; }
+/* ---- BASEMAP DROPDOWN in the map header: the title is the selector ---- */
+.basemap-wrap { position: relative; flex-shrink: 0; }
+.basemap-btn {
+    display: flex; align-items: center; gap: 8px; white-space: nowrap;
+    padding: 6px 10px; margin-left: -10px;
+    background: none; border: 1px solid transparent; border-radius: 4px;
+    font-size: 15px; font-weight: 600; color: #ddd; cursor: pointer;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.basemap-btn:hover, .basemap-btn[aria-expanded="true"] { background: #1c1c1c; border-color: #333; color: #fff; }
+.basemap-btn svg { flex-shrink: 0; color: #888; transition: transform 0.15s; }
+.basemap-btn[aria-expanded="true"] svg { transform: rotate(180deg); }
+#basemap-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 220px; }
+.layer-menu.basemap-menu {
+    left: -10px; right: auto; margin-top: 4px; min-width: 210px; padding: 4px 0;
+    max-height: calc(100vh - 90px); overflow-y: auto; scrollbar-width: thin; scrollbar-color: #333 transparent;
+}
+/* The basemap button is a visible box in the header, like the buttons in the bars */
+.basemap-btn { margin-left: 0; height: 34px; padding: 0 10px 0 12px; background: #1e1e1e; border-color: #3a3a3a; font-size: 14px; box-shadow: 0 2px 6px #0006; }
+.basemap-btn:hover, .basemap-btn[aria-expanded="true"] { background: #262626; border-color: #555; }
+.basemap-btn[aria-expanded="true"] { border-color: #ffdc32; }
+.layer-menu.basemap-menu { left: 0; margin-top: 6px; }
+/* ---- IMAGE TABS in the photo header (renderImageTabs in script.js) ---- */
+.image-tabs {
+    flex: 1; min-width: 0; margin-left: 20px;
+    display: flex; align-items: center; gap: 4px;
+    overflow-x: auto; scrollbar-width: none;
+}
+.image-tabs::-webkit-scrollbar { display: none; }
+.image-tab {
+    display: flex; align-items: center; gap: 7px; flex: 0 1 170px; min-width: 64px; height: 32px;
+    box-sizing: border-box; padding: 0 4px 0 10px;
+    background: #1a1a1a; border: 1px solid #333; border-radius: 4px;
+    font-size: 12px; color: #999; cursor: pointer; white-space: nowrap;
+    transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+.image-tab:hover  { background: #222; color: #fff; }
+.image-tab.active { background: #221c05; border-color: #6b5800; color: #ffdc32; cursor: default; }
+.image-tab .session-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.image-tab .session-name-input { margin: 0; height: 22px; box-sizing: border-box; font-size: 12px; }
+.image-tab-close {
+    width: 20px; height: 20px; padding: 0; flex-shrink: 0;
+    background: none; border: none; border-radius: 3px;
+    font-size: 14px; line-height: 1; color: #777; opacity: 0;
+    transition: opacity 0.12s, color 0.12s, background 0.12s;
+}
+.image-tab:hover .image-tab-close, .image-tab.active .image-tab-close, .image-tab-close:focus-visible { opacity: 1; }
+.image-tab-close:hover:not(:disabled) { background: #3a1515; color: #ff5555; }
+.image-tab-add {
+    width: 32px; height: 32px; padding: 0; flex-shrink: 0;
+    background: none; border: 1px dashed #3a3a3a; border-radius: 4px;
+    font-size: 16px; line-height: 1; color: #888;
+}
+.image-tab-add:hover:not(:disabled) { background: #222; border-style: solid; color: #fff; }
+
+/* ---- LINE BAR: New line on the left with the photo buttons; Level and the menu on the right ---- */
+#btn-add-line { margin-right: 4px; }
+#line-bar-end { display: flex; align-items: center; gap: 6px; margin-left: auto; padding-left: 8px; }
+#line-bar-end .session-manager-wrap { margin-left: 0; padding-left: 0; }
+#btn-horizon {
+    width: 32px; height: 32px; padding: 0; justify-content: center;
+    background: #151515; border-color: #333; box-shadow: 0 2px 6px #0006;
+}
+#btn-horizon:hover { background: #222; }
+#btn-horizon.active-mode    { background: #2a2000; }
+#btn-horizon.horizon-active { background: #2a1800; }
+/* Line bar, right-hand group: metadata, fit, adjust, original and level at equal distance, the menu set apart.
+   Their cards open towards the left, since the buttons now sit at the right edge. */
+#btn-add-line { margin-right: 6px; }
+#line-bar-end { gap: 6px; }
+#line-bar-end .exif-wrap, #line-bar-end .adjust-wrap { padding-right: 0; }
+#line-bar-end .adjust-wrap { gap: 6px; }
+#line-bar-end .session-manager-wrap { margin-left: 10px; }
+#line-bar-end .exif-card, #line-bar-end .adjust-card { left: auto; right: 0; }
+/* Plain "+" buttons: add image (after the tabs) and new line (line bar), with a small plus */
+.image-tab-add { background: #1a1a1a; border: 1px solid #333; font-size: 13px; color: #999; }
+.image-tab-add:hover:not(:disabled) { background: #222; color: #fff; }
+#btn-add-line svg { width: 11px; height: 11px; }
+.image-tab-add { display: flex; align-items: center; justify-content: center; }
+.image-tab-add svg { width: 11px; height: 11px; display: block; }
+/* Line chips and the map hint are as tall as the buttons of the line bar */
+.line-item, .map-hint { min-height: 32px; box-sizing: border-box; }
+.line-item { padding-top: 0; padding-bottom: 0; }
+.map-hint { display: flex; align-items: center; padding-top: 0; padding-bottom: 0; }
+/* Metadata card: the same gap under its button as the other menus; its two buttons are neutral, yellow on hover and press */
+.exif-card { margin-top: 6px; }
+.exif-gps-btn { background: #1e1e1e; border-color: #383838; color: #ccc; }
+.exif-gps-btn:hover, .exif-gps-btn:active, .exif-gps-btn:focus-visible { background: #2a2000; border-color: #ffdc32; color: #ffdc32; }

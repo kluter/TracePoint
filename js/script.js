@@ -8,7 +8,6 @@ const container   = document.getElementById("image-container");
 const overlay     = document.getElementById("drop-overlay");
 const btnAddLine    = document.getElementById("btn-add-line");
 const btnHorizon    = document.getElementById("btn-horizon");
-const toolbar       = document.getElementById("toolbar");
 const lineBar       = document.getElementById("line-bar");
 
 let pulseFrameId = null;
@@ -113,6 +112,10 @@ let activeSessionIndex = 0;
 
 /* Convenience accessor – always returns the active session */
 function sess() { return sessions[activeSessionIndex]; }
+
+/* ---- EXPORT STATE (functions: see EXPORT WITH PHOTOS below) ---- */
+const EXPORT_PHOTOS_KEY = 'tp-export-photos';   // localStorage: '1' = exported files carry the photos
+let exportPhotos = localStorage.getItem(EXPORT_PHOTOS_KEY) === '1';
 
 /* ---- AUTOSAVE STATE (functions: see AUTOSAVE below) ---- */
 const AUTOSAVE_KEY = 'tp-autosave';   // localStorage: '0' = switched off
@@ -371,7 +374,7 @@ function el(tag, className, parent) {
 const TILE_SETS = [
     {
         id: 'esri-sat',
-        label: '🛰 Esri Satellite',
+        label: 'Esri Satellite',
         layers: [
             { url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
               opts: { attribution: 'Tiles &copy; Esri', maxZoom: 21, maxNativeZoom: 19 } },
@@ -381,7 +384,7 @@ const TILE_SETS = [
     },
     {
         id: 's2-2024',
-        label: '🌍 Sentinel-2 2024',
+        label: 'Sentinel-2 2024',
         layers: [
             { url: 'https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2024_3857/default/g/{z}/{y}/{x}.jpg',
               opts: { attribution: '<a href="https://s2maps.eu" target="_blank" rel="noopener">Sentinel-2 cloudless</a> by EOX IT Services GmbH (contains modified Copernicus Sentinel data 2024)',
@@ -390,7 +393,7 @@ const TILE_SETS = [
     },
     {
         id: 'osm',
-        label: '🗺 OpenStreetMap',
+        label: 'OpenStreetMap',
         layers: [
             { url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
               opts: { attribution: '&copy; OpenStreetMap contributors', maxZoom: 19 } }
@@ -398,7 +401,7 @@ const TILE_SETS = [
     },
     {
         id: 'esri-dark',
-        label: '🌑 Esri Dark Gray',
+        label: 'Esri Dark Gray',
         layers: [
             { url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
               opts: { attribution: 'Tiles &copy; Esri', maxZoom: 21, maxNativeZoom: 16 } },
@@ -408,7 +411,7 @@ const TILE_SETS = [
     },
     {
         id: 'esri-topo',
-        label: '🏔 Esri Topo',
+        label: 'Esri Topo',
         layers: [
             { url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}',
               opts: { attribution: 'Tiles &copy; Esri', maxZoom: 21, maxNativeZoom: 19 } }
@@ -416,7 +419,7 @@ const TILE_SETS = [
     },
     {
         id: 'esri-streets',
-        label: '🏙 Esri Streets',
+        label: 'Esri Streets',
         layers: [
             { url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
               opts: { attribution: 'Tiles &copy; Esri', maxZoom: 21, maxNativeZoom: 19 } }
@@ -450,7 +453,7 @@ let customLayers = loadCustomLayers();
 function allTileSets() {
     return TILE_SETS.concat(customLayers.map(c => ({
         id: c.id,
-        label: '🔗 ' + c.name,
+        label: c.name,
         custom: true,
         layers: [{ url: c.url, opts: { attribution: 'Custom layer', maxZoom: 21 } }]
     })));
@@ -657,11 +660,12 @@ function setMapSetting(key, value) {
    set it to the lens in a photo's EXIF and the tilted map shows the scene with that perspective. */
 function fovToFocal(fov) { return 12 / Math.tan(fov * DEG / 2); }
 
-/* ---- MAP PANEL: basemap, terrain and camera in one place ---- */
+/* ---- MAP PANEL: terrain, buildings and camera in one place ---- */
 /* Opens from the ☰ button in the map bar under the map header. It stays open while its controls are
-   used; a click on the map or outside it, Esc or the button closes it. */
+   used; a click on the map or outside it, Esc or the button closes it.
+   The basemap has a dropdown of its own in the map header (see BASEMAP DROPDOWN). */
 let layerMenu = null;      // the panel
-let layerList = null;      // its basemap list, redrawn by renderLayerMenu
+let layerList = null;      // the basemap dropdown's list, redrawn by renderLayerMenu
 const mapPanelSync = [];   // one function per control: bring it in line with the settings
 
 function syncMapPanel() { mapPanelSync.forEach(fn => fn()); }
@@ -671,11 +675,10 @@ function buildLayerSwitcher() {
 
     const btn = el('button', 'layer-burger', wrap);
     btn.type = 'button';
-    btn.title = 'Map layers, terrain and camera';
-    btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-        <rect y="2"  width="16" height="2" rx="1"/>
-        <rect y="7"  width="16" height="2" rx="1"/>
-        <rect y="12" width="16" height="2" rx="1"/>
+    btn.title = 'Terrain, buildings and camera';
+    btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+        <line x1="1.5" y1="5" x2="14.5" y2="5"/><line x1="1.5" y1="11" x2="14.5" y2="11"/>
+        <circle cx="5.5" cy="5" r="2" fill="#151515"/><circle cx="10.5" cy="11" r="2" fill="#151515"/>
     </svg>`;
 
     const menu = el('div', 'layer-menu map-panel', wrap);
@@ -720,10 +723,6 @@ function buildLayerSwitcher() {
         });
     };
 
-    // Basemap
-    layerList = section('Basemap');
-    layerList.classList.add('map-panel-list');
-
     // Terrain
     const terrain = section('Terrain');
     addSwitch(terrain, '3D terrain', 'Elevation tiles from AWS. Tilt the map (Ctrl+drag) to see the relief.',
@@ -766,23 +765,52 @@ function buildLayerSwitcher() {
     syncMapPanel();
 
     const close = () => { menu.style.display = 'none'; };
-    btn.onclick = () => { menu.style.display = menu.style.display === 'none' ? 'block' : 'none'; };
+    btn.onclick = () => {
+        menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+        if (menu.style.display !== 'none') { hideHelp(); closeBasemapMenu(); }   // only one of them is open
+    };
     map.on('click', close);
     document.addEventListener('click', (e) => { if (!wrap.contains(e.target) && e.target.isConnected) close(); });
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
     menu.addEventListener('wheel', (e) => e.stopPropagation());   // scrolling the panel must not zoom anything under it
 }
 
-/* The basemap list: built-in layers, then the custom ones with edit and remove, then "add" */
+/* ---- BASEMAP DROPDOWN ----
+   In the map header, where the title used to be: the button shows the active basemap, the list has
+   the built-in layers, then the custom ones with edit and remove, then "add". Picking one closes it. */
+const basemapBtn = document.getElementById('btn-basemap');
+layerList = document.getElementById('basemap-menu');
+
+function closeBasemapMenu() {
+    layerList.style.display = 'none';
+    basemapBtn.setAttribute('aria-expanded', 'false');
+}
+
+basemapBtn.onclick = () => {
+    if (layerList.style.display !== 'none') { closeBasemapMenu(); return; }
+    layerList.style.display = 'block';
+    basemapBtn.setAttribute('aria-expanded', 'true');
+    hideHelp();
+    if (layerMenu) layerMenu.style.display = 'none';
+};
+document.addEventListener('click', (e) => {
+    if (!document.getElementById('basemap-wrap').contains(e.target) && e.target.isConnected) closeBasemapMenu();
+});
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeBasemapMenu(); });
+layerList.addEventListener('wheel', (e) => e.stopPropagation());
+
 function renderLayerMenu() {
     const list = layerList;
     list.innerHTML = '';
+    const active = allTileSets().find(s => s.id === activeTileSetId) || TILE_SETS[0];
+    document.getElementById('basemap-name').textContent = active.label;
+    basemapBtn.title = `Basemap: ${active.label}`;
 
     const addItem = (set) => {
         const item = el('div', 'layer-item', list);
         item.dataset.id = set.id;
         if (set.id === activeTileSetId) item.classList.add('active');
-        item.onclick = () => { setTileSet(set.id); renderLayerMenu(); };
+        item.onclick = () => { setTileSet(set.id); renderLayerMenu(); closeBasemapMenu(); };
         if (!set.custom) { item.textContent = set.label; return; }
 
         item.classList.add('layer-item-custom');
@@ -791,7 +819,7 @@ function renderLayerMenu() {
         const edit = el('button', 'layer-action', item);
         edit.title = 'Edit layer';
         edit.textContent = '✎';
-        edit.onclick = (e) => { e.stopPropagation(); layerMenu.style.display = 'none'; openLayerModal(set.id); };
+        edit.onclick = (e) => { e.stopPropagation(); closeBasemapMenu(); openLayerModal(set.id); };
         const del = el('button', 'layer-action layer-action-delete', item);
         del.title = 'Remove layer';
         del.textContent = '×';
@@ -804,7 +832,7 @@ function renderLayerMenu() {
 
     const add = el('div', 'layer-item layer-add', list);
     add.textContent = '＋ Add custom layer…';
-    add.onclick = () => { layerMenu.style.display = 'none'; openLayerModal(null); };
+    add.onclick = () => { closeBasemapMenu(); openLayerModal(null); };
 }
 
 function removeCustomLayer(id) {
@@ -1404,7 +1432,7 @@ function updateLineManager() {
             item.appendChild(ptBox);
         }
 
-        lineBar.insertBefore(item, document.getElementById('session-manager-wrap'));
+        lineBar.insertBefore(item, document.getElementById('line-bar-end'));
     });
 
     if (state.mode === 'map-point' && state.mapPointTarget) {
@@ -1414,7 +1442,7 @@ function updateLineManager() {
         hint.className = 'map-hint';
         hint.style.cssText = `color:${c}; border-color:${c}55; background:${c}18;`;
         hint.textContent = `Click map → L${lineIndex + 1} P${pointIndex + 1}`;
-        lineBar.insertBefore(hint, document.getElementById('session-manager-wrap'));
+        lineBar.insertBefore(hint, document.getElementById('line-bar-end'));
     }
 }
 
@@ -1539,6 +1567,8 @@ document.addEventListener('keydown', (e) => {
         const k = e.key.toLowerCase();
         if (k === 'z') { e.preventDefault(); if (e.shiftKey) redo(); else undo(); return; }
         if (k === 'y' && !e.shiftKey) { e.preventDefault(); redo(); return; }
+        // Ctrl+S exports all images, with or without photos as set in the ☰ menu (never the browser's "save page")
+        if (k === 's' && !e.shiftKey) { e.preventDefault(); if (!e.repeat) exportAllSessions(); return; }
     }
     // Browser shortcuts (Ctrl+R reload, Ctrl+F find, ...) are not ours; Ctrl+V arrives as a paste event
     if (e.ctrlKey || e.metaKey || e.altKey) return;
@@ -1644,114 +1674,114 @@ document.addEventListener('keydown', (e) => {
 /* ============================================================
    SESSION MANAGEMENT
    ============================================================ */
+/* The images as tabs in the photo header: colour dot, name, × to remove; "+" adds an image.
+   A click switches, a double-click on the name (or F2) renames. Redrawn together with the ☰ menu. */
+function renderImageTabs() {
+    const bar = document.getElementById('image-tabs');
+    if (!bar) return;
+    bar.innerHTML = '';
+    sessions.forEach((s, idx) => {
+        const tab = el('div', 'image-tab' + (idx === activeSessionIndex ? ' active' : ''), bar);
+        tab.style.setProperty('--sc', LINE_COLOURS[(sessionColourIndex(idx) * 2) % LINE_COLOURS.length]);
+        tab.title = s.name;
+        tab.setAttribute('role', 'tab');
+        tab.setAttribute('aria-selected', idx === activeSessionIndex ? 'true' : 'false');
+        el('span', 'session-dot', tab);
+        const name = el('span', 'session-name', tab);
+        name.textContent = s.name;
+        const close = el('button', 'image-tab-close', tab);
+        close.type = 'button';
+        close.title = 'Remove image';
+        close.setAttribute('aria-label', `Remove ${s.name}`);
+        close.textContent = '×';
+        close.onclick = (e) => { e.stopPropagation(); removeSession(idx); };
+        tab.onclick = (e) => {
+            if (e.target.closest('input')) return;   // the name being edited
+            if (idx !== activeSessionIndex) switchToSession(idx);
+        };
+        tab.ondblclick = (e) => { if (!e.target.closest('button, input')) renameSession(idx); };
+    });
+    const add = el('button', 'image-tab-add', bar);
+    add.type = 'button';
+    add.title = 'Add image';
+    add.setAttribute('aria-label', 'Add image');
+    add.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>';   // the same plus as New line
+    add.onclick = () => addSession();
+    bar.querySelector('.image-tab.active')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+}
+
+/* The ☰ menu of the photo side, in sections like the map panel:
+   File (import, export, with or without photos) · This browser (autosave) · Demo.
+   The images themselves are the tabs in the header (renderImageTabs). */
 function renderSessionMenu() {
+    renderImageTabs();
     const menu = document.getElementById('session-menu');
     if (!menu) return;
     menu.innerHTML = '';
-
-    // Demo entry at the top
-    const demoItem = document.createElement('div');
-    demoItem.className = 'session-item session-demo';
-    demoItem.innerHTML = `<span>📷</span><span class="session-name">Demo — Potsdam</span>`;
-    demoItem.onclick = () => { loadDemoImage(); menu.style.display = 'none'; };
-    menu.appendChild(demoItem);
-
-    const demoDivider = document.createElement('div');
-    demoDivider.className = 'session-divider';
-    menu.appendChild(demoDivider);
-
-    sessions.forEach((s, idx) => {
-        const item = document.createElement('div');
-        item.className = 'session-item' + (idx === activeSessionIndex ? ' active-session' : '');
-        item.style.setProperty('--sc', LINE_COLOURS[(sessionColourIndex(idx) * 2) % LINE_COLOURS.length]);
-        const dot = document.createElement('span');
-        dot.className = 'session-dot';
-        const nameSpan = document.createElement('span');
-        nameSpan.className = 'session-name';
-        nameSpan.textContent = s.name;
-        item.appendChild(dot);
-        item.appendChild(nameSpan);
-        item.insertAdjacentHTML('beforeend',
-            `<button class="btn-session-export" title="Rename (F2)" data-action="rename-session" data-idx="${idx}">
-                 <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-                     <path d="M1.2 8.8l.6-2.4L6.7 1.5l1.8 1.8-4.9 4.9z"/>
-                 </svg></button>`);
-        if (s.imgElement) {
-            item.insertAdjacentHTML('beforeend',
-                `<button class="btn-session-export" title="Export session" data-action="export-session" data-idx="${idx}">
-                     <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                         <line x1="5" y1="1" x2="5" y2="8"/><polyline points="2,5.5 5,8.5 8,5.5"/>
-                     </svg></button>`);
-        }
-        item.insertAdjacentHTML('beforeend',
-            `<button class="btn-delete" title="Remove image" data-action="remove-session" data-idx="${idx}">×</button>`);
-        item.onclick = (e) => {
-            if (e.target.closest('[data-action], input')) return;   // a button of the row or the name being edited, not the row
-            switchToSession(idx);
-            menu.style.display = 'none';
-        };
-        menu.appendChild(item);
-    });
-
-    const divider = document.createElement('div');
-    divider.className = 'session-divider';
-    menu.appendChild(divider);
-
-    const addBtn = document.createElement('div');
-    addBtn.className = 'session-add';
-    addBtn.textContent = '+ Add image';
-    addBtn.onclick = () => { addSession(); menu.style.display = 'none'; };
-    menu.appendChild(addBtn);
-
-    const importBtn = document.createElement('div');
-    importBtn.className = 'session-add session-import';
-    importBtn.innerHTML = `<span class="export-icon">
+    const close   = () => { menu.style.display = 'none'; };
+    const section = (title) => { el('div', 'map-panel-title session-title', menu).textContent = title; };
+    const arrow   = (up) => `<span class="export-icon">
         <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <line x1="5" y1="9" x2="5" y2="2"/><polyline points="2,4.5 5,1.5 8,4.5"/>
-        </svg></span> Import session`;
-    importBtn.onclick = () => { jsonPicker.click(); menu.style.display = 'none'; };
-    menu.appendChild(importBtn);
+            ${up ? '<line x1="5" y1="9" x2="5" y2="2"/><polyline points="2,4.5 5,1.5 8,4.5"/>'
+                 : '<line x1="5" y1="1" x2="5" y2="8"/><polyline points="2,5.5 5,8.5 8,5.5"/>'}
+        </svg></span>`;
+    // An entry that stays in place, greyed out, while it cannot be used: the menu keeps its shape
+    const entry = (cls, html, title, enabled, action) => {
+        const item = el('div', `session-add ${cls}` + (enabled ? '' : ' disabled'), menu);
+        item.innerHTML = html;
+        item.title = enabled ? title : 'Load a photo first';
+        if (enabled) item.onclick = () => { action(); close(); };
+        return item;
+    };
 
-    if (sessions.some(s => s.imgElement)) {
-        const exportAllBtn = document.createElement('div');
-        exportAllBtn.className = 'session-add session-export-all';
-        exportAllBtn.innerHTML = `<span class="export-icon">
-            <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <line x1="5" y1="1" x2="5" y2="8"/><polyline points="2,5.5 5,8.5 8,5.5"/>
-            </svg></span> Export all sessions`;
-        exportAllBtn.onclick = () => { exportAllSessions(); menu.style.display = 'none'; };
-        menu.appendChild(exportAllBtn);
+    // ---- File ----
+    section('File');
+    entry('session-import', `${arrow(true)} Import…`, 'Open a TracePoint session file (.json)', true, () => jsonPicker.click());
+    entry('session-export-all', `${arrow(false)} Export this image`, 'Save the image on screen with its lines and points',
+        !!sess()?.imgElement, () => exportSession(activeSessionIndex));
+    entry('session-export-all', `${arrow(false)} Export all <span class="session-key">Ctrl+S</span>`,
+        'Save all images with their lines and points as one file', sessions.some(s => s.imgElement), () => exportAllSessions());
+
+    // Export with or without the photos themselves; the note is there only while it is on
+    const photoRow = el('div', 'session-autosave session-export-photos', menu);
+    photoRow.innerHTML =
+        `<label class="autosave-switch" for="export-photos-switch" title="Store each photo inside the exported file, unchanged, with its GPS and camera data, so an import restores it without asking for the image. The file gets about a third bigger than the photo. Applies to every export, also Ctrl+S.">
+             Include photos</label>
+         <input type="checkbox" id="export-photos-switch" class="adjust-switch" role="switch" aria-label="Include photos" ${exportPhotos ? 'checked' : ''}>`;
+    photoRow.querySelector('input').onchange = (e) => { setExportPhotos(e.target.checked); renderSessionMenu(); };
+    if (exportPhotos) {
+        el('div', 'session-note', menu).textContent = 'Photos go into the file with their GPS data; it gets much bigger.';
     }
 
-    // Autosave switch and the button that deletes what it saved
-    const saveDivider = document.createElement('div');
-    saveDivider.className = 'session-divider';
-    menu.appendChild(saveDivider);
-
-    const saveRow = document.createElement('div');
-    saveRow.className = 'session-autosave';
+    // ---- This browser: autosave switch and the button that deletes what it saved ----
+    section('This browser');
+    const saveRow = el('div', 'session-autosave', menu);
     saveRow.innerHTML =
-        `<label class="autosave-switch" title="Keep the work in this browser so a refresh does not lose it. Off deletes the saved copy.">
-             <input type="checkbox" ${autosaveOn ? 'checked' : ''}> Autosave</label>
-         <button type="button" class="btn-clear-saved" title="Delete the saved session and start empty"
-                 ${autosaveOn && sessionsHaveWork() ? '' : 'disabled'}>Clear</button>`;
+        `<label class="autosave-switch" for="autosave-switch" title="Keep the work in this browser so a refresh does not lose it. Off deletes the saved copy.">
+             Autosave</label>
+         <span class="session-row-end">
+             <button type="button" class="btn-clear-saved" title="Delete the saved session and start empty"
+                     ${autosaveOn && sessionsHaveWork() ? '' : 'disabled'}>Clear</button>
+             <input type="checkbox" id="autosave-switch" class="adjust-switch" role="switch" aria-label="Autosave" ${autosaveOn ? 'checked' : ''}>
+         </span>`;
     saveRow.querySelector('input').onchange = (e) => { setAutosave(e.target.checked); renderSessionMenu(); };
-    saveRow.querySelector('button').onclick = () => { menu.style.display = 'none'; clearSavedSession(); };
-    menu.appendChild(saveRow);
+    saveRow.querySelector('button').onclick = () => { close(); clearSavedSession(); };
+
+    // ---- Demo: a photo to try the method on ----
+    section('Demo');
+    entry('session-demo', 'Potsdam, Germany', 'Load the demo photo', true, () => loadDemoImage());
 }
 
-/* Rename an image in the ☰ list: the name becomes a text field. Enter or a click elsewhere saves,
-   Esc cancels, an empty name keeps the old one. From the pencil on the row and from F2 (active image).
+/* Rename an image: the name on its tab becomes a text field. Enter or a click elsewhere saves,
+   Esc cancels, an empty name keeps the old one. From a double-click on the tab and from F2 (active image).
    After renameSessionTab in briatlon's sessionTabs.js. */
 const SESSION_NAME_MAX = 60;
 
 function renameSession(idx) {
     const s = sessions[idx];
-    const menu = document.getElementById('session-menu');
-    if (!s || !menu) return;
-    renderSessionMenu();
-    menu.style.display = 'block';
-    const span = menu.querySelectorAll('.session-item:not(.session-demo) .session-name')[idx];
+    if (!s) return;
+    renderImageTabs();
+    const span = document.querySelectorAll('#image-tabs .image-tab .session-name')[idx];
     if (!span) return;
     const input = document.createElement('input');
     input.className = 'session-name-input';
@@ -1772,6 +1802,7 @@ function renameSession(idx) {
         renderSessionMenu();
     };
     input.onkeydown = (e) => {
+        e.stopPropagation();   // typing a name is not a shortcut
         if (e.key !== 'Enter' && e.key !== 'Escape') return;
         e.preventDefault();
         finish(e.key === 'Escape');
@@ -1876,6 +1907,8 @@ function removeSession(idx) {
    ============================================================ */
 function showHelp(isDemo = false) {
     document.getElementById('help-card').style.display = 'block';
+    if (layerMenu) layerMenu.style.display = 'none';   // the map panel would sit behind the card
+    closeBasemapMenu();
     document.getElementById('help-demo-note').style.display = isDemo ? 'block' : 'none';
 }
 
@@ -2532,28 +2565,85 @@ function fileSafe(name) {
     return name.replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_');
 }
 
+/* ---- EXPORT WITH PHOTOS ----
+   Off by default and remembered in this browser. With it on, each session of an exported file
+   carries its photo as `image: { name, type, dataUrl }` (base64, the file's own bytes: EXIF and GPS
+   included), and the import restores it without asking for the image. The autosave never uses
+   this: it keeps the photos as files next to the JSON.
+   After sessionToProject in briatlon's build; the field layout is the same, so his files import too. */
+function setExportPhotos(on) {
+    exportPhotos = on;
+    localStorage.setItem(EXPORT_PHOTOS_KEY, on ? '1' : '0');
+}
+
+const blobToDataURL = (blob) => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload  = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
+});
+
+/* sessionToData plus the photo, when the switch is on and the session has one */
+async function sessionToExport(s) {
+    const data = sessionToData(s);
+    if (exportPhotos && s.imageFile) {
+        data.image = {
+            name:    s.imageFilename || s.imageFile.name || 'photo',
+            type:    s.imageFile.type || 'image/jpeg',
+            dataUrl: await blobToDataURL(s.imageFile)
+        };
+    }
+    return data;
+}
+
+/* The photo of a session file as a File, or null when the entry is not a base64 image.
+   Whether it really is a picture is decided by loadImage: what the browser cannot decode is rejected. */
+const IMAGE_DATA_URL = /^data:(image\/[a-z0-9.+-]+);base64,/i;
+
+function embeddedImageFile(image) {
+    if (!image || typeof image !== 'object' || typeof image.dataUrl !== 'string') return null;
+    const head = IMAGE_DATA_URL.exec(image.dataUrl.slice(0, 80));
+    if (!head) return null;
+    try {
+        const bin   = atob(image.dataUrl.slice(head[0].length));
+        const bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        const name = typeof image.name === 'string' && image.name ? image.name.slice(0, 255) : 'photo';
+        return new File([bytes], name, { type: head[1].toLowerCase() });
+    } catch (err) {
+        return null;   // broken base64: the session asks for its image as before
+    }
+}
+
+async function exportSessions(list, filename, doneText) {
+    if (!list.length) return showToast('Nothing to export yet: load a photo first.');
+    try {
+        const data = [];
+        for (const s of list) data.push(await sessionToExport(s));
+        downloadJSON({ json_version: JSON_VERSION, exported: new Date().toISOString(), sessions: data }, filename);
+    } catch (err) {
+        // A string the browser cannot hold, or a photo it could not read back
+        return showToast(exportPhotos
+            ? 'Export failed: the photos are too large for one file. Export the images one by one, or switch off "Include photos".'
+            : 'Export failed.');
+    }
+    const withPhotos = exportPhotos && list.some(s => s.imageFile);
+    showToast(doneText + (withPhotos ? ' Photos included.' : ''), 'success');
+}
+
+const exportStamp = () => new Date().toISOString().slice(0, 16).replace('T', '_').replace(/:/g, '-');
+
 function exportSession(idx) {
-    const s  = sessions[idx];
+    const s = sessions[idx];
     if (idx === activeSessionIndex) s.mapView = getMapView();
-    const ts = new Date().toISOString().slice(0, 16).replace('T', '_').replace(/:/g, '-');
-    downloadJSON(
-        { json_version: JSON_VERSION, exported: new Date().toISOString(), sessions: [sessionToData(s)] },
-        `tracepoint_${fileSafe(s.name)}_${ts}.json`
-    );
-    showToast('Session exported.', 'success');
+    return exportSessions([s], `tracepoint_${fileSafe(s.name)}_${exportStamp()}.json`, 'Session exported.');
 }
 
 function exportAllSessions() {
     if (sessions[activeSessionIndex]) {
         sessions[activeSessionIndex].mapView = getMapView();
     }
-    const ts = new Date().toISOString().slice(0, 16).replace('T', '_').replace(/:/g, '-');
-    downloadJSON(
-        { json_version: JSON_VERSION, exported: new Date().toISOString(),
-          sessions: sessions.filter(s => s.imgElement).map(sessionToData) },
-        `tracepoint_all_${ts}.json`
-    );
-    showToast('All sessions exported.', 'success');
+    return exportSessions(sessions.filter(s => s.imgElement), `tracepoint_all_${exportStamp()}.json`, 'All sessions exported.');
 }
 
 /* Builds sessions from the `sessions` array of a session file; every field is type-checked.
@@ -2636,6 +2726,9 @@ function applySessionData(list, keepView = false) {
         if (keepView) s.hasAutoZoomed = !!s.mapObjects.intersectionLatLng;
         updateUI();
         historyReset(s);
+        // A file exported with its photo brings it along: no "reload the image" step
+        const photo = embeddedImageFile(sd.image);
+        if (photo) loadImage(photo, s);
         return s;
     });
 }
@@ -3205,6 +3298,15 @@ map.on('contextmenu', (e) => {
     measureItem.textContent = 'Measure distance from here';
     measureItem.onclick = () => { hideCtxMenu(); startMeasure({ lat: e.lngLat.lat, lng: e.lngLat.lng }); };
 
+    const streetItem = el('button', 'map-ctx-item', ctxMenu);
+    streetItem.type = 'button';
+    streetItem.textContent = 'Street-level imagery here';
+    streetItem.onclick = () => {
+        hideCtxMenu();
+        const spot = { lat: e.lngLat.lat, lng: e.lngLat.lng };
+        if (street.open) streetLookAt(spot); else setStreetOpen(true, spot);
+    };
+
     el('div', 'map-ctx-divider', ctxMenu);
     const addLink = (parent, text, href) => {
         const a = el('a', 'map-ctx-item', parent);
@@ -3731,6 +3833,7 @@ function makeSplitter(handle, box, { axis = 'x', cssVar, key, min = 320, start =
         handle.setPointerCapture(e.pointerId);
         handle.classList.add('dragging');
         document.body.classList.add('pane-resizing');
+        if (axis === 'y') document.body.classList.add('pane-resizing-y');
         e.preventDefault();
         handle.focus();
     });
@@ -3742,7 +3845,7 @@ function makeSplitter(handle, box, { axis = 'x', cssVar, key, min = 320, start =
     const end = () => {
         if (!handle.classList.contains('dragging')) return;
         handle.classList.remove('dragging');
-        document.body.classList.remove('pane-resizing');
+        document.body.classList.remove('pane-resizing', 'pane-resizing-y');
         set(pct, true);
     };
     handle.addEventListener('pointerup', end);
@@ -3780,6 +3883,625 @@ btnPaneCollapse.addEventListener('click', () => {
 });
 
 /* ============================================================
+   STREET-LEVEL IMAGERY – a panel above the map (button in the map bar)
+   Shows the photo nearest to a spot: the map centre, or the place picked with
+   right-click → "Street-level imagery here"; the map follows to where the photo was taken.
+   A click or the arrow keys walk to the next photo. 360° photos can be looked around in,
+   ordinary photos are shown flat; a marker on the map shows where the photo was
+   taken and which way the view points.
+   Sources: Panoramax (no key) and Mapillary (the user's own free token, kept in
+   this browser only). Their servers are contacted only while the panel is open;
+   the panel always starts closed. Idea: the Street View split in briatlon's build.
+   ============================================================ */
+const STREET_SOURCE_KEY = 'tp-street-source';
+const STREET_TOKEN_KEY  = 'tp-street-token';    // Mapillary token: localStorage only, never exported or autosaved
+const STREET_RADII      = [60, 300, 1500];      // metres: the search widens until it finds something
+const STREET_FOV        = 75;                   // vertical field of view of the 360° view, degrees
+const STREET_STEP       = 40;                   // metres: how far one step of walking may reach
+
+const streetUi = {
+    button:   document.getElementById('btn-street'),
+    panel:    document.getElementById('street-panel'),
+    splitter: document.getElementById('street-splitter'),
+    source:   document.getElementById('street-source'),
+    token:    document.getElementById('street-token'),
+    info:     document.getElementById('street-info'),
+    here:     document.getElementById('btn-street-here'),
+    hd:       document.getElementById('btn-street-hd'),
+    cover:    document.getElementById('btn-street-cover'),
+    close:    document.getElementById('btn-street-close'),
+    view:     document.getElementById('street-view'),
+    canvas:   document.getElementById('street-canvas'),
+    flat:     document.getElementById('street-flat'),
+    status:   document.getElementById('street-status')
+};
+
+const street = {
+    open:   false,
+    source: localStorage.getItem(STREET_SOURCE_KEY) === 'mapillary' ? 'mapillary' : 'panoramax',
+    token:  localStorage.getItem(STREET_TOKEN_KEY) || '',
+    cover:  localStorage.getItem('tp-street-cover') !== '0',   // coverage overlay on the map, on unless switched off
+    target: null,     // { lat, lng } last looked up
+    item:   null,     // the image on screen
+    hd:     false,
+    req:    0,        // counts lookups and image loads: an answer to an older one is dropped
+    moveReq: 0,       // the same for walking
+    marker: null,
+    yaw: 0, pitch: 0, fov: STREET_FOV,   // 360° view, degrees; yaw 0 = centre of the image
+    zoom: 1, tx: 0, ty: 0                // flat photo
+};
+
+/* ---- sources: each turns its API answer into
+        { id, lat, lng, heading, date, pano, url, hd, credit, license } ---- */
+function httpsUrl(v) {
+    if (typeof v !== 'string') return null;
+    try { const u = new URL(v); return u.protocol === 'https:' ? u.href : null; } catch (err) { return null; }
+}
+
+function streetBbox(p, metres) {
+    const dLat = metres / 111320;
+    const dLng = metres / (111320 * Math.max(0.01, Math.cos(p.lat * DEG)));
+    return [p.lng - dLng, p.lat - dLat, p.lng + dLng, p.lat + dLat].map(v => v.toFixed(6)).join(',');
+}
+
+async function streetJson(url, headers = {}) {
+    const res = await fetch(url, { headers, referrerPolicy: 'no-referrer', credentials: 'omit' });
+    if (!res.ok) throw Object.assign(new Error('HTTP ' + res.status), { status: res.status });
+    return res.json();
+}
+
+function panoramaxItem(f) {
+    const c = f?.geometry?.coordinates;
+    const url = httpsUrl(f?.assets?.sd?.href);
+    if (!Array.isArray(c) || !finite(c[0]) || !finite(c[1]) || !url) return null;
+    const p = f.properties || {};
+    return {
+        id: String(f.id), lat: c[1], lng: c[0],
+        heading: finite(p['view:azimuth']) ? p['view:azimuth'] : null,
+        date:    typeof p.datetime === 'string' ? p.datetime.slice(0, 10) : '',
+        pano:    p['pers:interior_orientation']?.field_of_view === 360,
+        url, hd: httpsUrl(f.assets?.hd?.href),
+        credit:  typeof f.providers?.[0]?.name === 'string' ? f.providers[0].name : '',
+        license: typeof p.license === 'string' ? p.license : ''
+    };
+}
+
+function mapillaryItem(d) {
+    const c = d?.computed_geometry?.coordinates || d?.geometry?.coordinates;
+    const url = httpsUrl(d?.thumb_2048_url);
+    if (!Array.isArray(c) || !finite(c[0]) || !finite(c[1]) || !url) return null;
+    const heading = finite(d.computed_compass_angle) ? d.computed_compass_angle : d.compass_angle;
+    return {
+        id: String(d.id), lat: c[1], lng: c[0],
+        heading: finite(heading) ? heading : null,
+        date:    finite(d.captured_at) ? new Date(d.captured_at).toISOString().slice(0, 10) : '',
+        pano:    d.is_pano === true,
+        url, hd: httpsUrl(d.thumb_original_url),
+        credit:  typeof d.creator?.username === 'string' ? d.creator.username : '',
+        license: 'CC-BY-SA-4.0'
+    };
+}
+
+const STREET_SOURCES = {
+    panoramax: {
+        label: 'Panoramax',
+        async near(p, metres) {
+            const data = await streetJson(`https://api.panoramax.xyz/api/search?bbox=${streetBbox(p, metres)}&limit=100`);
+            return (Array.isArray(data.features) ? data.features : []).map(panoramaxItem);
+        }
+    },
+    mapillary: {
+        label: 'Mapillary',
+        needsToken: true,
+        async near(p, metres) {
+            const fields = 'id,thumb_2048_url,thumb_original_url,computed_geometry,geometry,computed_compass_angle,compass_angle,is_pano,captured_at,creator';
+            const data = await streetJson(
+                `https://graph.mapillary.com/images?fields=${fields}&bbox=${streetBbox(p, metres)}&limit=100`,
+                { Authorization: 'OAuth ' + street.token });
+            return (Array.isArray(data.data) ? data.data : []).map(mapillaryItem);
+        }
+    }
+};
+
+/* ---- 360° view: the equirectangular photo on a full-canvas triangle, one draw per change ---- */
+let streetGl = null;   // { gl, uni, tex } once the first 360° photo arrives; false if WebGL is not there
+
+function streetGlInit() {
+    if (streetGl !== null) return streetGl;
+    const gl = streetUi.canvas.getContext('webgl2') || streetUi.canvas.getContext('webgl');
+    if (!gl) return (streetGl = false);
+    const shader = (type, src) => {
+        const s = gl.createShader(type);
+        gl.shaderSource(s, src);
+        gl.compileShader(s);
+        return s;
+    };
+    const prog = gl.createProgram();
+    gl.attachShader(prog, shader(gl.VERTEX_SHADER,
+        'attribute vec2 p; void main() { gl_Position = vec4(p, 0.0, 1.0); }'));
+    // Ray through the pixel, tilted up by `pitch`, turned right by `yaw`, looked up in the photo
+    gl.attachShader(prog, shader(gl.FRAGMENT_SHADER, `
+        precision highp float;
+        uniform sampler2D tex; uniform vec2 res; uniform float yaw, pitch, f;
+        void main() {
+            vec2 q = (gl_FragCoord.xy * 2.0 - res) / res.y * f;
+            vec3 d = normalize(vec3(q, 1.0));
+            float cp = cos(pitch), sp = sin(pitch), cy = cos(yaw), sy = sin(yaw);
+            d = vec3(d.x, d.y * cp + d.z * sp, d.z * cp - d.y * sp);
+            d = vec3(d.x * cy + d.z * sy, d.y, d.z * cy - d.x * sy);
+            float u = atan(d.x, d.z) / 6.283185307 + 0.5;
+            float v = 0.5 - asin(clamp(d.y, -1.0, 1.0)) / 3.141592654;
+            gl_FragColor = texture2D(tex, vec2(fract(u), v));
+        }`));
+    gl.linkProgram(prog);
+    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) return (streetGl = false);
+    gl.useProgram(prog);
+    gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+    const loc = gl.getAttribLocation(prog, 'p');
+    gl.enableVertexAttribArray(loc);
+    gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+    const tex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    const uni = {};
+    ['res', 'yaw', 'pitch', 'f'].forEach(n => { uni[n] = gl.getUniformLocation(prog, n); });
+    return (streetGl = { gl, uni, tex });
+}
+
+/* The photo as the texture; one wider than the graphics card takes is scaled down first */
+function streetGlImage(img) {
+    const { gl } = streetGl;
+    const max = Math.min(gl.getParameter(gl.MAX_TEXTURE_SIZE), 8192);
+    let src = img;
+    if (img.naturalWidth > max || img.naturalHeight > max) {
+        const k = max / Math.max(img.naturalWidth, img.naturalHeight);
+        src = document.createElement('canvas');
+        src.width  = Math.round(img.naturalWidth * k);
+        src.height = Math.round(img.naturalHeight * k);
+        src.getContext('2d').drawImage(img, 0, 0, src.width, src.height);
+    }
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src);   // throws for a photo served without CORS
+}
+
+function streetDraw() {
+    if (!streetGl || streetUi.canvas.hidden) return;
+    const { gl, uni } = streetGl, c = streetUi.canvas;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const w = Math.max(1, Math.round(c.clientWidth * dpr)), h = Math.max(1, Math.round(c.clientHeight * dpr));
+    if (c.width !== w || c.height !== h) { c.width = w; c.height = h; }
+    gl.viewport(0, 0, w, h);
+    gl.uniform2f(uni.res, w, h);
+    gl.uniform1f(uni.yaw, street.yaw * DEG);
+    gl.uniform1f(uni.pitch, street.pitch * DEG);
+    gl.uniform1f(uni.f, Math.tan(street.fov * DEG / 2));
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+}
+
+function streetFlatTransform() {
+    streetUi.flat.style.transform = `translate(${street.tx}px, ${street.ty}px) scale(${street.zoom})`;
+}
+
+/* The recorded direction of a photo is that of its middle. Many photos carry no compass value; the
+   service then takes the direction of travel, which is wrong for a camera mounted facing another way. */
+function streetItemHeading(it) {
+    return it && it.heading !== null ? it.heading : null;
+}
+
+/* ---- marker: where the photo was taken, the wedge points along the view ---- */
+function streetHeading() {
+    const it = street.item;
+    const base = streetItemHeading(it);
+    if (base === null) return null;
+    return (((base + (it.pano && !streetUi.canvas.hidden ? street.yaw : 0)) % 360) + 360) % 360;
+}
+
+function streetMarkerUpdate() {
+    const it = street.item;
+    if (!it) { if (street.marker) { street.marker.remove(); street.marker = null; } return; }
+    if (!street.marker) {
+        const node = el('div', 'street-marker');
+        node.innerHTML = `<svg viewBox="-22 -22 44 44"><path d="M0 0 L-11 -19 A22 22 0 0 1 11 -19 Z" fill="#ffdc32" fill-opacity="0.45" stroke="#ffdc32" stroke-width="1"/>
+            <circle r="5" fill="#ffdc32" stroke="#111" stroke-width="2"/></svg>`;
+        street.marker = new maplibregl.Marker({ element: node, rotationAlignment: 'map', pitchAlignment: 'map' })
+            .setLngLat([it.lng, it.lat]).addTo(map);
+    }
+    const heading = streetHeading();
+    street.marker.setLngLat([it.lng, it.lat]).setRotation(heading ?? 0);
+    street.marker.getElement().querySelector('path').style.display = heading === null ? 'none' : '';
+}
+
+/* ---- panel ---- */
+function streetStatus(text) { streetUi.status.textContent = text || ''; }
+
+function streetInfo() {
+    const it = street.item;
+    if (!it) { streetUi.info.textContent = ''; return; }
+    const dist = street.target ? Math.round(distanceMetres(street.target, it)) : null;
+    streetUi.info.textContent = [
+        it.credit && `© ${it.credit}`, it.license, it.date, it.pano ? '360°' : 'photo',
+        dist !== null && `${dist} m from the spot`
+    ].filter(Boolean).join(' · ');
+    streetUi.info.title = `${STREET_SOURCES[street.source].label}: ${streetUi.info.textContent}`;
+}
+
+function streetButtons() {
+    const it = street.item;
+    streetUi.hd.disabled   = !it?.hd || it.hd === it.url;
+    streetUi.hd.classList.toggle('active', !!it && street.hd);
+    streetUi.token.hidden  = street.source !== 'mapillary';
+    streetUi.cover.hidden  = street.source !== 'panoramax';
+    streetUi.cover.classList.toggle('active', street.cover);
+}
+
+function streetClearView() {
+    streetUi.canvas.hidden = true;
+    streetUi.flat.hidden = true;
+    streetUi.flat.removeAttribute('src');
+}
+
+/* Put an image on screen. compass: keep looking this way (degrees from north) if it is a 360° photo */
+function streetShow(item, { hd = false, compass = null, keepView = false } = {}) {
+    const req = ++street.req;
+    const first = !keepView;
+    street.item = item;
+    street.hd = hd;
+    if (first) {
+        street.pitch = 0; street.fov = STREET_FOV; street.zoom = 1; street.tx = 0; street.ty = 0;
+        street.yaw = compass !== null && item.heading !== null ? compass - streetItemHeading(item) : 0;
+        // The map goes to where this photo was taken, close enough to see the marker's surroundings
+        map.easeTo({ center: [item.lng, item.lat], zoom: Math.max(map.getZoom(), 16), duration: 400 });
+    }
+    streetInfo();
+    streetButtons();
+    streetStatus(hd ? 'Loading full resolution…' : 'Loading image…');
+    const url = hd ? item.hd : item.url;
+
+    const showFlat = () => {
+        if (req !== street.req) return;
+        streetUi.canvas.hidden = true;
+        streetUi.flat.onload  = () => { if (req === street.req) streetStatus(''); };
+        streetUi.flat.onerror = () => { if (req === street.req) { streetClearView(); streetStatus('The image could not be loaded.'); } };
+        streetUi.flat.referrerPolicy = 'no-referrer';
+        streetUi.flat.src = url;
+        streetUi.flat.hidden = false;
+        streetFlatTransform();
+        streetMarkerUpdate();
+    };
+
+    if (!item.pano || !streetGlInit()) { showFlat(); return; }
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.referrerPolicy = 'no-referrer';
+    img.onload = () => {
+        if (req !== street.req) return;
+        try { streetGlImage(img); } catch (err) { showFlat(); return; }
+        streetUi.flat.hidden = true;
+        streetUi.flat.removeAttribute('src');
+        streetUi.canvas.hidden = false;
+        streetStatus('');
+        streetDraw();
+        streetMarkerUpdate();
+    };
+    img.onerror = showFlat;   // no CORS on this server: the photo is still shown, unrolled
+    img.src = url;
+    streetMarkerUpdate();
+}
+
+function streetFail(err) {
+    street.item = null;
+    streetClearView();
+    streetInfo(); streetButtons(); streetMarkerUpdate();
+    const name = STREET_SOURCES[street.source].label;
+    if (street.source === 'mapillary' && err && [400, 401, 403, 500].includes(err.status)) {
+        streetStatus('Mapillary did not accept the token. Check it in the field above.');
+    } else {
+        streetStatus(`${name} could not be reached.`);
+    }
+}
+
+/* Find and show the image nearest to p */
+async function streetLookAt(p) {
+    const src = STREET_SOURCES[street.source];
+    street.target = { lat: p.lat, lng: p.lng };
+    const req = ++street.req;
+    if (src.needsToken && !street.token) {
+        street.item = null;
+        streetClearView(); streetInfo(); streetButtons(); streetMarkerUpdate();
+        streetStatus('Mapillary needs your own (free) client token: paste it into the field above.');
+        streetUi.token.focus();
+        return;
+    }
+    streetStatus(`Searching ${src.label}…`);
+    try {
+        for (const metres of STREET_RADII) {
+            const items = (await src.near(street.target, metres)).filter(Boolean);
+            if (req !== street.req) return;
+            if (!items.length) continue;
+            let best = items[0], bestD = Infinity;
+            for (const it of items) {
+                const d = distanceMetres(street.target, it);
+                if (d < bestD) { best = it; bestD = d; }
+            }
+            streetShow(best);
+            return;
+        }
+        street.item = null;
+        streetClearView(); streetInfo(); streetButtons(); streetMarkerUpdate();
+        streetStatus(`No ${src.label} imagery within ${STREET_RADII[STREET_RADII.length - 1] / 1000} km of this spot.`);
+    } catch (err) {
+        if (req === street.req) streetFail(err);
+    }
+}
+
+/* A short message over the view that goes away by itself */
+let streetHintTimer = null;
+function streetHint(text) {
+    streetStatus(text);
+    clearTimeout(streetHintTimer);
+    streetHintTimer = setTimeout(() => { if (streetUi.status.textContent === text) streetStatus(''); }, 1600);
+}
+
+const angleDiff = (a, b) => ((a - b + 540) % 360) - 180;   // a relative to b, -180…180
+
+/* Walk: go to the nearest image that lies in the compass direction `compass` (degrees) from the one
+   on screen. The images around the current one are asked for once and kept with it. A 360° view
+   keeps looking the same way; a photo of the same kind, facing the way the view does, is preferred. */
+async function streetMove(compass) {
+    const from = street.item, src = STREET_SOURCES[street.source];
+    if (!from) return;
+    if (compass === null) return streetHint('This image has no recorded direction to walk along.');
+    const move = ++street.moveReq;
+    const view = streetHeading();
+    try {
+        if (!from.around) from.around = src.near(from, STREET_STEP);
+        const items = (await from.around).filter(Boolean);
+        if (move !== street.moveReq || street.item !== from) return;
+        // A real step first (dense sequences have a photo every metre or two), then whatever is there
+        let best = null, bestScore = Infinity;
+        for (const least of [5, 1]) for (const it of items) {
+            if (best && least === 1) break;
+            if (it.id === from.id) continue;
+            const d = distanceMetres(from, it);
+            if (d < least || d > STREET_STEP) continue;
+            const off = Math.abs(angleDiff(bearingDeg(from, it), compass));
+            if (off > 60) continue;
+            let score = d * (1 + (off / 45) ** 2);
+            // Stay with the same kind of photo, and with ordinary photos that look the way the view does now
+            if (it.pano !== from.pano) score += 15;
+            if (!it.pano && view !== null && it.heading !== null) score += Math.abs(angleDiff(streetItemHeading(it), view)) / 180 * 40;
+            if (score < bestScore) { best = it; bestScore = score; }
+        }
+        if (!best) return streetHint('No image in that direction.');
+        streetShow(best, { compass: from.pano ? streetHeading() : null });
+    } catch (err) {
+        from.around = null;
+        if (move === street.moveReq) streetHint(`${src.label} could not be reached.`);
+    }
+}
+
+/* ---- coverage: where Panoramax has photos, drawn on the map while the panel is open ----
+   Panoramax's own vector tiles: a coarse grid when zoomed far out, the sequences as lines (360° solid,
+   ordinary photos dashed) and, zoomed in close, one dot per photo. A click on a line or dot loads the
+   photo there. Source and layers exist only while the panel is open with Panoramax selected and the
+   Coverage button on, so the tile server is not contacted otherwise. Mapillary has no overlay here. */
+const STREET_COVER_COLOUR = '#3fd0e0';
+const STREET_COVER_LAYERS = ['street-cover-grid', 'street-cover-flat', 'street-cover-360', 'street-cover-pics'];
+
+function streetCoverage() {
+    if (!mapReady) { map.once('load', streetCoverage); return; }   // opened before the map was ready
+    if (!(street.open && street.cover && street.source === 'panoramax')) {
+        STREET_COVER_LAYERS.forEach(id => { if (map.getLayer(id)) map.removeLayer(id); });
+        if (map.getSource('street-cover')) map.removeSource('street-cover');
+        map.getContainer().classList.remove('street-cover-hover');
+        return;
+    }
+    if (map.getSource('street-cover')) return;
+    map.addSource('street-cover', {
+        type: 'vector', tiles: ['https://api.panoramax.xyz/api/map/{z}/{x}/{y}.mvt'], minzoom: 0, maxzoom: 15,
+        attribution: 'Street-level coverage: <a href="https://panoramax.fr" target="_blank" rel="noopener">Panoramax</a>'
+    });
+    const below = 'ellipse';   // above basemap, hillshade and buildings; below rays, ellipse and measurement
+    map.addLayer({
+        id: 'street-cover-grid', type: 'circle', source: 'street-cover', 'source-layer': 'grid', maxzoom: 7,
+        filter: ['>', ['get', 'coef'], 0],
+        paint: {
+            'circle-color': STREET_COVER_COLOUR,
+            'circle-radius': ['interpolate', ['linear'], ['zoom'], 1, 1, 6, 5],
+            'circle-opacity': ['interpolate', ['linear'], ['get', 'coef'], 0, 0.25, 1, 0.9]
+        }
+    }, below);
+    const line = (id, filter, dash) => map.addLayer({
+        id, type: 'line', source: 'street-cover', 'source-layer': 'sequences', minzoom: 6, filter,
+        layout: { 'line-cap': dash ? 'butt' : 'round', 'line-join': 'round' },
+        paint: {
+            'line-color': STREET_COVER_COLOUR, 'line-opacity': 0.7,
+            'line-width': ['interpolate', ['linear'], ['zoom'], 7, 0.75, 14, 1.5, 18, 3],
+            ...(dash ? { 'line-dasharray': dash } : {})
+        }
+    }, below);
+    line('street-cover-flat', ['!=', ['get', 'type'], 'equirectangular'], [2, 1.5]);
+    line('street-cover-360',  ['==', ['get', 'type'], 'equirectangular'], null);
+    map.addLayer({
+        id: 'street-cover-pics', type: 'circle', source: 'street-cover', 'source-layer': 'pictures', minzoom: 15,
+        paint: {
+            'circle-color': STREET_COVER_COLOUR,
+            'circle-radius': ['interpolate', ['linear'], ['zoom'], 15, 2, 19, 5],
+            'circle-stroke-color': '#0c0c0c', 'circle-stroke-width': 1,
+            'circle-opacity': ['interpolate', ['linear'], ['zoom'], 15, 0, 16, 1],
+            'circle-stroke-opacity': ['interpolate', ['linear'], ['zoom'], 15, 0, 16, 1]
+        }
+    }, below);
+}
+
+/* The coverage under a point of the map, a few pixels around it; a photo dot comes before a line.
+   Nothing while a map click belongs to a point placement or a measurement. */
+function streetCoverageAt(point) {
+    if (!map.getLayer('street-cover-pics') || measure.active || state.mode === 'map-point') return null;
+    const box = [[point.x - 5, point.y - 5], [point.x + 5, point.y + 5]];
+    const hits = map.queryRenderedFeatures(box, { layers: STREET_COVER_LAYERS.filter(id => id !== 'street-cover-grid') });
+    return hits.find(f => f.layer.id === 'street-cover-pics') || hits[0] || null;
+}
+
+map.on('mousemove', (e) => {
+    if (!street.open) return;
+    map.getContainer().classList.toggle('street-cover-hover', !!streetCoverageAt(e.point));
+});
+
+map.on('click', async (e) => {
+    if (!street.open) return;
+    if (e.originalEvent?.target?.closest?.('.maplibregl-marker')) return;
+    const hit = streetCoverageAt(e.point);
+    if (!hit) return;
+    const spot = { lat: e.lngLat.lat, lng: e.lngLat.lng };
+    const id = hit.layer.id === 'street-cover-pics' && typeof hit.properties?.id === 'string' ? hit.properties.id : null;
+    if (!id) { streetLookAt(spot); return; }
+    // A photo dot: exactly that photo
+    const req = ++street.req;
+    streetStatus('Loading image…');
+    try {
+        const data = await streetJson(`https://api.panoramax.xyz/api/search?ids=${encodeURIComponent(id)}`);
+        if (req !== street.req) return;
+        const item = panoramaxItem(data.features?.[0]);
+        if (!item) { streetLookAt(spot); return; }
+        street.target = { lat: item.lat, lng: item.lng };
+        streetShow(item);
+    } catch (err) {
+        if (req === street.req) streetFail(err);
+    }
+});
+
+function setStreetOpen(on, target = null) {
+    street.open = on;
+    streetUi.panel.hidden = !on;
+    streetUi.splitter.hidden = !on;
+    streetUi.button.setAttribute('aria-pressed', on ? 'true' : 'false');
+    if (on) {
+        streetLookAt(target || map.getCenter());
+    } else {
+        street.req++;          // whatever is still on its way is dropped
+        street.item = null;
+        streetClearView(); streetInfo(); streetButtons(); streetMarkerUpdate(); streetStatus('');
+    }
+    streetCoverage();
+    map.resize();
+}
+
+streetUi.source.value = street.source;
+streetUi.token.value  = street.token;
+streetButtons();
+
+streetUi.button.addEventListener('click', () => { setStreetOpen(!street.open); streetUi.button.blur(); });
+streetUi.close.addEventListener('click', () => setStreetOpen(false));
+streetUi.here.addEventListener('click', () => streetLookAt(map.getCenter()));
+streetUi.cover.addEventListener('click', () => {
+    street.cover = !street.cover;
+    localStorage.setItem('tp-street-cover', street.cover ? '1' : '0');
+    streetButtons();
+    streetCoverage();
+});
+streetUi.hd.addEventListener('click', () => {
+    if (street.item) streetShow(street.item, { hd: !street.hd, keepView: true });
+});
+streetUi.source.addEventListener('change', () => {
+    street.source = streetUi.source.value === 'mapillary' ? 'mapillary' : 'panoramax';
+    localStorage.setItem(STREET_SOURCE_KEY, street.source);
+    streetButtons();
+    streetCoverage();
+    streetLookAt(street.target || map.getCenter());
+});
+streetUi.token.addEventListener('change', () => {
+    street.token = streetUi.token.value.trim();
+    if (street.token) localStorage.setItem(STREET_TOKEN_KEY, street.token);
+    else localStorage.removeItem(STREET_TOKEN_KEY);
+    if (street.open && street.source === 'mapillary') streetLookAt(street.target || map.getCenter());
+});
+
+/* Mouse: drag looks around (360°) or pans a zoomed flat photo, the wheel zooms, a click walks towards
+   the clicked side of the view. Arrow keys, while the view has the focus: up and down walk forwards
+   and backwards along the view, left and right step sideways. */
+{
+    let drag = null;
+    const onDown = (e) => {
+        if (e.button !== 0) return;
+        drag = { x: e.clientX, y: e.clientY, travelled: 0 };
+        e.currentTarget.setPointerCapture(e.pointerId);
+        e.currentTarget.classList.add('dragging');
+        e.preventDefault();
+        streetUi.view.focus({ preventScroll: true });
+    };
+    const onUp = (e) => {
+        const click = drag && drag.travelled < 5 && e.type === 'pointerup';
+        drag = null;
+        e.currentTarget.classList.remove('dragging');
+        if (!click) return;
+        // How far left or right of the middle the click was, as an angle
+        const r = streetUi.view.getBoundingClientRect();
+        const x = (e.clientX - r.left) / Math.max(1, r.width) * 2 - 1;
+        const off = e.currentTarget === streetUi.canvas
+            ? Math.atan(x * (r.width / Math.max(1, r.height)) * Math.tan(street.fov * DEG / 2)) * RAD
+            : x * 30;
+        const heading = streetHeading();
+        streetMove(heading === null ? null : heading + off);
+    };
+    const onMove = (e) => {
+        if (!drag) return;
+        const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+        drag = { x: e.clientX, y: e.clientY, travelled: drag.travelled + Math.abs(dx) + Math.abs(dy) };
+        if (e.currentTarget === streetUi.canvas) {
+            const perPx = street.fov / Math.max(1, streetUi.canvas.clientHeight);   // degrees per pixel
+            street.yaw   = (street.yaw - dx * perPx) % 360;
+            street.pitch = Math.max(-89, Math.min(89, street.pitch + dy * perPx));
+            streetDraw();
+            streetMarkerUpdate();
+        } else if (street.zoom > 1) {
+            const maxX = streetUi.view.clientWidth * (street.zoom - 1) / 2, maxY = streetUi.view.clientHeight * (street.zoom - 1) / 2;
+            street.tx = Math.max(-maxX, Math.min(maxX, street.tx + dx));
+            street.ty = Math.max(-maxY, Math.min(maxY, street.ty + dy));
+            streetFlatTransform();
+        }
+    };
+    const onWheel = (e) => {
+        e.preventDefault();
+        const k = Math.exp(e.deltaY * 0.0015);
+        if (e.currentTarget === streetUi.canvas) {
+            street.fov = Math.max(15, Math.min(110, street.fov * k));
+            streetDraw();
+        } else {
+            street.zoom = Math.max(1, Math.min(8, street.zoom / k));
+            const maxX = streetUi.view.clientWidth * (street.zoom - 1) / 2, maxY = streetUi.view.clientHeight * (street.zoom - 1) / 2;
+            street.tx = Math.max(-maxX, Math.min(maxX, street.tx));
+            street.ty = Math.max(-maxY, Math.min(maxY, street.ty));
+            streetFlatTransform();
+        }
+    };
+    [streetUi.canvas, streetUi.flat].forEach(node => {
+        node.addEventListener('pointerdown', onDown);
+        node.addEventListener('pointermove', onMove);
+        node.addEventListener('pointerup', onUp);
+        node.addEventListener('pointercancel', onUp);
+        node.addEventListener('wheel', onWheel, { passive: false });
+    });
+    const KEY_TURN = { ArrowUp: 0, ArrowRight: 90, ArrowDown: 180, ArrowLeft: -90 };
+    streetUi.view.addEventListener('keydown', (e) => {
+        if (!(e.key in KEY_TURN) || e.ctrlKey || e.metaKey || e.altKey) return;
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.repeat) return;
+        const heading = streetHeading();
+        streetMove(heading === null ? null : heading + KEY_TURN[e.key]);
+    });
+    new ResizeObserver(streetDraw).observe(streetUi.view);
+}
+
+makeSplitter(streetUi.splitter, document.getElementById('map-stack'),
+    { axis: 'y', cssVar: '--street', key: 'tp-street-split', min: 120, start: 45 });
+
+/* ============================================================
    START – bring back the autosaved work, if any
    ============================================================ */
+renderSessionMenu();   // the image tabs are there from the start
 autosaveRestore();
