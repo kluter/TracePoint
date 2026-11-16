@@ -983,3 +983,21 @@ button.btn-primary:hover:not(:disabled) { background: #004a6e; color: #fff; }
 .map-panel-actions { display: flex; gap: 6px; margin-top: 8px; }
 .map-panel-actions button { font-size: 11px; padding: 4px 10px; }
 .map-panel-actions .map-panel-reset { margin-left: auto; color: #888; }
+
+/* ---- DISTANCE MEASUREMENT ---- */
+/* Compass and ruler side by side, bottom-left: close, with a small gap between them */
+/* MapLibre puts a control added later in front of the earlier ones at the bottom, hence the reversed row */
+.maplibregl-ctrl-bottom-left { display: flex; flex-direction: row-reverse; justify-content: flex-end; align-items: flex-end; }
+.maplibregl-ctrl-bottom-left .maplibregl-ctrl { float: none; margin: 0 0 10px 10px; }
+.maplibregl-ctrl-bottom-left .measure-ctrl { margin-left: 6px; }
+.measure-btn { display: flex; align-items: center; justify-content: center; color: #ccc; border-radius: 4px; }
+.measure-btn svg { width: 17px; height: 17px; }
+.maplibregl-ctrl-group button.measure-btn:hover  { background-color: #2a2000; color: #ffdc32; }
+.maplibregl-ctrl-group button.measure-btn.active { background-color: #2a2000; color: #ffdc32; }
+.measure-ctrl:has(.measure-btn.active) { border-color: #ffdc32; }
+/* The distance, at the middle of the measured line */
+.measure-label {
+    padding: 2px 8px; border-radius: 10px; pointer-events: none; white-space: nowrap;
+    background: rgba(21, 21, 21, .92); color: #fff; border: 1px solid #fff;
+    font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums;
+}
