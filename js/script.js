@@ -241,9 +241,40 @@ const map = new maplibregl.Map({
     aroundCenter: false,
     rotateDegreesPerPixelMoved: ROTATE_DEG_PER_PX
 });
-// zoom bottom-left, compass bottom-right; search box and layer menu live in the map bar under the header
-map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-left');
-map.addControl(new maplibregl.NavigationControl({ showZoom: false, visualizePitch: true }), 'bottom-right');
+// The compass (reset bearing and tilt) is the only button on the map, bottom-left; zooming is done with the wheel,
+// double-click or the keyboard. Search box and map panel live in the map bar under the header.
+map.addControl(new maplibregl.NavigationControl({ showZoom: false, visualizePitch: true }), 'bottom-left');
+
+/* With 3D terrain, dragging and wheel zooming work on the ground point under the mouse. Near the horizon
+   of a tilted view, or over terrain that has not loaded yet, that point is far away or wrong, and one
+   step then throws the map kilometres off or changes the zoom by many levels. While the mouse drags or
+   the wheel turns, a single camera update may not move the centre further than the view is large or
+   change the zoom by more than 1.5 levels; a bigger step is dropped and the map stays put for that
+   frame. Flights and jumps made by the app are not touched. */
+let mapMouseDown = false, mapLastWheel = 0;
+{
+    const box = map.getCanvasContainer();
+    box.addEventListener('mousedown', () => { mapMouseDown = true; }, true);
+    box.addEventListener('wheel', () => { mapLastWheel = performance.now(); }, { capture: true, passive: true });
+    window.addEventListener('mouseup', () => { mapMouseDown = false; }, true);
+    window.addEventListener('blur',    () => { mapMouseDown = false; });
+}
+let mapGuardWarned = 0;
+map.transformCameraUpdate = (next) => {
+    const byHand = mapMouseDown || performance.now() - mapLastWheel < 500;   // the wheel zoom glides on for a moment
+    if (!byHand || !map.getTerrain()) return {};
+    const cur = map.getCenter(), zoom = map.getZoom();
+    const metresPerPixel = 40075016.686 * Math.cos(cur.lat * Math.PI / 180) / (512 * Math.pow(2, zoom));
+    const c = map.getCanvas();
+    const limit = Math.hypot(c.clientWidth, c.clientHeight) * metresPerPixel;
+    const moved = cur.distanceTo(next.center);
+    if (moved <= limit && Math.abs(next.zoom - zoom) <= 1.5) return {};
+    if (performance.now() - mapGuardWarned > 2000) {   // a trace for bug reports, at most every 2 s
+        mapGuardWarned = performance.now();
+        console.warn(`TracePoint: dropped a map step with 3D terrain (zoom ${zoom.toFixed(2)} → ${next.zoom.toFixed(2)}, ${(moved / 1000).toFixed(1)} km)`);
+    }
+    return { center: cur, zoom };
+};
 
 let mapReady = false;   // sources and layers can only be added once the style has loaded
 
@@ -513,7 +544,7 @@ function setTileSet(id) {
         map.addLayer({
             id: lid, type: 'raster', source: lid,
             paint: { 'raster-opacity': l.opts.opacity ?? 1, 'raster-fade-duration': 0 }
-        }, map.getLayer('ellipse') ? 'ellipse' : undefined);   // base imagery stays below the work layers (ellipse is the lowest)
+        }, map.getLayer('hillshade') ? 'hillshade' : undefined);   // base imagery stays below the hillshade and the work layers
         activeTileLayerIds.push(lid);
     });
 }
@@ -530,59 +561,228 @@ map.on('error', (e) => {
 setTileSet(localStorage.getItem('tp-tileset') || 'esri-sat');
 
 /* ---- 3D TERRAIN ---- */
-/* Mapzen Terrarium DEM tiles from AWS (keyless, CORS ok). The source is registered at map load but
-   no tile is requested until terrain is switched on. Independent of the chosen imagery. */
+/* Mapzen Terrarium DEM tiles from AWS (keyless, CORS ok). The sources are registered at map load but
+   no tile is requested until terrain or hillshade is switched on. Independent of the chosen imagery. */
 const TERRAIN_TILES = 'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png';
 let terrainOn = localStorage.getItem('tp-terrain') === '1';
 
 function setTerrain(on) {
     terrainOn = on;
     localStorage.setItem('tp-terrain', on ? '1' : '0');
-    if (!mapReady) return;   // applied again from the map's load handler
-    map.setTerrain(on ? { source: 'dem', exaggeration: 1 } : null);
+    applyMapSettings();
 }
 
-/* ---- LAYER SWITCHER CONTROL ---- */
-/* Lives in the map bar under the map header, not on the map itself */
+/* ---- MAP SETTINGS: how the terrain looks and what the camera may do ----
+   Kept in this browser, for the map as a whole: not per image and not exported.
+   Field of view and camera limits after briatlon's map options. */
+const MAP_SETTINGS_KEY = 'tp-map-settings';
+const MAP_SETTING_RANGES = {   // [min, max, default]
+    exaggeration: [1, 3, 1],
+    fov:          [10, 90, 37],     // vertical field of view in degrees; MapLibre's own default is 36.87
+    maxPitch:     [0, 90, 90],
+    minZoom:      [0, 20, 0],
+    maxZoom:      [0, 20, 20],
+    buildingsOpacity: [20, 100, 80]   // percent
+};
+
+function loadMapSettings() {
+    let saved = {};
+    try { saved = JSON.parse(localStorage.getItem(MAP_SETTINGS_KEY)) || {}; } catch (err) { /* start from the defaults */ }
+    const s = { hillshade: saved.hillshade === true, buildings: saved.buildings === true };
+    Object.entries(MAP_SETTING_RANGES).forEach(([key, [min, max, def]]) => {
+        s[key] = finite(saved[key]) ? Math.min(max, Math.max(min, saved[key])) : def;
+    });
+    if (s.minZoom > s.maxZoom) { s.minZoom = MAP_SETTING_RANGES.minZoom[2]; s.maxZoom = MAP_SETTING_RANGES.maxZoom[2]; }
+    return s;
+}
+
+let mapSettings = loadMapSettings();
+
+function applyMapSettings() {
+    const s = mapSettings;
+    map.setVerticalFieldOfView(s.fov);
+    map.setMaxPitch(s.maxPitch);
+    map.setMinZoom(0);            // out of the way first: a new maximum below the old minimum would be refused
+    map.setMaxZoom(s.maxZoom);
+    map.setMinZoom(s.minZoom);
+    if (!mapReady) return;        // terrain and hillshade need the style; applied again from the map's load handler
+    map.setTerrain(terrainOn ? { source: 'dem', exaggeration: s.exaggeration } : null);
+    map.setLayoutProperty('hillshade', 'visibility', s.hillshade ? 'visible' : 'none');
+    applyBuildings();
+}
+
+/* ---- 3D BUILDINGS ----
+   OpenStreetMap buildings as blocks on top of any basemap, to line up rooflines and skylines on the
+   tilted map. Vector tiles from OpenFreeMap (keyless, OpenMapTiles schema). Source and layer exist
+   only while the switch is on: off removes them, so that server is not contacted at all. */
+const BUILDINGS_TILEJSON = 'https://tiles.openfreemap.org/planet';
+const BUILDINGS_MIN_ZOOM = 13;   // the tiles carry buildings from here on
+const BUILDING_FALLBACK_HEIGHT = 5;   // metres, for the rare building without a height in the tiles
+
+function applyBuildings() {
+    const s = mapSettings;
+    if (!s.buildings) {
+        if (map.getLayer('buildings'))  map.removeLayer('buildings');
+        if (map.getSource('buildings')) map.removeSource('buildings');
+        return;
+    }
+    if (!map.getSource('buildings')) map.addSource('buildings', { type: 'vector', url: BUILDINGS_TILEJSON });
+    if (!map.getLayer('buildings')) {
+        map.addLayer({
+            id: 'buildings', type: 'fill-extrusion', source: 'buildings', 'source-layer': 'building',
+            minzoom: BUILDINGS_MIN_ZOOM,
+            filter: ['!=', ['get', 'hide_3d'], true],   // outlines that only repeat the parts of a detailed building
+            paint: {
+                'fill-extrusion-color':  '#d9d9d6',
+                'fill-extrusion-height': ['coalesce', ['get', 'render_height'], BUILDING_FALLBACK_HEIGHT],
+                'fill-extrusion-base':   ['coalesce', ['get', 'render_min_height'], 0],
+                'fill-extrusion-vertical-gradient': true   // sides a little darker than the roofs
+            }
+        }, 'ellipse');   // above basemap and hillshade, below rays and ellipse
+    }
+    map.setPaintProperty('buildings', 'fill-extrusion-opacity', s.buildingsOpacity / 100);
+}
+
+function setMapSetting(key, value) {
+    mapSettings[key] = value;
+    // The zoom limits push each other instead of crossing
+    if (key === 'minZoom' && value > mapSettings.maxZoom) mapSettings.maxZoom = value;
+    if (key === 'maxZoom' && value < mapSettings.minZoom) mapSettings.minZoom = value;
+    localStorage.setItem(MAP_SETTINGS_KEY, JSON.stringify(mapSettings));
+    applyMapSettings();
+    syncMapPanel();
+}
+
+/* Full-frame focal length with the same vertical field of view (24 mm sensor height, landscape):
+   set it to the lens in a photo's EXIF and the tilted map shows the scene with that perspective. */
+function fovToFocal(fov) { return 12 / Math.tan(fov * DEG / 2); }
+
+/* ---- MAP PANEL: basemap, terrain and camera in one place ---- */
+/* Opens from the ☰ button in the map bar under the map header. It stays open while its controls are
+   used; a click on the map or outside it, Esc or the button closes it. */
+let layerMenu = null;      // the panel
+let layerList = null;      // its basemap list, redrawn by renderLayerMenu
+const mapPanelSync = [];   // one function per control: bring it in line with the settings
+
+function syncMapPanel() { mapPanelSync.forEach(fn => fn()); }
+
 function buildLayerSwitcher() {
     const wrap = document.getElementById('layer-switcher-wrap');
 
     const btn = el('button', 'layer-burger', wrap);
     btn.type = 'button';
-    btn.title = 'Switch map layer';
+    btn.title = 'Map layers, terrain and camera';
     btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
         <rect y="2"  width="16" height="2" rx="1"/>
         <rect y="7"  width="16" height="2" rx="1"/>
         <rect y="12" width="16" height="2" rx="1"/>
     </svg>`;
 
-    const menu = el('div', 'layer-menu', wrap);
+    const menu = el('div', 'layer-menu map-panel', wrap);
     menu.style.display = 'none';
     layerMenu = menu;
-    renderLayerMenu();
 
-    btn.onclick = () => {
-        menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+    const section = (title) => {
+        el('div', 'map-panel-title', menu).textContent = title;
+        return el('div', 'map-panel-body', menu);
+    };
+    const row = (parent, label, title) => {
+        const r = el('div', 'adjust-row', parent);
+        if (title) r.title = title;
+        const id = `map-opt-${label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+        const l = el('label', '', r);
+        l.textContent = label;
+        l.htmlFor = id;
+        return { r, id };
+    };
+    const addSwitch = (parent, label, title, get, set) => {
+        const { r, id } = row(parent, label, title);
+        const input = el('input', 'adjust-switch', r);
+        input.type = 'checkbox'; input.id = id; input.setAttribute('role', 'switch');
+        const val = el('span', 'adjust-val', r);
+        input.onchange = () => set(input.checked);
+        mapPanelSync.push(() => { input.checked = get(); val.textContent = get() ? 'On' : 'Off'; });
+    };
+    /* A slider for one map setting; double-click puts it back to its default */
+    const addSlider = (parent, label, title, key, step, fmt, enabled = () => true) => {
+        const [min, max, def] = MAP_SETTING_RANGES[key];
+        const { r, id } = row(parent, label, title);
+        const input = el('input', '', r);
+        input.type = 'range'; input.id = id; input.min = min; input.max = max; input.step = step;
+        const val = el('span', 'adjust-val', r);
+        input.oninput    = () => setMapSetting(key, +input.value);
+        input.ondblclick = () => { input.blur(); setMapSetting(key, def); };
+        mapPanelSync.push(() => {
+            if (document.activeElement !== input) input.value = mapSettings[key];   // not under the dragging thumb
+            val.textContent = fmt(mapSettings[key]);
+            input.disabled = !enabled();
+            r.classList.toggle('disabled', !enabled());
+        });
     };
 
-    map.on('click', () => { menu.style.display = 'none'; });
+    // Basemap
+    layerList = section('Basemap');
+    layerList.classList.add('map-panel-list');
+
+    // Terrain
+    const terrain = section('Terrain');
+    addSwitch(terrain, '3D terrain', 'Elevation tiles from AWS. Tilt the map (Ctrl+drag) to see the relief.',
+        () => terrainOn, setTerrain);
+    addSlider(terrain, 'Height', 'How much the relief is exaggerated. Needs 3D terrain.',
+        'exaggeration', 0.1, v => `${v.toFixed(1)}×`, () => terrainOn);
+    addSwitch(terrain, 'Hillshade', 'Shades the slopes on top of the basemap, with or without 3D terrain. Uses the same elevation tiles.',
+        () => mapSettings.hillshade, on => setMapSetting('hillshade', on));
+
+    // Buildings
+    const buildings = section('Buildings');
+    addSwitch(buildings, '3D buildings', `OpenStreetMap buildings as 3D blocks, from zoom ${BUILDINGS_MIN_ZOOM}. Loaded from OpenFreeMap while this is on. Tilt the map (Ctrl+drag) to see them rise.`,
+        () => mapSettings.buildings, on => setMapSetting('buildings', on));
+    addSlider(buildings, 'Opacity', 'How much of the basemap shows through the blocks',
+        'buildingsOpacity', 5, v => `${v}%`, () => mapSettings.buildings);
+
+    // Camera
+    const camera = section('Camera');
+    addSlider(camera, 'Field of view', 'Strength of the perspective when the map is tilted. The focal length is the full-frame lens with the same vertical angle.',
+        'fov', 1, v => `${v}° · ${Math.round(fovToFocal(v))} mm`);
+    addSlider(camera, 'Max tilt', 'How far the map can be tilted', 'maxPitch', 1, v => `${v}°`);
+    addSlider(camera, 'Min zoom', 'How far out the map can zoom', 'minZoom', 1, v => `${v}`);
+    addSlider(camera, 'Max zoom', 'How far in the map can zoom', 'maxZoom', 1, v => `${v}`);
+
+    const actions = el('div', 'map-panel-actions', camera);
+    const action = (label, title, fn) => {
+        const b = el('button', '', actions);
+        b.type = 'button'; b.textContent = label; b.title = title;
+        b.onclick = fn;
+        return b;
+    };
+    action('North up', 'Turn the map to north; the tilt stays',  () => map.easeTo({ bearing: 0 }));
+    action('Top down', 'Look straight down; the bearing stays', () => map.easeTo({ pitch: 0 }));
+    action('Reset', 'All sliders back to their defaults: terrain height, buildings opacity, field of view and the camera limits', () => {
+        Object.keys(MAP_SETTING_RANGES).forEach(key => { mapSettings[key] = MAP_SETTING_RANGES[key][2]; });
+        setMapSetting('fov', mapSettings.fov);
+    }).classList.add('map-panel-reset');
+
+    renderLayerMenu();
+    syncMapPanel();
+
+    const close = () => { menu.style.display = 'none'; };
+    btn.onclick = () => { menu.style.display = menu.style.display === 'none' ? 'block' : 'none'; };
+    map.on('click', close);
+    document.addEventListener('click', (e) => { if (!wrap.contains(e.target) && e.target.isConnected) close(); });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
+    menu.addEventListener('wheel', (e) => e.stopPropagation());   // scrolling the panel must not zoom anything under it
 }
 
-let layerMenu = null;
-
+/* The basemap list: built-in layers, then the custom ones with edit and remove, then "add" */
 function renderLayerMenu() {
-    const menu = layerMenu;
-    menu.innerHTML = '';
+    const list = layerList;
+    list.innerHTML = '';
 
     const addItem = (set) => {
-        const item = el('div', 'layer-item', menu);
+        const item = el('div', 'layer-item', list);
         item.dataset.id = set.id;
         if (set.id === activeTileSetId) item.classList.add('active');
-        item.onclick = () => {
-            setTileSet(set.id);
-            renderLayerMenu();
-            menu.style.display = 'none';
-        };
+        item.onclick = () => { setTileSet(set.id); renderLayerMenu(); };
         if (!set.custom) { item.textContent = set.label; return; }
 
         item.classList.add('layer-item-custom');
@@ -591,7 +791,7 @@ function renderLayerMenu() {
         const edit = el('button', 'layer-action', item);
         edit.title = 'Edit layer';
         edit.textContent = '✎';
-        edit.onclick = (e) => { e.stopPropagation(); menu.style.display = 'none'; openLayerModal(set.id); };
+        edit.onclick = (e) => { e.stopPropagation(); layerMenu.style.display = 'none'; openLayerModal(set.id); };
         const del = el('button', 'layer-action layer-action-delete', item);
         del.title = 'Remove layer';
         del.textContent = '×';
@@ -599,25 +799,12 @@ function renderLayerMenu() {
     };
 
     TILE_SETS.forEach(addItem);
-
-    el('div', 'layer-divider', menu);
-    const terrain = el('div', 'layer-item layer-terrain', menu);
-    terrain.textContent = '⛰ Terrain';
-    terrain.title = 'Elevation tiles from AWS. Tilt the map (Ctrl+drag) to see the relief.';
-    if (terrainOn) terrain.classList.add('active');
-    terrain.onclick = () => {
-        setTerrain(!terrainOn);
-        renderLayerMenu();
-        menu.style.display = 'none';
-    };
-
-    el('div', 'layer-divider', menu);
+    if (customLayers.length) el('div', 'layer-divider', list);
     allTileSets().filter(s => s.custom).forEach(addItem);
-    if (customLayers.length) el('div', 'layer-divider', menu);
 
-    const add = el('div', 'layer-item layer-add', menu);
+    const add = el('div', 'layer-item layer-add', list);
     add.textContent = '＋ Add custom layer…';
-    add.onclick = () => { menu.style.display = 'none'; openLayerModal(null); };
+    add.onclick = () => { layerMenu.style.display = 'none'; openLayerModal(null); };
 }
 
 function removeCustomLayer(id) {
@@ -628,6 +815,7 @@ function removeCustomLayer(id) {
 }
 
 buildLayerSwitcher();
+applyMapSettings();   // camera settings now; terrain and hillshade follow when the style has loaded
 
 /* ---- CUSTOM LAYER POPUP ---- */
 const layerModal      = document.getElementById('layer-modal');
@@ -703,13 +891,18 @@ layerModal.addEventListener('keydown', (e) => {
    and Google Maps links. Returns { lat, lng } or null. */
 function parseCoordinates(text) {
     const s = String(text || '').trim();
-    if (!s || s.length > 500) return null;
+    if (!s || s.length > 2000) return null;
 
     if (/^https?:\/\//i.test(s)) {
+        const known = parseCoordinateUrl(s);   // Apple, Bing, Yandex, OpenStreetMap, Lookmap, Baidu, Google Earth search, lat=/lon=
+        if (known !== undefined) return known;
         const m = s.match(/@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/) ||
                   s.match(/[?&](?:q|ll|query|center)=(-?\d+(?:\.\d+)?)(?:,|%2C)\s*(-?\d+(?:\.\d+)?)/i);
         return m ? validLatLng(+m[1], +m[2]) : null;
     }
+
+    const mercator = parseWebMercator(s);
+    if (mercator) return mercator;
 
     const norm = s.replace(/[″“”]|''/g, '"').replace(/[′‘’]/g, "'");
     const PART = /(?<![A-Za-z])([NSEW])?\s*([-+]?\d+(?:\.\d+)?)\s*°?\s*(?:(\d+(?:\.\d+)?)\s*'\s*)?(?:(\d+(?:\.\d+)?)\s*"\s*)?([NSEW](?![A-Za-z]))?/gi;
@@ -728,6 +921,128 @@ function parseCoordinates(text) {
     if (/[EW]/.test(a.hemi) || /[NS]/.test(b.hemi)) [a, b] = [b, a];           // hemisphere letters decide
     else if (!a.hemi && !b.hemi && Math.abs(a.v) > 90 && Math.abs(b.v) <= 90) [a, b] = [b, a]; // lng first
     return validLatLng(a.v, b.v);
+}
+
+/* ---- LINKS FROM OTHER MAP SERVICES ----
+   Formats after briatlon's coordinatePaste.js. A known service is read by its own rules and the answer
+   is final (Yandex writes longitude first, so a generic rule would get it wrong); undefined means
+   "not a service known here", and the generic rules in parseCoordinates get their turn. */
+function parseCoordinateUrl(s) {
+    let url;
+    try { url = new URL(s.replace(/\\&/g, '&')); } catch (err) { return null; }
+    const host = url.hostname.toLowerCase().replace(/^www\./, '');
+    const q = url.searchParams, hash = new URLSearchParams(url.hash.slice(1));
+    const NUM = '[+-]?(?:\\d+(?:\\.\\d*)?|\\.\\d+)';
+    const pair = (text, sep = ',', lngFirst = false) => {
+        const m = (text || '').match(new RegExp(`^\\s*(${NUM})\\s*${sep}\\s*(${NUM})\\s*$`));
+        return m ? validLatLng(+m[lngFirst ? 2 : 1], +m[lngFirst ? 1 : 2]) : null;
+    };
+
+    if (host === 'maps.apple.com') return pair(q.get('coordinate') ?? q.get('ll') ?? q.get('q'));
+    if (host === 'bing.com')       return pair(q.get('cp'), '~');
+    if (/^yandex\.[a-z.]+$/.test(host)) return pair(q.get('ll'), ',', true);
+    if (host === 'openstreetmap.org' || host === 'osm.org') {
+        if (q.has('mlat') && q.has('mlon')) return pair(`${q.get('mlat')},${q.get('mlon')}`);
+        const view = hash.get('map')?.split('/');             // #map=zoom/lat/lng
+        return view?.length === 3 ? pair(`${view[1]},${view[2]}`) : null;
+    }
+    if (host === 'lookmap.skzk.dev') {
+        const view  = hash.get('c')?.split('/');              // #c=zoom/lat/lng, optional p=lat/lng
+        const point = hash.get('p')?.split('/') ?? view?.slice(1);
+        return point?.length === 2 ? pair(point.join(',')) : null;
+    }
+    if (host === 'map.baidu.com') {
+        const m  = url.pathname.match(new RegExp(`^/@(${NUM}),(${NUM})`));   // Baidu's own projected metres
+        const ll = m && baiduMercatorToWgs84(+m[1], +m[2]);
+        return ll ? validLatLng(ll.lat, ll.lng) : null;
+    }
+    if (host === 'earth.google.com') {
+        const m = url.pathname.match(/^\/web\/search\/([^/]+)/);
+        if (m) { try { const p = pair(decodeURIComponent(m[1])); if (p) return p; } catch (err) { /* not a pair */ } }
+    }
+    if (q.has('lat') && (q.has('lon') || q.has('lng'))) return pair(`${q.get('lat')},${q.get('lon') ?? q.get('lng')}`);
+    return undefined;
+}
+
+/* Short links carry no coordinates; reading them would mean asking their server where they lead */
+function isShortMapLink(text) {
+    const m = String(text || '').trim().match(/^https?:\/\/([^/?#]+)(\/[^?#]*)?/i);
+    if (!m) return false;
+    const host = m[1].toLowerCase().replace(/^www\./, '');
+    return ['maps.app.goo.gl', 'goo.gl', 'g.co', 'maps.apple', 'binged.it', 'bit.ly', 't.co', 'tinyurl.com'].includes(host) ||
+           (/^yandex\./.test(host) && /^\/maps\/-\//.test(m[2] || ''));
+}
+const SHORT_LINK_NOTE = "Short links can't be read here. Open it and copy the full address.";
+
+/* Web Mercator metres (EPSG:3857) as "x, y", with or without a leading @. Only taken when a number is
+   far too large for degrees, so it cannot be mistaken for latitude and longitude. */
+function parseWebMercator(s) {
+    const m = s.match(/^@?\s*([-+]?\d+(?:\.\d+)?)\s*[,;\s]\s*([-+]?\d+(?:\.\d+)?)$/);
+    if (!m) return null;
+    const x = +m[1], y = +m[2], RADIUS = 6378137, MAX = Math.PI * RADIUS;
+    if (Math.max(Math.abs(x), Math.abs(y)) <= 1000 || Math.abs(x) > MAX || Math.abs(y) > MAX) return null;
+    return validLatLng(Math.atan(Math.sinh(y / RADIUS)) * RAD, x / RADIUS * RAD);
+}
+
+/* ---- BAIDU ----
+   Baidu Maps shows its own projected coordinates (BD-09 Mercator). This turns them into an approximate
+   WGS84 position, in the browser: good to some metres, enough to land on the right spot.
+   BD09 conversion adapted from https://github.com/46319943/BD09Convertor (via briatlon's baiduCoordinates.js):
+
+   Copyright (c) 2018 The Python Packaging Authority
+
+   Permission is hereby granted, free of charge, to any person obtaining a copy
+   of this software and associated documentation files (the "Software"), to deal
+   in the Software without restriction, including without limitation the rights
+   to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+   copies of the Software, and to permit persons to whom the Software is
+   furnished to do so, subject to the following conditions:
+
+   The above copyright notice and this permission notice shall be included in all
+   copies or substantial portions of the Software.
+
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+   FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+   AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+   LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+   OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+   SOFTWARE. */
+const baiduMercatorBands = [12890594.86, 8362377.87, 5591021, 3481989.83, 1678043.12, 0];
+const baiduMercatorCoefficients = [[1.410526172116255e-08, 8.98305509648872e-06, -1.9939833816331, 200.9824383106796, -187.2403703815547, 91.6087516669843, -23.38765649603339, 2.57121317296198, -0.03801003308653, 17337981.2], [-7.435856389565537e-09, 8.983055097726239e-06, -0.78625201886289, 96.32687599759846, -1.85204757529826, -59.36935905485877, 47.40033549296737, -16.50741931063887, 2.28786674699375, 10260144.86], [-3.030883460898826e-08, 8.98305509983578e-06, 0.30071316287616, 59.74293618442277, 7.357984074871, -25.38371002664745, 13.45380521110908, -3.29883767235584, 0.32710905363475, 6856817.37], [-1.981981304930552e-08, 8.983055099779535e-06, 0.03278182852591, 40.31678527705744, 0.65659298677277, -4.44255534477492, 0.85341911805263, 0.12923347998204, -0.04625736007561, 4482777.06], [3.09191371068437e-09, 8.983055096812155e-06, 6.995724062e-05, 23.10934304144901, -0.00023663490511, -0.6321817810242, -0.00663494467273, 0.03430082397953, -0.00466043876332, 2555164.4], [2.890871144776878e-09, 8.983055095805407e-06, -3.068298e-08, 7.47137025468032, -3.53937994e-06, -0.02145144861037, -1.234426596e-05, 0.00010322952773, -3.23890364e-06, 826088.5]];
+
+// Convert Baidu's projected coordinates to an approximate WGS84 location locally.
+function baiduMercatorToWgs84(x, y) {
+    if (!Number.isFinite(x) || !Number.isFinite(y) || Math.abs(x) > 20037726.38 || Math.abs(y) > 12474104.17) return null;
+    const index = baiduMercatorBands.findIndex(band => Math.abs(y) >= band);
+    const c = baiduMercatorCoefficients[index];
+    const t = Math.abs(y) / c[9];
+    let lat = 0;
+    for (let power = 0; power <= 6; power++) lat += c[power + 2] * t ** power;
+    lat *= y < 0 ? -1 : 1;
+    let lng = (c[0] + c[1] * Math.abs(x)) * (x < 0 ? -1 : 1);
+    // Remove BD09's offset to obtain GCJ02.
+    const pi = Math.PI, xPi = pi * 3000 / 180;
+    const bx = lng - 0.0065, by = lat - 0.006;
+    const distance = Math.hypot(bx, by) - 0.00002 * Math.sin(by * xPi);
+    const angle = Math.atan2(by, bx) - 0.000003 * Math.cos(bx * xPi);
+    lng = distance * Math.cos(angle);
+    lat = distance * Math.sin(angle);
+    if (lng <= 73.66 || lng >= 135.05 || lat <= 3.86 || lat >= 53.55) return { lat, lng };
+    // Approximate the inverse GCJ02 offset; accuracy is suitable for viewport navigation.
+    const dx = lng - 105, dy = lat - 35;
+    const wave = (a, b) => (20 * Math.sin(6 * a * pi) + 20 * Math.sin(2 * a * pi) +
+        20 * Math.sin(b * pi) + 40 * Math.sin(b / 3 * pi)) * 2 / 3;
+    let dlat = -100 + 2 * dx + 3 * dy + 0.2 * dy ** 2 + 0.1 * dx * dy + 0.2 * Math.sqrt(Math.abs(dx));
+    dlat += wave(dx, dy) + (160 * Math.sin(dy / 12 * pi) + 320 * Math.sin(dy / 30 * pi)) * 2 / 3;
+    let dlng = 300 + dx + 2 * dy + 0.1 * dx ** 2 + 0.1 * dx * dy + 0.1 * Math.sqrt(Math.abs(dx));
+    dlng += wave(dx, dx) + (150 * Math.sin(dx / 12 * pi) + 300 * Math.sin(dx / 30 * pi)) * 2 / 3;
+    const radians = lat * pi / 180;
+    const magic = 1 - 0.00669342162296594323 * Math.sin(radians) ** 2;
+    const root = Math.sqrt(magic);
+    dlat = dlat * 180 / (6378245 * (1 - 0.00669342162296594323) / (magic * root) * pi);
+    dlng = dlng * 180 / (6378245 / root * Math.cos(radians) * pi);
+    return { lat: lat - dlat, lng: lng - dlng };
 }
 
 function validLatLng(lat, lng) {
@@ -794,10 +1109,12 @@ function renderSearchList() {
 /* A bad entry is cleared and the message takes the placeholder's place, in red, until the next keystroke */
 const SEARCH_PLACEHOLDER = 'Paste coordinates…';
 const SEARCH_ERROR       = 'Not recognised — try 52.40, 13.06';
-function setSearchError(on) {
+const SEARCH_TITLE       = 'Paste or type coordinates or a map link, then press Enter. Ctrl+V anywhere works too.';
+function setSearchError(on, message = SEARCH_ERROR) {
     searchInput.classList.toggle('search-input-error', on);
     if (on) searchInput.value = '';
-    searchInput.placeholder = on ? SEARCH_ERROR : SEARCH_PLACEHOLDER;
+    searchInput.placeholder = on ? message : SEARCH_PLACEHOLDER;
+    searchInput.title = on ? message : SEARCH_TITLE;   // the box may be too narrow for the whole message
 }
 
 /* Lives in the map bar; the pin list floats top-left on the map */
@@ -809,14 +1126,14 @@ function buildCoordSearch() {
     searchInput.placeholder = SEARCH_PLACEHOLDER;
     searchInput.spellcheck = false;
     searchInput.autocomplete = 'off';
-    searchInput.title = 'Paste or type coordinates, then press Enter. Ctrl+V anywhere works too.';
+    searchInput.title = SEARCH_TITLE;
 
     searchList = el('div', 'search-list', document.getElementById('map-container'));
     searchList.style.display = 'none';
 
     const submit = (text) => {
         const c = parseCoordinates(text);
-        if (!c) { setSearchError(true); return false; }
+        if (!c) { setSearchError(true, isShortMapLink(text) ? SHORT_LINK_NOTE : SEARCH_ERROR); return false; }
         setSearchError(false);
         searchInput.value = '';
         searchInput.blur();
@@ -848,7 +1165,7 @@ document.addEventListener('paste', (e) => {
     const text = e.clipboardData && e.clipboardData.getData('text');
     if (!text || !text.trim()) return;
     const c = parseCoordinates(text);
-    if (!c) return showToast('No coordinates found in clipboard.');
+    if (!c) return showToast(isShortMapLink(text) ? SHORT_LINK_NOTE : 'No coordinates found in clipboard.');
     e.preventDefault();
     setSearchError(false);
     addSearchPin(c);
@@ -893,7 +1210,7 @@ sessions = [createSession('Image 1')];
    UI HELPERS
    ============================================================ */
 function updateUI() {
-    map.getCanvas().style.cursor = (state.mode === 'map-point') ? 'crosshair' : '';
+    map.getCanvas().style.cursor = (state.mode === 'map-point' || measuring()) ? 'crosshair' : '';
     updatePlacingTag();
     syncMarkerSelection();
 
@@ -1138,6 +1455,7 @@ function deletePoint(lIdx, pIdx) {
 /* The next map click places this point. Runs by itself once a line has its second point,
    and from F, the point pills and the step guide. */
 function startMapPoint(lIdx, pIdx) {
+    clearMeasure();   // the next map click belongs to the point, not to a measurement
     state.activeLineIndex = lIdx;
     state.mode = 'map-point';
     state.mapPointTarget = { lineIndex: lIdx, pointIndex: pIdx };
@@ -1229,6 +1547,7 @@ document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
         // A drag in progress snaps back instead of deselecting
         if (cancelMarkerDrag()) return;
+        if (measure.active) { clearMeasure(); return; }
         if (state.pointDrag) {
             const { line, pt, origY } = state.pointDrag;
             pt.y = origY; state.pointDrag = null; line.pristine = false;
@@ -1296,6 +1615,13 @@ document.addEventListener('keydown', (e) => {
     if (e.key === 'r' || e.key === 'R') {
         e.preventDefault();
         if (state.activeLineIndex !== -1) deleteLine(state.activeLineIndex);
+        return;
+    }
+
+    // M — measure a distance on the map (again to clear)
+    if (e.key === 'm' || e.key === 'M') {
+        e.preventDefault();
+        if (!e.repeat) { if (measure.active) clearMeasure(); else startMeasure(); }
         return;
     }
 
@@ -2817,12 +3143,42 @@ const CTX_LINKS = [
     ['Google Maps',  (la, ln, z) => `https://www.google.com/maps/search/?api=1&query=${la},${ln}`],
     ['Street View',  (la, ln, z) => `https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${la},${ln}`],
     ['Google Earth', (la, ln, z) => `https://earth.google.com/web/@${la},${ln},0a,2000d,35y,0h,0t,0r`],
+    ['OpenStreetMap', (la, ln, z) => `https://www.openstreetmap.org/?mlat=${la}&mlon=${ln}#map=${z}/${la}/${ln}`]
+];
+/* The "Open in…" submenu. Formats after briatlon's mapLocationMenu.js. Yandex wants longitude first;
+   Baidu is given WGS84 and converts on its side; Mapillary and Lookmap count zoom like MapLibre. */
+const CTX_MORE_LINKS = [
     ['Apple Maps',   (la, ln, z) => `https://maps.apple.com/?ll=${la},${ln}&q=${la},${ln}&z=${z}`],
+    ['Lookmap',      (la, ln, z) => `https://lookmap.skzk.dev/#c=${z - 1}/${la}/${ln}`],
     ['Bing Maps',    (la, ln, z) => `https://www.bing.com/maps?cp=${la}~${ln}&lvl=${z}&sp=point.${la}_${ln}_Pin`],
-    ['Yandex Maps',  (la, ln, z) => `https://yandex.com/maps/?ll=${ln},${la}&z=${z}&pt=${ln},${la}`]
+    ['Mapillary',    (la, ln, z) => `https://www.mapillary.com/app/?lat=${la}&lng=${ln}&z=${z - 1}`],
+    ['Yandex Maps',  (la, ln, z) => `https://yandex.com/maps/?ll=${ln},${la}&z=${z}&pt=${ln},${la}`],
+    ['Baidu Maps',   (la, ln, z) => `https://api.map.baidu.com/marker?location=${la},${ln}&coord_type=wgs84&title=TracePoint&content=${la},${ln}&output=html&src=webapp.tracepoint`]
 ];
 
-function hideCtxMenu() { ctxMenu.style.display = 'none'; }
+/* The submenu is an element of its own next to the menu (the menu clips what it contains) */
+const ctxSub = el('div', 'map-ctx-menu map-ctx-sub', document.getElementById('map-container'));
+ctxSub.style.display = 'none';
+let ctxSubTimer = null;
+
+function hideCtxSub()  { clearTimeout(ctxSubTimer); ctxSub.style.display = 'none'; }
+function hideCtxMenu() { ctxMenu.style.display = 'none'; hideCtxSub(); }
+
+/* Right of the menu, level with its "Open in…" row; left of it when the map ends there */
+function showCtxSub(trigger) {
+    clearTimeout(ctxSubTimer);
+    const box = map.getContainer().getBoundingClientRect();
+    const m = ctxMenu.getBoundingClientRect(), t = trigger.getBoundingClientRect();
+    ctxSub.style.display = 'block';
+    const w = ctxSub.offsetWidth, h = ctxSub.offsetHeight;
+    const left = m.right - box.left + w > box.width ? m.left - box.left - w + 1 : m.right - box.left - 1;
+    ctxSub.style.left = `${Math.max(0, left)}px`;
+    ctxSub.style.top  = `${Math.max(0, Math.min(t.top - box.top, box.height - h))}px`;
+}
+/* Leaving towards the submenu must not close it on the way: closing waits a moment */
+function leaveCtxSub() { clearTimeout(ctxSubTimer); ctxSubTimer = setTimeout(hideCtxSub, 250); }
+ctxSub.addEventListener('mouseenter', () => clearTimeout(ctxSubTimer));
+ctxSub.addEventListener('mouseleave', leaveCtxSub);
 
 map.on('contextmenu', (e) => {
     e.preventDefault();
@@ -2844,15 +3200,35 @@ map.on('contextmenu', (e) => {
             .catch(() => showToast('Could not copy to clipboard.'));
     };
 
+    const measureItem = el('button', 'map-ctx-item', ctxMenu);
+    measureItem.type = 'button';
+    measureItem.textContent = 'Measure distance from here';
+    measureItem.onclick = () => { hideCtxMenu(); startMeasure({ lat: e.lngLat.lat, lng: e.lngLat.lng }); };
+
     el('div', 'map-ctx-divider', ctxMenu);
-    CTX_LINKS.forEach(([label, url]) => {
-        const a = el('a', 'map-ctx-item', ctxMenu);
-        a.href = url(la, ln, z);
+    const addLink = (parent, text, href) => {
+        const a = el('a', 'map-ctx-item', parent);
+        a.href = href;
         a.target = '_blank';
         a.rel = 'noopener';
-        a.textContent = `Open in ${label}`;
+        a.textContent = text;
         a.onclick = hideCtxMenu;
-    });
+        return a;
+    };
+    CTX_LINKS.forEach(([label, url]) => addLink(ctxMenu, `Open in ${label}`, url(la, ln, z))
+        .addEventListener('mouseenter', leaveCtxSub));
+
+    // "Open in…" opens the submenu on hover and on click
+    const more = el('button', 'map-ctx-item map-ctx-more', ctxMenu);
+    more.type = 'button';
+    more.textContent = 'Open in…';
+    more.setAttribute('aria-haspopup', 'true');
+    more.addEventListener('mouseenter', () => showCtxSub(more));
+    more.addEventListener('mouseleave', leaveCtxSub);
+    more.onclick = () => { if (ctxSub.style.display === 'none') showCtxSub(more); else hideCtxSub(); };
+    hideCtxSub();
+    ctxSub.innerHTML = '';
+    CTX_MORE_LINKS.forEach(([label, url]) => addLink(ctxSub, label, url(la, ln, z)));
 
     // Place at the click, flipped so it stays inside the map
     const box = map.getContainer().getBoundingClientRect();
@@ -2867,12 +3243,13 @@ map.on('contextmenu', (e) => {
 map.on('click',     hideCtxMenu);
 map.on('movestart', hideCtxMenu);
 document.addEventListener('keydown',   (e) => { if (e.key === 'Escape') hideCtxMenu(); });
-document.addEventListener('mousedown', (e) => { if (!ctxMenu.contains(e.target)) hideCtxMenu(); });
+document.addEventListener('mousedown', (e) => { if (!ctxMenu.contains(e.target) && !ctxSub.contains(e.target)) hideCtxMenu(); });
 
 /* ============================================================
    MAP INTERACTION – place geo points
    ============================================================ */
 map.on('click', (e) => {
+    if (measure.active) { measureClick(e.lngLat); return; }   // a map click never both measures and places
     if (state.mode !== 'map-point' || !state.mapPointTarget) return;
     if (e.originalEvent?.target?.closest?.('.geo-point')) return;   // clicking an existing marker never places a point
     const { lineIndex, pointIndex } = state.mapPointTarget;
@@ -2914,13 +3291,33 @@ map.on('load', () => {
         id: 'rays', type: 'line', source: 'work', filter: ['==', ['get', 'kind'], 'ray'],
         paint: { 'line-color': ['get', 'colour'], 'line-width': 2, 'line-opacity': 0.85, 'line-dasharray': [3, 2] }
     });
+    // Distance measurement: on top of everything else drawn on the map
+    map.addSource('measure', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+    map.addLayer({
+        id: 'measure-line', type: 'line', source: 'measure', filter: ['==', ['geometry-type'], 'LineString'],
+        paint: { 'line-color': '#fff', 'line-width': 2, 'line-dasharray': [3, 3] }
+    });
+    map.addLayer({
+        id: 'measure-points', type: 'circle', source: 'measure', filter: ['==', ['geometry-type'], 'Point'],
+        paint: { 'circle-radius': 5, 'circle-color': '#fff', 'circle-stroke-color': '#111', 'circle-stroke-width': 1.5 }
+    });
     map.addSource('dem', {
         type: 'raster-dem', tiles: [TERRAIN_TILES], encoding: 'terrarium', tileSize: 256, maxzoom: 15,
         attribution: 'Terrain: <a href="https://github.com/tilezen/joerd/blob/master/docs/attribution.md" target="_blank" rel="noopener">Mapzen Terrarium</a> via AWS'
     });
+    /* Hillshade gets a DEM source of its own (same tiles): sharing one with the 3D terrain makes
+       MapLibre render both from a lower-resolution copy. Hidden layers request nothing. */
+    map.addSource('dem-shade', {
+        type: 'raster-dem', tiles: [TERRAIN_TILES], encoding: 'terrarium', tileSize: 256, maxzoom: 15,
+        attribution: 'Terrain: <a href="https://github.com/tilezen/joerd/blob/master/docs/attribution.md" target="_blank" rel="noopener">Mapzen Terrarium</a> via AWS'
+    });
+    map.addLayer({
+        id: 'hillshade', type: 'hillshade', source: 'dem-shade', layout: { visibility: 'none' },
+        paint: { 'hillshade-exaggeration': 0.45, 'hillshade-shadow-color': '#000', 'hillshade-highlight-color': '#fff', 'hillshade-accent-color': '#000' }
+    }, 'ellipse');   // above the basemap, below rays and ellipse
     mapReady = true;
     setTileSet(activeTileSetId);
-    setTerrain(terrainOn);
+    applyMapSettings();
     rebuildWorkSource();
 });
 
@@ -3210,6 +3607,104 @@ function intersectLines(p1, p2, p3, p4) {
         lng: x1 + t * (x2 - x1)
     };
 }
+
+/* ============================================================
+   DISTANCE MEASUREMENT – two clicks on the map, straight-line ground distance
+   After briatlon's distanceMeasure.js. Starts from the ruler button next to the compass, the M key
+   or the right-click menu; Esc or M clears it. A third click starts a new measurement. While a
+   measurement waits for a click, map clicks belong to it; starting a point placement ends it and
+   the other way round. Nothing of it is saved, exported or undone.
+   ============================================================ */
+const measure = { active: false, points: [], hover: null, label: null, button: null };
+
+/* Waiting for a map click (the first or the second point) */
+function measuring() { return measure.active && measure.points.length < 2; }
+
+function formatDistance(metres) {
+    return metres >= 1000
+        ? `${(metres / 1000).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} km`
+        : `${metres.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })} m`;
+}
+
+/* Great-circle distance in metres */
+function distanceMetres(a, b) {
+    const lat1 = a.lat * DEG, lat2 = b.lat * DEG, dLat = lat2 - lat1, dLng = (b.lng - a.lng) * DEG;
+    const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+    return 2 * R * 1000 * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+
+function drawMeasure() {
+    if (measure.button) measure.button.classList.toggle('active', measure.active);
+    if (!mapReady) return;
+    const [a, b] = measure.points;
+    const end = b || (a ? measure.hover : null);   // the second point, or the mouse while it is still open
+    const features = measure.points.map(p => ({ type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: [p.lng, p.lat] } }));
+    if (a && end) features.push({ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: [[a.lng, a.lat], [end.lng, end.lat]] } });
+    map.getSource('measure').setData({ type: 'FeatureCollection', features });
+
+    // The distance sits at the middle of the line
+    if (a && end) {
+        if (!measure.label) measure.label = new maplibregl.Marker({ element: el('div', 'measure-label') });
+        measure.label.getElement().textContent = formatDistance(distanceMetres(a, end));
+        measure.label.setLngLat([(a.lng + end.lng) / 2, (a.lat + end.lat) / 2]).addTo(map);
+    } else if (measure.label) {
+        measure.label.remove();
+    }
+}
+
+function startMeasure(first = null) {
+    // A point waiting for its map click stops waiting: the next click is the measurement's
+    if (state.mode === 'map-point') {
+        state.mode = state.activeLineIndex !== -1 ? 'drag-line' : 'idle';
+        state.mapPointTarget = null;
+    }
+    measure.active = true;
+    measure.points = first ? [first] : [];
+    measure.hover = null;
+    drawMeasure();
+    render(); updateUI();
+}
+
+function clearMeasure() {
+    if (!measure.active) return;
+    measure.active = false;
+    measure.points = [];
+    measure.hover = null;
+    drawMeasure();
+    updateUI();
+}
+
+function measureClick(lngLat) {
+    if (measure.points.length >= 2) measure.points = [];   // a third click starts a new measurement
+    measure.points.push({ lat: lngLat.lat, lng: lngLat.lng });
+    measure.hover = null;
+    drawMeasure();
+    updateUI();
+}
+
+/* After the first click the line and the distance follow the mouse */
+map.on('mousemove', (e) => {
+    if (!measure.active || measure.points.length !== 1) return;
+    measure.hover = { lat: e.lngLat.lat, lng: e.lngLat.lng };
+    drawMeasure();
+});
+
+/* The ruler button sits right of the compass, bottom-left on the map */
+map.addControl({
+    onAdd() {
+        const box = el('div', 'maplibregl-ctrl maplibregl-ctrl-group measure-ctrl');
+        const btn = el('button', 'measure-btn', box);
+        btn.type = 'button';
+        btn.title = 'Measure distance (M)';
+        btn.setAttribute('aria-label', 'Measure distance');
+        btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 17 17 3l4 4L7 21z"/><path d="m7.5 12.5 2 2M10.5 9.5l2 2M13.5 6.5l2 2"/></svg>`;
+        btn.onclick = () => { if (measure.active) clearMeasure(); else startMeasure(); };
+        measure.button = btn;
+        return box;
+    },
+    onRemove() { measure.button = null; }
+}, 'bottom-left');
 
 /* ============================================================
    DIVIDER – drag the handle between two panes to resize them

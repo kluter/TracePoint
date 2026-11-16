@@ -1,5 +1,20 @@
 # Changelog
 
+## v2.7.0
+
+- One map panel behind the ☰ button with three sections: Basemap, Terrain and Camera. It stays open while you use it
+- Terrain: height exaggeration (1–3×) and hillshade, with or without 3D terrain
+- Camera: field of view (shown with its full-frame focal length), max tilt, min and max zoom, North up and Top down
+- Reset puts all sliders of the panel back to their defaults
+- Compass moved to the bottom-left of the map; the zoom buttons are gone (mouse wheel, double-click or `+` / `−` zoom)
+- 3D buildings: OpenStreetMap buildings as blocks on top of any basemap, with an opacity slider. Off by default; the shapes come from OpenFreeMap (no key) and that server is only contacted while the switch is on
+- Distance measurement: ruler button next to the compass, `M`, or right-click → "Measure distance from here". Two clicks give the straight-line ground distance, with a live preview after the first; `Esc` clears
+- Right-click menu: OpenStreetMap joins Google Maps, Street View and Google Earth; an "Open in…" submenu adds Apple Maps, Lookmap, Bing Maps, Mapillary, Yandex Maps and Baidu Maps
+- Coordinate paste reads links from Apple Maps, Bing, Yandex, OpenStreetMap, Lookmap, Baidu and Google Earth, any link with `lat=`/`lon=`, and Web Mercator values; short links get their own message
+- Fixed: with 3D terrain, dragging or wheel-zooming near the horizon or over tiles that had not loaded yet could throw the map kilometres away or change the zoom by many levels
+- Top down keeps the bearing, North up keeps the tilt
+- Map settings are remembered in this browser
+
 ## v2.6.0
 
 - Draggable divider between photo and map: drag to resize, double-click for 50/50, arrow keys when focused (Shift for bigger steps); the split is remembered

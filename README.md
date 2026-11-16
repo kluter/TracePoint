@@ -30,7 +30,8 @@ The more lines you add, the more rays are generated and the more robustly the in
 - **Resizable layout:** drag the divider between photo and map, double-click it for 50/50, or fold the photo side away with the chevron on it
 - **Autosave:** work and images are kept in this browser, so a refresh does not lose them. Switch it off or clear it in the ☰ image menu
 - **EXIF metadata viewer:** camera, lens, capture settings, GPS, altitude, and camera direction read from the image. GPS can be placed on the map as a reference marker
-- **Map layers:** Esri Satellite, Sentinel-2 2024, OpenStreetMap, Esri Dark Gray, Esri Topo, Esri Streets, optional 3D terrain, plus [custom XYZ layers](#custom-map-layers) by URL
+- **Map panel:** basemap, terrain, 3D buildings and camera settings in one place; match the field of view to a photo's lens and compare skylines on the tilted map
+- **Map layers:** Esri Satellite, Sentinel-2 2024, OpenStreetMap, Esri Dark Gray, Esri Topo, Esri Streets, optional 3D terrain with adjustable height and hillshade, plus [custom XYZ layers](#custom-map-layers) by URL
 - **[Coordinate search](#coordinate-search):** paste coordinates (decimal, degrees-minutes-seconds or a Google Maps link) to drop numbered pins on the map
 - Horizon correction for tilted images
 - Built-in Potsdam demo with step-by-step guide
@@ -71,11 +72,12 @@ The more lines you add, the more rays are generated and the more robustly the in
 | Image sessions, export, import | ☰ button, right of the line bar |
 | Autosave on / off, clear saved work | Last row of the ☰ image menu. Off or **Clear** deletes the copy kept in the browser |
 | Image metadata | `</>` button, left of the line bar. **Show on map** places the EXIF GPS position |
-| Rotate / tilt map | Ctrl + drag, or right-click drag, tilt up to 90°. Click the compass (bottom-right) or press `N` to reset. The map bar shows bearing, tilt and zoom |
-| Map layers and 3D terrain | ☰ button, right of the map bar. Custom layers: **+ Add custom layer…**, then ✎ / × to edit or remove |
+| Rotate / tilt map | Ctrl + drag, or right-click drag, tilt up to 90°. Click the compass (bottom-left of the map) or press `N` to reset. The map bar shows bearing, tilt and zoom |
+| Map layers, terrain and camera | ☰ button, right of the map bar. One panel: **Basemap** (custom layers: **+ Add custom layer…**, then ✎ / × to edit or remove), **Terrain** (3D terrain, height 1–3×, hillshade), **Buildings** (OpenStreetMap buildings as 3D blocks from zoom 13, with opacity) and **Camera** (field of view with its full-frame focal length, max tilt, min and max zoom, **North up**, **Top down**). **Reset** puts all sliders back to their defaults; double-click a slider to reset just that one |
 | Jump to coordinates | Paste into the search box in the map bar (or `Ctrl+V` anywhere) |
+| Measure a distance | Ruler button next to the compass, `M`, or right-click → **Measure distance from here**. Click two points for the straight-line ground distance; a third click starts over, `Esc` clears. Not saved or exported |
 | Pins | Click a row in the pin list at the top-left of the map to go back to it; × or **Clear all** removes |
-| Copy a spot / open it elsewhere | Right-click the map: copy coordinates, or open the spot in Google Maps, Street View, Google Earth, Apple, Bing or Yandex Maps |
+| Copy a spot / open it elsewhere | Right-click the map: copy coordinates, measure from there, or open the spot in Google Maps, Street View, Google Earth or OpenStreetMap. **Open in…** adds Apple Maps, Lookmap, Bing Maps, Mapillary, Yandex Maps and Baidu Maps. Nothing is requested from any of them until you click |
 | Share or bookmark a view | Copy the URL: the map view is in the `#` part, nothing else |
 
 ### Keyboard shortcuts
@@ -94,6 +96,7 @@ The more lines you add, the more rays are generated and the more robustly the in
 | `Ctrl+Z` | Undo a line or point edit; `Ctrl+Shift+Z` or `Ctrl+Y` redoes |
 | `Ctrl+V` | Paste a photo → new image; paste coordinates → pin on map |
 | `N` | Reset map to north |
+| `M` | Measure a distance on the map (again or `Esc` to clear) |
 
 ---
 
@@ -116,8 +119,19 @@ Paste coordinates into the search box in the bar under the map header, or press 
 | Labelled | `lat 52.4012 lon 13.0645` |
 | Google Maps link (map view) | `https://www.google.com/maps/@52.4012,13.0645,15z` |
 | Google Maps link (query) | `https://maps.google.com/?q=52.4012,13.0645` |
+| Google Earth link | `https://earth.google.com/web/@52.4012,13.0645,35a,1000d,35y,0h,0t,0r` |
+| Apple Maps link | `https://maps.apple.com/?ll=52.4012,13.0645` |
+| Bing Maps link | `https://www.bing.com/maps?cp=52.4012~13.0645&lvl=15` |
+| Yandex Maps link (longitude first) | `https://yandex.com/maps/?ll=13.0645,52.4012&z=15` |
+| OpenStreetMap link | `https://www.openstreetmap.org/#map=15/52.4012/13.0645` |
+| Lookmap link | `https://lookmap.skzk.dev/#c=15/52.4012/13.0645` |
+| Baidu Maps link (approximate) | `https://map.baidu.com/@12959219,4825334,15z` |
+| Any link with `lat=` and `lon=` or `lng=` | `https://example.com/?lat=52.4012&lon=13.0645` |
+| Web Mercator metres (x, y) | `1454336, 6872995` |
 
 The first number is read as latitude, unless N/S/E/W letters or a value above 90 say otherwise.
+
+A link's zoom level is ignored: a pasted link drops a pin like any other paste. Short links such as `maps.app.goo.gl/…` contain no coordinates and cannot be read without asking their server, so TracePoint asks you to open them and copy the full address. Baidu uses its own shifted coordinate system; its links are converted in the browser and land within some metres.
 
 ---
 
@@ -226,7 +240,7 @@ python3 -m http.server
 
 ## Changelog
 
-Current version: **v2.6.0**. All releases are listed in [CHANGELOG.md](CHANGELOG.md).
+Current version: **v2.7.0**. All releases are listed in [CHANGELOG.md](CHANGELOG.md).
 
 ---
 
@@ -256,7 +270,7 @@ A polished interface is not the same as a safe one. This section explains exactl
 
 Photos are loaded directly into an HTML5 `<canvas>` element and processed in the browser. No upload, no base64 POST, no fetch call carries image data anywhere. To verify, open **DevTools → Network** (`F12`) and load an image: no request involving it appears.
 
-The only outbound requests are map tile fetches from public servers (Esri, OpenStreetMap, EOX), elevation tiles from AWS while 3D terrain is switched on, plus the servers of any [custom map layer](#custom-map-layers) you add yourself. They contain no session data, no coordinates from your work, and no image content.
+The only outbound requests are map tile fetches from public servers (Esri, OpenStreetMap, EOX), elevation tiles from AWS while 3D terrain or hillshade is switched on, building shapes from OpenFreeMap while 3D buildings is switched on, plus the servers of any [custom map layer](#custom-map-layers) you add yourself. They contain no session data, no coordinates from your work, and no image content.
 
 ```javascript
 // The full extent of network activity in TracePoint:
@@ -264,7 +278,8 @@ The only outbound requests are map tile fetches from public servers (Esri, OpenS
 // GET https://tile.openstreetmap.org/z/x/y.png
 // GET https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2024_3857/default/g/z/y/x.jpg
 // GET <your custom layer URL>   ← only if you add one and select it
-// GET https://s3.amazonaws.com/elevation-tiles-prod/terrarium/z/x/y.png   ← only while terrain is on
+// GET https://s3.amazonaws.com/elevation-tiles-prod/terrarium/z/x/y.png   ← only while 3D terrain or hillshade is on
+// GET https://tiles.openfreemap.org/planet/...                          ← only while 3D buildings is on
 // No other requests.
 ```
 
@@ -290,6 +305,7 @@ Photo adjustments and coordinate pins are not saved. Besides that, `localStorage
 // Verify in DevTools → Application → Storage
 // localStorage:   { "tp-tileset": "esri-sat" }  ← your map layer choice
 //                 { "tp-terrain": "0" }         ← 3D terrain on/off
+//                 { "tp-map-settings": {...} }  ← terrain height, hillshade, 3D buildings, field of view, camera limits
 //                 { "tp-custom-layers": [...] } ← name + URL of custom layers, if you added any
 //                 { "tp-autosave": "1" }        ← autosave on/off
 //                 { "tp-split": "50.00" }       ← width of the photo side in percent
