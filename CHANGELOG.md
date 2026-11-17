@@ -4,6 +4,9 @@
 
 - Show on map in the image metadata card turns into Remove from map once the GPS marker is on the map, and takes it away again
 - The tools of the line bar (new line, metadata, fit, adjust, level) are always visible; without a photo they are greyed out and do nothing, and `E` and `W` do nothing either
+- Show original sits in the row next to Adjust and is greyed out until the photo is adjusted
+- Opening the street-level panel no longer moves the map: pick a spot on the coverage overlay (now thicker and easier to see), with Map centre, or with right-click
+- The 3D terrain switch enables the Height slider right away, not only after another map setting changed
 
 ## v2.8.0
 

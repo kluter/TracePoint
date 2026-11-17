@@ -574,6 +574,7 @@ function setTerrain(on) {
     terrainOn = on;
     localStorage.setItem('tp-terrain', on ? '1' : '0');
     applyMapSettings();
+    syncMapPanel();   // the Height slider depends on it
 }
 
 /* ---- MAP SETTINGS: how the terrain looks and what the camera may do ----
@@ -2462,8 +2463,10 @@ function updateAdjustUI() {
     adjustInvert.checked = !!s.adjust.invert;
     document.getElementById('adjust-invert-val').textContent = s.adjust.invert ? 'On' : 'Off';
     btnAdjust.classList.toggle('active', adjusted);
-    // Show original: only offered while the photo is adjusted, yellow while it is on
-    btnOriginal.style.display = adjusted ? 'flex' : 'none';
+    // Show original: always in the row, clickable only while the photo is adjusted, yellow while it is on
+    btnOriginal.disabled = !adjusted;
+    if (!btnOriginal.dataset.title) btnOriginal.dataset.title = btnOriginal.title;
+    btnOriginal.title = adjusted ? btnOriginal.dataset.title : (s.imgElement ? 'Adjust the photo first' : LOAD_FIRST);
     btnOriginal.classList.toggle('active', state.showOriginal);
     btnCardOriginal.disabled = !adjusted;
     btnCardOriginal.classList.toggle('active-mode', state.showOriginal);
@@ -4334,16 +4337,16 @@ function streetCoverage() {
         filter: ['>', ['get', 'coef'], 0],
         paint: {
             'circle-color': STREET_COVER_COLOUR,
-            'circle-radius': ['interpolate', ['linear'], ['zoom'], 1, 1, 6, 5],
-            'circle-opacity': ['interpolate', ['linear'], ['get', 'coef'], 0, 0.25, 1, 0.9]
+            'circle-radius': ['interpolate', ['linear'], ['zoom'], 1, 1.5, 6, 6],
+            'circle-opacity': ['interpolate', ['linear'], ['get', 'coef'], 0, 0.35, 1, 0.95]
         }
     }, below);
     const line = (id, filter, dash) => map.addLayer({
         id, type: 'line', source: 'street-cover', 'source-layer': 'sequences', minzoom: 6, filter,
         layout: { 'line-cap': dash ? 'butt' : 'round', 'line-join': 'round' },
         paint: {
-            'line-color': STREET_COVER_COLOUR, 'line-opacity': 0.7,
-            'line-width': ['interpolate', ['linear'], ['zoom'], 7, 0.75, 14, 1.5, 18, 3],
+            'line-color': STREET_COVER_COLOUR, 'line-opacity': 0.9,
+            'line-width': ['interpolate', ['linear'], ['zoom'], 7, 1.5, 14, 3, 18, 5],
             ...(dash ? { 'line-dasharray': dash } : {})
         }
     }, below);
@@ -4353,7 +4356,7 @@ function streetCoverage() {
         id: 'street-cover-pics', type: 'circle', source: 'street-cover', 'source-layer': 'pictures', minzoom: 15,
         paint: {
             'circle-color': STREET_COVER_COLOUR,
-            'circle-radius': ['interpolate', ['linear'], ['zoom'], 15, 2, 19, 5],
+            'circle-radius': ['interpolate', ['linear'], ['zoom'], 15, 3, 19, 7],
             'circle-stroke-color': '#0c0c0c', 'circle-stroke-width': 1,
             'circle-opacity': ['interpolate', ['linear'], ['zoom'], 15, 0, 16, 1],
             'circle-stroke-opacity': ['interpolate', ['linear'], ['zoom'], 15, 0, 16, 1]
@@ -4398,13 +4401,22 @@ map.on('click', async (e) => {
     }
 });
 
+/* With the panel open and nothing chosen yet: say how to choose, instead of jumping somewhere */
+function streetPrompt() {
+    street.target = null;
+    streetStatus(street.source === 'panoramax' && street.cover
+        ? 'Click a line or dot on the map, or use Map centre.'
+        : 'Right-click the map and choose Street-level imagery here, or use Map centre.');
+}
+
 function setStreetOpen(on, target = null) {
     street.open = on;
     streetUi.panel.hidden = !on;
     streetUi.splitter.hidden = !on;
     streetUi.button.setAttribute('aria-pressed', on ? 'true' : 'false');
     if (on) {
-        streetLookAt(target || map.getCenter());
+        if (target) streetLookAt(target);
+        else if (!street.item) streetPrompt();
     } else {
         street.req++;          // whatever is still on its way is dropped
         street.item = null;
@@ -4426,6 +4438,7 @@ streetUi.cover.addEventListener('click', () => {
     localStorage.setItem('tp-street-cover', street.cover ? '1' : '0');
     streetButtons();
     streetCoverage();
+    if (street.open && !street.item) streetPrompt();
 });
 streetUi.hd.addEventListener('click', () => {
     if (street.item) streetShow(street.item, { hd: !street.hd, keepView: true });
@@ -4435,13 +4448,14 @@ streetUi.source.addEventListener('change', () => {
     localStorage.setItem(STREET_SOURCE_KEY, street.source);
     streetButtons();
     streetCoverage();
-    streetLookAt(street.target || map.getCenter());
+    if (street.target) streetLookAt(street.target);
+    else streetPrompt();
 });
 streetUi.token.addEventListener('change', () => {
     street.token = streetUi.token.value.trim();
     if (street.token) localStorage.setItem(STREET_TOKEN_KEY, street.token);
     else localStorage.removeItem(STREET_TOKEN_KEY);
-    if (street.open && street.source === 'mapillary') streetLookAt(street.target || map.getCenter());
+    if (street.open && street.source === 'mapillary' && street.target) streetLookAt(street.target);
 });
 
 /* Mouse: drag looks around (360°) or pans a zoomed flat photo, the wheel zooms, a click walks towards
@@ -4528,5 +4542,5 @@ makeSplitter(streetUi.splitter, document.getElementById('map-stack'),
    START – bring back the autosaved work, if any
    ============================================================ */
 renderSessionMenu();   // the image tabs are there from the start
-updateLineBarTools();  // greyed out until a photo is loaded
+updateAdjustUI();      // tools greyed out until a photo is loaded
 autosaveRestore();

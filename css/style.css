@@ -1191,3 +1191,5 @@ body.pane-resizing #street-view { pointer-events: none; }
 /* Line bar tools without a photo: visible, greyed out, not clickable */
 #line-bar .exif-burger:disabled { opacity: 0.3; cursor: not-allowed; box-shadow: none; }
 #line-bar .exif-burger:disabled:hover { background: #151515; color: #aaa; }
+/* Adjust and Show original side by side, like the other tools */
+.adjust-wrap { display: flex; }
