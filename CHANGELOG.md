@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Fixed: adding a ninth image froze the page (the search for a free line colour never ended); colours now repeat from the ninth image on
 - Show on map in the image metadata card turns into Remove from map once the GPS marker is on the map, and takes it away again
 - The tools of the line bar (new line, metadata, fit, adjust, level) are always visible; without a photo they are greyed out and do nothing, and `E` and `W` do nothing either
 - Show original sits in the row next to Adjust and is greyed out until the photo is adjusted

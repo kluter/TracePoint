@@ -1211,12 +1211,12 @@ const LINE_COLOURS = [
     '#35ffe1', '#00aaff', '#b535ff', '#ff3535'
 ];
 
-/* Find the lowest colour slot not already claimed by an existing session */
+/* The lowest colour slot no session has yet; with all slots taken, the lowest of the least used ones
+   (a loop that waited for a free slot never ended from the ninth image on) */
 function nextFreeColourIndex() {
-    const used = new Set((sessions || []).map(s => s.colourIndex));
-    let n = 0;
-    while (used.has(n % LINE_COLOURS.length)) n++;
-    return n % LINE_COLOURS.length;
+    const count = new Array(LINE_COLOURS.length).fill(0);
+    (sessions || []).forEach(s => { if (count[s.colourIndex] !== undefined) count[s.colourIndex]++; });
+    return count.indexOf(Math.min(...count));
 }
 
 function sessionColourIndex(sessionIdx) {
