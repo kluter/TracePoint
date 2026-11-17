@@ -76,7 +76,7 @@ The more lines you add, the more rays are generated and the more robustly the in
 | Export, import, demo | ☰ button, right of the line bar |
 | Export with photos | **Include photos** switch in the ☰ menu of the photo side, off by default. On: every export stores each photo inside the JSON, unchanged, with its GPS and camera data; the file gets about a third bigger than the photo. Import then restores the photo by itself |
 | Autosave on / off, clear saved work | **This browser** section of the ☰ menu of the photo side. Off or **Clear** deletes the copy kept in the browser |
-| Image metadata | `</>` button in the line bar. **Show on map** places the EXIF GPS position |
+| Image metadata | `</>` button in the line bar. **Show on map** places the EXIF GPS position; the same button, now **Remove from map**, takes it away again |
 | Rotate / tilt map | Ctrl + drag, or right-click drag, tilt up to 90°. Click the compass (bottom-left of the map) or press `N` to reset. The map bar shows bearing, tilt and zoom |
 | Basemap | The name in the map header: click it for the list. The active one is highlighted. Custom layers: **+ Add custom layer…**, then ✎ / × to edit or remove |
 | Terrain, buildings and camera | Sliders button, right of the map bar. One panel: **Terrain** (3D terrain, height 1–3×, hillshade), **Buildings** (OpenStreetMap buildings as 3D blocks from zoom 13, with opacity) and **Camera** (field of view with its full-frame focal length, max tilt, min and max zoom, **North up**, **Top down**). **Reset** puts all sliders back to their defaults; double-click a slider to reset just that one |

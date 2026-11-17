@@ -8,6 +8,7 @@ const container   = document.getElementById("image-container");
 const overlay     = document.getElementById("drop-overlay");
 const btnAddLine    = document.getElementById("btn-add-line");
 const btnHorizon    = document.getElementById("btn-horizon");
+const LOAD_FIRST    = 'Load a photo first';   // tooltip of a line bar tool while there is no photo
 const lineBar       = document.getElementById("line-bar");
 
 let pulseFrameId = null;
@@ -1251,8 +1252,10 @@ function updateUI() {
         btnHorizon.title = `Rotation: ${sess().view.rotation.toFixed(1)}° — click to reset`;
     } else {
         btnHorizon.classList.remove('active-mode', 'horizon-active');
-        btnHorizon.title = 'Set horizon correction';
+        btnHorizon.title = sess().imgElement ? 'Set horizon correction' : LOAD_FIRST;
     }
+    btnHorizon.disabled = !sess().imgElement;
+    btnAddLine.disabled = !sess().imgElement;
 
     historyCommit();
     updateLineManager();
@@ -1622,6 +1625,7 @@ document.addEventListener('keydown', (e) => {
     // W — level tool (toggle / reset)
     if (e.key === 'w' || e.key === 'W') {
         e.preventDefault();
+        if (!sess().imgElement) return;   // like the greyed-out button
         btnHorizon.click();
         return;
     }
@@ -1637,6 +1641,7 @@ document.addEventListener('keydown', (e) => {
     // E — new line
     if (e.key === 'e' || e.key === 'E') {
         e.preventDefault();
+        if (!sess().imgElement) return;   // like the greyed-out button
         addLine(true);
         return;
     }
@@ -1842,10 +1847,7 @@ function switchToSession(idx) {
         if (!hasGeoWork) applyMapView(WORLD_VIEW);
     }
 
-    const exifWrap = document.getElementById('exif-wrap');
     const exifCard = document.getElementById('exif-card');
-    // Show exif button if an image is loaded, or if exif data was restored from JSON
-    exifWrap.style.display = (s.imgElement || s.exif) ? 'block' : 'none';
     exifCard.style.display = 'none';
     adjustCard.style.display = 'none';
     updateAdjustUI();
@@ -2017,7 +2019,7 @@ function loadImage(file, s = sess(), fromStore = false, onReady = null) {
             .finally(() => {
                 scheduleAutosave();
                 if (s !== sess()) return;
-                document.getElementById('exif-wrap').style.display = 'block';
+                updateLineBarTools();
                 document.getElementById('exif-card').style.display = 'none';
             });
     };
@@ -2255,7 +2257,7 @@ function renderExifCard() {
             <line x1="11.5" y1="8" x2="15" y2="8"/>
         </svg>`;
         const gpsBtn = (lat != null && lng != null)
-            ? `<button class="exif-gps-btn" data-action="exif-gps">${crosshair}Show on map</button>`
+            ? `<button class="exif-gps-btn" data-action="exif-gps">${crosshair}${sess().exifGpsMarker ? 'Remove from map' : 'Show on map'}</button>`
             : '';
         const rayBtn = (lat != null && lng != null && dir != null)
             ? `<button class="exif-gps-btn exif-ray-btn" data-action="exif-ray">${crosshair}Add direction ray</button>`
@@ -2273,17 +2275,19 @@ function renderExifCard() {
     }
 }
 
+/* "Show on map" puts the photo's GPS position on the map; with the marker there, the same button
+   reads "Remove from map" and takes it away again. */
 function goToExifGps() {
     const s   = sess();
-    const pos = exifLatLng(s.exif);
-    if (!pos) return;
-    const { lat, lng } = pos;
-
-    // Remove previous EXIF GPS marker for this session
     if (s.exifGpsMarker) {
         s.exifGpsMarker.remove();
         s.exifGpsMarker = null;
+        renderExifCard();
+        return;
     }
+    const pos = exifLatLng(s.exif);
+    if (!pos) return;
+    const { lat, lng } = pos;
 
     const exifCoords = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
     s.exifGpsMarker = new maplibregl.Marker({ element: el('div', 'exif-gps-marker') })
@@ -2293,6 +2297,7 @@ function goToExifGps() {
 
     jumpTo({ lat, lng }, Math.max(map.getZoom(), 15));
     s.exifGpsMarker.togglePopup();
+    renderExifCard();
 }
 
 /* Popup with a header, the coordinates and a copy button (intersection + EXIF markers) */
@@ -2425,12 +2430,31 @@ function photoLayer(s) {
     return c;
 }
 
+/* The tools of the line bar are always there; without a photo they are greyed out and do nothing.
+   The metadata button also works for an image whose metadata came back from a session file. */
+function updateLineBarTools() {
+    const s = sess();
+    const set = (id, on) => {
+        const btn = document.getElementById(id);
+        if (!btn.dataset.title) btn.dataset.title = btn.title;
+        btn.disabled = !on;
+        btn.title = on ? btn.dataset.title : LOAD_FIRST;
+    };
+    set('btn-exif', !!(s.imgElement || s.exif));
+    set('btn-adjust', !!s.imgElement);
+    set('btn-fit', !!s.imgElement);
+    set('btn-add-line', !!s.imgElement);
+    // Level: its tooltip also tells the rotation, which updateUI keeps; only its state changes here
+    btnHorizon.disabled = !s.imgElement;
+    if (!s.imgElement) btnHorizon.title = LOAD_FIRST;
+    else if (btnHorizon.title === LOAD_FIRST) btnHorizon.title = 'Set horizon correction';
+}
+
 function updateAdjustUI() {
     const s = sess();
     const adjusted = !!s.imgElement && isAdjusted(s);
     if (!adjusted) state.showOriginal = false;   // nothing to compare with
-    adjustWrap.style.display = s.imgElement ? 'flex' : 'none';
-    btnFit.style.display     = s.imgElement ? 'flex' : 'none';
+    updateLineBarTools();
     ADJUST_SLIDERS.forEach(sl => {
         if (document.activeElement !== sl.input) sl.input.value = sl.toPos(s.adjust[sl.key]);   // not under the dragging thumb
         sl.val.textContent = `${s.adjust[sl.key]}%`;
@@ -4504,4 +4528,5 @@ makeSplitter(streetUi.splitter, document.getElementById('map-stack'),
    START – bring back the autosaved work, if any
    ============================================================ */
 renderSessionMenu();   // the image tabs are there from the start
+updateLineBarTools();  // greyed out until a photo is loaded
 autosaveRestore();

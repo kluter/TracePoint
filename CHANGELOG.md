@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Show on map in the image metadata card turns into Remove from map once the GPS marker is on the map, and takes it away again
+- The tools of the line bar (new line, metadata, fit, adjust, level) are always visible; without a photo they are greyed out and do nothing, and `E` and `W` do nothing either
+
 ## v2.8.0
 
 - Export with photos: an "Include photos" switch in the ☰ menu of the photo side, off by default and remembered. With it on, exported files carry each photo, and import restores it without asking for the image. The photo goes in unchanged, with its GPS and camera data, and the file gets about a third bigger than the photo
