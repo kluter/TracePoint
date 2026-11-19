@@ -131,9 +131,19 @@ Current version: **v2.8.0**. All releases are listed in [CHANGELOG.md](CHANGELOG
 
 ## Recognition
 
-**Curated lists:** [jivoi/awesome-osint](https://github.com/jivoi/awesome-osint) (Image Analysis), [Astrosp/Awesome-OSINT-List](https://github.com/Astrosp/Awesome-OSINT-List) (GEO), [The-Osint-Toolbox/Geolocation-OSINT](https://github.com/The-Osint-Toolbox/Geolocation-OSINT) (Geolocation)
+### Curated Lists
 
-**Press:** [TracePoint: A Browser-Based Tool for Image Geolocation by Ray Intersection](https://remote-sensing.org/tracepoint-a-browser-based-tool-for-image-geolocation-by-ray-intersection/), Earth Observation Research Cluster, University of Würzburg
+| List | Section |
+|---|---|
+| [jivoi/awesome-osint](https://github.com/jivoi/awesome-osint) | Image Analysis |
+| [Astrosp/Awesome-OSINT-List](https://github.com/Astrosp/Awesome-OSINT-List) | GEO |
+| [The-Osint-Toolbox/Geolocation-OSINT](https://github.com/The-Osint-Toolbox/Geolocation-OSINT) | Geolocation |
+
+### Press
+
+| Publication | Publisher |
+|---|---|
+| [TracePoint: A Browser-Based Tool for Image Geolocation by Ray Intersection](https://remote-sensing.org/tracepoint-a-browser-based-tool-for-image-geolocation-by-ray-intersection/) | Earth Observation Research Cluster, University of Würzburg |
 
 ---
 
