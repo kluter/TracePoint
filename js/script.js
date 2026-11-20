@@ -4,6 +4,8 @@
 
 const canvas      = document.getElementById("image-canvas");
 const ctx         = canvas.getContext("2d");
+const lineCanvas  = document.getElementById("line-canvas");   // lines and points, at screen size (see render)
+const lctx        = lineCanvas.getContext("2d");
 const container   = document.getElementById("image-container");
 const overlay     = document.getElementById("drop-overlay");
 const btnAddLine    = document.getElementById("btn-add-line");
@@ -86,15 +88,6 @@ lineBar.addEventListener('click', e => {
     e.stopPropagation();
     if (btn.dataset.action === 'delete-line')  deleteLine(+btn.dataset.idx);
     if (btn.dataset.action === 'delete-point') deletePoint(+btn.dataset.lidx, +btn.dataset.pidx);
-});
-
-document.getElementById('session-menu').addEventListener('click', e => {
-    const btn = e.target.closest('[data-action]');
-    if (!btn) return;
-    e.stopPropagation();
-    if (btn.dataset.action === 'rename-session') renameSession(+btn.dataset.idx);
-    if (btn.dataset.action === 'export-session') exportSession(+btn.dataset.idx);
-    if (btn.dataset.action === 'remove-session') removeSession(+btn.dataset.idx);
 });
 
 document.getElementById('exif-card').addEventListener('click', e => {
@@ -238,6 +231,7 @@ function applyTransform() {
     const v = sess().view;
     canvas.style.transform       = `translate(${v.tx}px, ${v.ty}px) scale(${v.scale})`;
     canvas.style.transformOrigin = '0 0';
+    drawLines();   // the lines are drawn at screen size and do not move with the photo's CSS transform
     scheduleAutosave();
 }
 
@@ -423,7 +417,7 @@ const TILE_SETS = [
         id: 'osm',
         label: 'OpenStreetMap',
         layers: [
-            { url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+            { url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',   // OSM retired the a/b/c subdomains
               opts: { attribution: '&copy; OpenStreetMap contributors', maxZoom: 19 } }
         ]
     },
@@ -1586,6 +1580,23 @@ btnHorizon.onclick = () => {
     render(); updateUI();
 };
 
+/* Esc with a menu or card open closes just that, and leaves the selection or point placement alone.
+   Runs before every other key handler (capture on window). */
+window.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    const open = [layerMenu, layerList, adjustCard, ctxMenu,
+                  document.getElementById('session-menu'), document.getElementById('exif-card')]
+        .filter(node => node && node.style.display !== 'none');
+    if (!open.length) return;
+    if (layerMenu) layerMenu.style.display = 'none';
+    closeBasemapMenu();
+    adjustCard.style.display = 'none';
+    hideCtxMenu();
+    document.getElementById('session-menu').style.display = 'none';
+    document.getElementById('exif-card').style.display = 'none';
+    e.stopPropagation();
+}, true);
+
 /* Keyboard shortcuts */
 document.addEventListener('keydown', (e) => {
     // Ignore when typing in an actual text input
@@ -1891,8 +1902,9 @@ function renderSessionMenu() {
         `<label class="autosave-switch" for="autosave-switch" title="Keep the work in this browser so a refresh does not lose it. Off deletes the saved copy.">
              Autosave</label>
          <span class="session-row-end">
-             <button type="button" class="btn-clear-saved" title="Delete the saved session and start empty"
-                     ${autosaveOn && sessionsHaveWork() ? '' : 'disabled'}>Clear</button>
+             <button type="button" class="btn-clear-saved"
+                     title="${autosaveOwner ? 'Delete the saved session and start empty' : 'TracePoint is open in another tab: clear the saved session there'}"
+                     ${autosaveOn && autosaveOwner && sessionsHaveWork() ? '' : 'disabled'}>Clear</button>
              <input type="checkbox" id="autosave-switch" class="adjust-switch" role="switch" aria-label="Autosave" ${autosaveOn ? 'checked' : ''}>
          </span>`;
     saveRow.querySelector('input').onchange = (e) => { setAutosave(e.target.checked); renderSessionMenu(); };
@@ -1979,8 +1991,7 @@ function switchToSession(idx) {
     updateAdjustUI();
 
     if (s.imgElement) {
-        canvas.width         = s.imgElement.width;
-        canvas.height        = s.imgElement.height;
+        sizePhotoCanvas(s.imgElement);
         canvas.style.display = 'block';
         overlay.style.display = 'none';
         applyTransform();
@@ -1989,6 +2000,7 @@ function switchToSession(idx) {
         canvas.style.display  = 'none';
         overlay.style.display = 'flex';
         updateDropOverlay();
+        render();   // clears the lines of the image before
     }
 
     updateUI();
@@ -2124,9 +2136,11 @@ function loadImage(file, s = sess(), fromStore = false, onReady = null) {
         if (!isRestore && file.name && !s.renamed) s.name = file.name.replace(/\.[^.]+$/, '');
         if (!fromStore) autosavePutImage(s);
         if (!isRestore) fitPhoto(s);
+        if (img.width > MAX_CANVAS_SIDE || img.height > MAX_CANVAS_SIDE || img.width * img.height > MAX_CANVAS_AREA) {
+            showToast(`This photo (${img.width} × ${img.height} px) is larger than a browser canvas can hold and may stay blank. Scale it down first.`);
+        }
         if (s === sess()) {
-            canvas.width  = img.width;
-            canvas.height = img.height;
+            sizePhotoCanvas(img);
             canvas.style.display = 'block';
             overlay.style.display = 'none';
             applyTransform();
@@ -2304,6 +2318,11 @@ function exifLatLng(e) {
     return validLatLng(lat, lng);
 }
 
+/* GPSImgDirectionRef "M": the camera direction is measured from magnetic north, not true north */
+function magneticDirection(e) {
+    return /^m/i.test(String(e?.GPSImgDirectionRef || ''));
+}
+
 function cardinalDir(deg) {
     const dirs = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
     return dirs[Math.round(deg / 45) % 8];
@@ -2360,7 +2379,7 @@ function renderExifCard() {
             // — Location —
             ['GPS',           lat != null && lng != null ? `${lat.toFixed(5)}, ${lng.toFixed(5)}` : null],
             ['Altitude',      alt != null ? `${Math.round(alt)} m` : null],
-            ['Cam direction', dir != null ? `${Math.round(dir)}° ${cardinalDir(dir)}` : null],
+            ['Cam direction', dir != null ? `${Math.round(dir)}° ${cardinalDir(dir)}${magneticDirection(e) ? ' (magnetic)' : ''}` : null],
             ['Travel dir',    trk != null ? `${Math.round(trk)}° ${cardinalDir(trk)}` : null],
             ['Speed',         formatGPSSpeed(pick(e, 'GPSSpeed'), pick(e, 'GPSSpeedRef'))],
             ['GPS time',      formatGPSTimestamp(pick(e, 'GPSTimeStamp'), pick(e, 'GPSDateStamp'))],
@@ -2477,6 +2496,8 @@ function addExifRay() {
     recomputeIntersection();
     render(); updateUI();
     showToast('EXIF direction ray added.', 'success');
+    // The magnetic declination (a few degrees in most places) is not corrected: it needs a world magnetic model
+    if (magneticDirection(s.exif)) showToast('The camera recorded a magnetic bearing: the ray can be off true north by the local declination.');
 }
 
 /* Button toggle */
@@ -2531,29 +2552,42 @@ function imageFilter(s) {
         : 'none';
 }
 
-/* The photo with its rotation and display filter, drawn once into an offscreen canvas and redrawn
-   only when the image, the rotation or a slider changes. render() copies it, so the pulse animation
-   and every drag frame no longer rotate and filter the full photo again.
-   Browsers without ctx.filter fall back to filtering the whole visible canvas. */
-const photoCache = { canvas: document.createElement('canvas'), img: null, key: '' };
+/* The photo with its rotation and display filter, drawn into the photo canvas only when the image,
+   the rotation or a slider changes. Lines and points have a canvas of their own at screen size
+   (drawLines), so the pulse animation and every drag frame never touch the full-resolution photo.
+   Browsers without ctx.filter fall back to a CSS filter on the photo canvas. */
+const photoCache = { img: null, key: '' };
 
-function photoLayer(s) {
+/* The largest canvas Chrome and Firefox draw; a bigger photo stays blank (Safari's limits are lower) */
+const MAX_CANVAS_SIDE = 32767, MAX_CANVAS_AREA = 268435456;
+
+/* The photo canvas has the photo's own pixel size: lines and points are stored in those pixels.
+   Setting the size wipes the canvas, so it is only set when it changes, and the photo is redrawn then. */
+function sizePhotoCanvas(img) {
+    if (canvas.width === img.width && canvas.height === img.height) return;
+    canvas.width  = img.width;
+    canvas.height = img.height;
+    photoCache.key = '';
+}
+
+function drawPhoto(s) {
     const img = s.imgElement, f = imageFilter(s);
-    const key = `${img.width}x${img.height}|${s.view.rotation}|${f}`;
-    if (photoCache.img === img && photoCache.key === key) return photoCache.canvas;
+    sizePhotoCanvas(img);
+    const key = `${s.view.rotation}|${f}`;
+    if (photoCache.img === img && photoCache.key === key) return;
 
-    const c = photoCache.canvas;
-    c.width = img.width; c.height = img.height;   // also resets the context
-    const pc = c.getContext('2d');
-    const cx = c.width / 2, cy = c.height / 2;
-    pc.translate(cx, cy);
-    pc.rotate(s.view.rotation * Math.PI / 180);
-    pc.translate(-cx, -cy);
-    if ('filter' in pc) { pc.filter = f; canvas.style.filter = ''; }
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const cx = canvas.width / 2, cy = canvas.height / 2;
+    ctx.translate(cx, cy);
+    ctx.rotate(s.view.rotation * Math.PI / 180);
+    ctx.translate(-cx, -cy);
+    if ('filter' in ctx) { ctx.filter = f; canvas.style.filter = ''; }
     else canvas.style.filter = f;
-    pc.drawImage(img, 0, 0);
+    ctx.drawImage(img, 0, 0);
+    if ('filter' in ctx) ctx.filter = 'none';
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
     photoCache.img = img; photoCache.key = key;
-    return c;
 }
 
 /* The tools of the line bar are always there; without a photo they are greyed out and do nothing.
@@ -2708,7 +2742,7 @@ function downloadJSON(data, filename) {
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement('a');
     a.href = url; a.download = filename; a.click();
-    URL.revokeObjectURL(url);
+    setTimeout(() => URL.revokeObjectURL(url), 60000);   // some browsers read the file after click() returns
 }
 
 /* An image name as part of a file name: the characters Windows refuses become "_".
@@ -2803,7 +2837,9 @@ function exportAllSessions() {
    keepView: the saved map view wins over the automatic zoom to the intersection. */
 const HEX_COLOUR = /^#[0-9a-f]{6}$/i;   // the only colour form a session file may carry: it ends up in styles
 
-/* A map position from a file: plain numbers in range, nothing else carried over */
+/* A map position from a file: plain numbers in range, nothing else carried over. Longitude may run
+   past ±180 on purpose: MapLibre does not wrap a click on the next world copy, and a ray across the
+   antimeridian only stays straight with its points unwrapped. */
 function cleanGeo(g) {
     if (!g || !finite(g.lat) || !finite(g.lng) || Math.abs(g.lat) > 90 || Math.abs(g.lng) > 360) return null;
     return { lat: g.lat, lng: g.lng };
@@ -2989,10 +3025,13 @@ function autosaveWrite() {
     const keep = new Set(sessions.map(s => 'img:' + s.id));
     autosaveTx('readwrite', store => {
         if (json) store.put(json, 'session'); else store.delete('session');
-        // images of removed sessions go too
-        store.getAllKeys().onsuccess = (e) => e.target.result.forEach(k => {
-            if (k !== 'session' && !keep.has(k)) store.delete(k);
-        });
+        store.getAllKeys().onsuccess = (e) => {
+            const have = new Set(e.target.result);
+            // images of removed sessions go too
+            have.forEach(k => { if (k !== 'session' && !keep.has(k)) store.delete(k); });
+            // and a photo missing from the store (deleted from another tab) is put back
+            sessions.forEach(s => { if (s.imageFile && !have.has('img:' + s.id)) store.put(s.imageFile, 'img:' + s.id); });
+        };
     }).catch(autosaveFailed);
 }
 
@@ -3060,14 +3099,30 @@ function setAutosave(on) {
         autosaveWarned = false;
         sessions.forEach(autosavePutImage);
         autosaveWrite();
-        showToast('Autosave on. Work is kept in this browser.', 'success');
+        showToast(autosaveOwner ? 'Autosave on. Work is kept in this browser.'
+                                : 'Autosave on. The other TracePoint tab saves its work; this tab saves once that one is closed.', 'success');
     } else {
         autosaveClearStore();
         showToast('Autosave off. Saved copy deleted.', 'success');
     }
 }
 
+/* The switch is shared by all tabs (localStorage). Switched in another tab, it holds here too:
+   off stops this tab's writes at once (that tab has deleted the saved copy already), on lets the
+   tab that holds the store write it again. */
+window.addEventListener('storage', (e) => {
+    if (e.key !== AUTOSAVE_KEY) return;
+    const on = e.newValue !== '0';
+    if (on === autosaveOn) return;
+    autosaveOn = on;
+    if (!on) { clearTimeout(autosaveTimer); autosaveTimer = null; }
+    else if (autosaveOwner && autosaveReady) { autosaveWarned = false; sessions.forEach(autosavePutImage); autosaveWrite(); }
+    renderSessionMenu();
+});
+
 function clearSavedSession() {
+    // The saved copy belongs to the tab that writes it; deleting it from here would only lose its photos
+    if (!autosaveOwner) return showToast('TracePoint is open in another tab. Clear the saved session there.');
     if (!confirm('Delete the saved session and start empty? This cannot be undone.')) return;
     autosaveClearStore().then(() => {
         resetWorkspace(true);
@@ -3088,17 +3143,19 @@ window.addEventListener('pagehide', () => { if (autosaveTimer) autosaveWrite(); 
 container.addEventListener('wheel', (e) => {
     if (!sess().imgElement) return;
     e.preventDefault();
+    if (!e.deltaY) return;   // a sideways scroll is not a zoom
     const v = sess().view;
     const rect   = container.getBoundingClientRect();
     const mouseX = e.clientX - rect.left;
     const mouseY = e.clientY - rect.top;
-    const factor = e.deltaY < 0 ? 1.12 : 1 / 1.12;
+    // One wheel notch (about 100 px) zooms 12 %; a trackpad's many small steps add up to the same
+    const px     = e.deltaY * (e.deltaMode === 1 ? 33 : e.deltaMode === 2 ? 800 : 1);
+    const factor = Math.pow(1.12, -Math.max(-1, Math.min(1, px / 100)));
     const newScale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, v.scale * factor));
     v.tx = mouseX - (mouseX - v.tx) * (newScale / v.scale);
     v.ty = mouseY - (mouseY - v.ty) * (newScale / v.scale);
     v.scale = newScale;
-    applyTransform();
-    render();   // line widths and labels follow the zoom
+    applyTransform();   // also redraws the lines: their widths and labels follow the zoom
 }, { passive: false });
 
 /* ============================================================
@@ -3108,7 +3165,8 @@ let spaceDown = false;
 const CLICK_SLOP = 4;   // screen px the mouse may move between press and release and still count as a click
 document.addEventListener('keydown', (e) => {
     const tag = e.target.tagName;
-    if (e.code === 'Space' && tag !== 'INPUT' && tag !== 'TEXTAREA' && tag !== 'SELECT') {
+    // Not on a focused button or link: Space presses those
+    if (e.code === 'Space' && !['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON', 'A'].includes(tag)) {
         spaceDown = true; e.preventDefault();
     }
 });
@@ -3153,7 +3211,7 @@ window.addEventListener('mouseup', () => {
     state.isDragging = false;
     state.press = null;
     if (state.pointDrag) { state.pointDrag = null; updateUI(); }
-    else if (wasLineDrag) historyCommit();   // a finished line drag is one undo step
+    else if (wasLineDrag) updateUI();   // one undo step, and the guide moves on from "drag the line"
     else if (press && press.wasActive) addPhotoPoint(press.lineIndex, press.imgY);   // a click on the active line
 });
 window.addEventListener('mousemove', (e) => {
@@ -3185,14 +3243,41 @@ window.addEventListener('mousemove', (e) => {
    ============================================================ */
 function render() {
     const s = sess();
-    if (!s.imgElement) return;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.drawImage(photoLayer(s), 0, 0);
+    if (s.imgElement) drawPhoto(s);
+    drawLines();
+}
+
+/* The line canvas covers the photo panel at the screen's own resolution */
+function sizeLineCanvas() {
+    const dpr = window.devicePixelRatio || 1;
+    const w = Math.max(1, Math.round(container.clientWidth * dpr));
+    const h = Math.max(1, Math.round(container.clientHeight * dpr));
+    if (lineCanvas.width !== w || lineCanvas.height !== h) { lineCanvas.width = w; lineCanvas.height = h; }
+    return dpr;
+}
+new ResizeObserver(() => drawLines()).observe(container);
+
+function stopPulse() {
+    if (pulseFrameId !== null) { cancelAnimationFrame(pulseFrameId); pulseFrameId = null; }
+}
+
+/* Lines, points and the level tool's guide line. Drawn in image pixels through the photo's view
+   transform, onto a canvas the size of the panel: cheap enough for every animation frame. */
+function drawLines() {
+    const s = sess();
+    const dpr = sizeLineCanvas();
+    const ctx = lctx;   // everything below draws on the line canvas, never on the photo
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, lineCanvas.width, lineCanvas.height);
+    if (!s || !s.imgElement) { stopPulse(); return; }
+    const v = s.view;
+    ctx.setTransform(v.scale * dpr, 0, 0, v.scale * dpr, v.tx * dpr, v.ty * dpr);
 
     /* Lines live in image pixels. Zoomed out, a 1.5 px line on a 12 MP photo would be a fraction of a
        screen pixel, so every size is multiplied by k to keep it constant on screen. Zoomed in past
        100 % the sizes stay in image pixels and grow with the photo. */
-    const k = Math.max(1, 1 / s.view.scale);
+    const k = Math.max(1, 1 / v.scale);
+    const blurScale = v.scale * dpr;   // shadowBlur ignores the transform: it is in canvas pixels
 
     let needsRerender = false;
     ctx.font = `bold ${11 * k}px monospace`;
@@ -3212,7 +3297,9 @@ function render() {
         if (line.pristine) {
             const pulse = Math.sin(Date.now() / 250);   // -1 … +1
             ctx.shadowColor = colour;
-            ctx.shadowBlur  = (22 + 12 * pulse) * k;    // 10 … 34
+            // 10 … 34 screen px when zoomed out; zoomed in it grows with the photo, up to a limit
+            // (a blur hundreds of pixels wide costs more than the whole rest of the frame)
+            ctx.shadowBlur  = Math.min((22 + 12 * pulse) * k * blurScale, 80 * dpr);
         }
 
         // The line stops at each point's ring, so the pixel under the point stays visible
@@ -3288,9 +3375,9 @@ function render() {
 
     if (needsRerender) {
         if (pulseFrameId === null)
-            pulseFrameId = requestAnimationFrame(() => { pulseFrameId = null; render(); });
+            pulseFrameId = requestAnimationFrame(() => { pulseFrameId = null; drawLines(); });
     } else {
-        if (pulseFrameId !== null) { cancelAnimationFrame(pulseFrameId); pulseFrameId = null; }
+        stopPulse();
     }
 
     if (state.mode === 'horizon' && s.horizonPoints.length > 0) {
@@ -3375,7 +3462,11 @@ canvas.addEventListener('click', (e) => {
         sess().horizonPoints.push(pt);
         if (sess().horizonPoints.length === 2) {
             const [p1, p2] = sess().horizonPoints;
-            const angle = Math.atan2(p2.y - p1.y, p2.x - p1.x) * 180 / Math.PI;
+            let angle = Math.atan2(p2.y - p1.y, p2.x - p1.x) * 180 / Math.PI;
+            // Clicked right to left the angle is near ±180°; the horizon is the same line, so the photo
+            // must not turn upside down
+            if (angle > 90) angle -= 180;
+            else if (angle < -90) angle += 180;
             sess().view.rotation = -angle;
             state.mode = 'idle';
             sess().horizonPoints = [];
@@ -3817,7 +3908,8 @@ function recomputeIntersection() {
         const disc  = Math.sqrt(Math.max(0, (trace / 2) ** 2 - (Cxx * Cyy - Cxy * Cxy)));
         const l1 = trace / 2 + disc;
         const l2 = trace / 2 - disc;
-        const angle = Math.abs(Cxy) < 1e-12 ? 0 : Math.atan2(l1 - Cxx, Cxy);
+        // Direction of the major axis; also right when the spread is exactly along x or y (Cxy = 0)
+        const angle = 0.5 * Math.atan2(2 * Cxy, Cxx - Cyy);
         const a = Math.sqrt(Math.max(0, l1)) * 2;
         const b = Math.sqrt(Math.max(0, l2)) * 2;
         const steps = 64;
@@ -3872,7 +3964,10 @@ function intersectLines(p1, p2, p3, p4) {
     const x4 = p4.lng, y4 = p4.lat;
 
     const denom = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
-    if (Math.abs(denom) < 1e-10) return null; // parallel
+    // Parallel: denom is |a|·|b|·sin(angle), so the test is relative to the lengths. A fixed limit
+    // took two lines whose points lie a metre apart for parallel, whatever their angle.
+    const lengths = Math.hypot(x1 - x2, y1 - y2) * Math.hypot(x3 - x4, y3 - y4);
+    if (lengths === 0 || Math.abs(denom) < 1e-9 * lengths) return null;
 
     const t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / denom;
     return {
@@ -4367,8 +4462,10 @@ function streetFail(err) {
     streetClearView();
     streetInfo(); streetButtons(); streetMarkerUpdate();
     const name = STREET_SOURCES[street.source].label;
-    if (street.source === 'mapillary' && err && [400, 401, 403, 500].includes(err.status)) {
+    if (street.source === 'mapillary' && err && [400, 401, 403].includes(err.status)) {
         streetStatus('Mapillary did not accept the token. Check it in the field above.');
+    } else if (err && err.status >= 500) {
+        streetStatus(`${name} has a problem on its side (error ${err.status}). Try again later.`);
     } else {
         streetStatus(`${name} could not be reached.`);
     }

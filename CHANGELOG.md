@@ -1,8 +1,20 @@
 # Changelog
 
-## Unreleased
+## v2.9.1
 
 - Dragging an empty part of the photo pans it, like the map; a click there still deselects. Space + drag and middle-click drag work as before
+- Smoother photo panel: lines and points are drawn on a canvas of their own at screen size, so the glow of a new line and the waiting point no longer redraw the full-resolution photo every frame. A photo too large for a browser canvas now says so instead of staying blank
+- Fixed: levelling with the second click left of the first turned the photo upside down
+- Fixed: switching autosave off in one tab did not stop another open TracePoint tab from saving. Clear works only in the tab that saves, and a photo missing from the saved copy is put back
+- Fixed: after dragging a new line, the step guide still asked to drag it
+- Fixed: two map points about a metre apart were taken for parallel lines, and no position was found
+- Fixed: the error ellipse could point 90° the wrong way when the crossings lay exactly along north–south or east–west
+- Fixed: a sideways scroll zoomed the photo out, and trackpads zoomed it far too fast
+- OpenStreetMap tiles come from `tile.openstreetmap.org`, without the retired a/b/c subdomains
+- Esc with a menu open closes only the menu, and keeps the selected line or the point waiting for its map click
+- Space presses a focused button again (it only pans the photo elsewhere)
+- A magnetic camera direction in the metadata is marked "(magnetic)", and the EXIF ray warns that it is not corrected to true north
+- A server error at Panoramax or Mapillary says so, instead of blaming the Mapillary token
 
 ## v2.9.0
 
