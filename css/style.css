@@ -179,6 +179,8 @@ button:disabled     { opacity: 0.3; cursor: not-allowed; }
     flex: 1; position: relative; overflow: hidden; background: #111;
 }
 #image-canvas { display: none; cursor: crosshair; position: absolute; top: 0; left: 0; }
+/* Lines and points, drawn at screen size over the photo (see render in script.js) */
+#line-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 
 #drop-overlay {
     position: absolute; inset: 0;

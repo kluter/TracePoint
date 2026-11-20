@@ -38,7 +38,7 @@ So that a refresh does not lose work, TracePoint saves the open sessions and the
 - **Clear** in the ☰ menu of the photo side deletes the saved copy and empties the workspace.
 - **Autosave off** in the same menu deletes the saved copy at once and stores nothing from then on. Use this for sensitive material; closing the tab then leaves no trace of the investigation.
 - A private window works as usual; the browser deletes the saved copy when that window closes.
-- Two tabs share one saved copy; the last change wins.
+- With TracePoint open in two tabs, only the first one saves. The second restores the saved work, but its own changes are not saved until the first tab is closed, and **Clear** works only in the first. Switching autosave off in either tab deletes the saved copy and stops both from saving.
 
 Photo adjustments and coordinate pins are not saved. Besides that, `localStorage` holds a few settings. `sessionStorage` and cookies are unused.
 
@@ -50,6 +50,7 @@ Photo adjustments and coordinate pins are not saved. Besides that, `localStorage
 //                 { "tp-custom-layers": [...] } ← name + URL of custom layers, if you added any
 //                 { "tp-autosave": "1" }        ← autosave on/off
 //                 { "tp-split": "50.00" }       ← width of the photo side in percent
+//                 { "tp-keys": "photo" }        ← key layout, Photo or Map
 //                 { "tp-export-photos": "1" }   ← "Include photos" on/off
 //                 { "tp-street-source": "…" }   ← Panoramax or Mapillary
 //                 { "tp-street-token": "…" }    ← your Mapillary token, if you entered one (never exported)
@@ -63,7 +64,7 @@ Photo adjustments and coordinate pins are not saved. Besides that, `localStorage
 
 ## Session import cannot run code
 
-Importing a session file does not execute anything. Every field is type-checked on the way in, unknown keys are discarded, and strings are escaped before display. There is no `eval()` and no raw HTML injection. The worst a manipulated file can do is fail to import.
+Importing a session file does not execute anything. Lines, points, map views and colours are type-checked on the way in and unknown keys are discarded. The image metadata block is kept as it is, as plain data, and like every other string it is escaped before display. An embedded photo is used only if the browser can decode it as an image. There is no `eval()` and no raw HTML injection. The worst a manipulated file can do is fail to import.
 
 ## The code is fully auditable
 
