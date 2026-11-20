@@ -42,22 +42,38 @@ Open it with the panorama button in the map bar, or right-click the map → **St
 
 ## Keyboard shortcuts
 
+There are two key layouts, switched with **Photo | Map** in the help card (`?` button, or the help key). The choice is kept in this browser.
+
+- **Photo** (default): the left hand works the photo, the mouse the map.
+- **Map**: `W` `A` `S` `D` move the map and `Q` / `E` turn it while held, like in a game; the photo tools move to other keys.
+
+Keys are physical positions, so on a French (AZERTY) or German (QWERTZ) keyboard they sit in the same place as on a US one; in Chrome and Edge the help card shows your keyboard's letters.
+
+| Action | Photo | Map |
+|---|---|---|
+| New line | `E` | `R` |
+| Delete active line | `R` | — (use `Del`) |
+| Map the next unmapped point | `F` | `G` |
+| Toggle level tool / reset rotation | `W` | `L` |
+| Toggle help card | `X` | `H` |
+| Move the map (held) | — | `W` `A` `S` `D` |
+| Turn the map (held) | — | `Q` / `E` |
+| Look straight down | — | `T` |
+| Reset map to north and flat | `N` | `N` |
+| Measure a distance on the map (again or `Esc` to clear) | `M` | `M` |
+
+The same in both layouts:
+
 | Key | Action |
 |---|---|
-| `W` | Toggle level tool / reset rotation |
-| `E` | New line |
-| `R` | Delete active line |
-| `F` | Map next unmapped point of active line |
-| `X` | Toggle help card |
 | `Del` / `Backspace` | Delete the selected point, or the active line if no point is selected |
-| `1` – `5` | Jump to line 1–5 |
+| `1` – `5` | Jump to line 1–5 (number row or keypad) |
 | `Esc` | Cancel / deselect |
 | `F2` | Rename the active image |
 | `Ctrl+Z` | Undo a line or point edit; `Ctrl+Shift+Z` or `Ctrl+Y` redoes |
 | `Ctrl+S` | Export all sessions (with photos if **Include photos** is on) |
 | `Ctrl+V` | Paste a photo → new image; paste coordinates → pin on map |
-| `N` | Reset map to north |
-| `M` | Measure a distance on the map (again or `Esc` to clear) |
+| Space + drag | Pan the photo |
 
 ## Loading photos
 

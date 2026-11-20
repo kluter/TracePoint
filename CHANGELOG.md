@@ -1,7 +1,10 @@
 # Changelog
 
-## Unreleased
+## v2.9.0
 
+- Two key layouts, switched with Photo | Map in the help card and remembered in this browser. Photo is the layout so far. Map moves the map with `W` `A` `S` `D` and turns it with `Q` / `E` while the keys are held; `T` looks straight down, and new line, next point, level tool and help move to `R`, `G`, `L` and `H`. The help card, the step guide and the tooltips show the keys of the active layout
+- Shortcut keys are physical positions, so on French or German keyboards they sit where they are on a US one; in Chrome and Edge the help card shows your keyboard's letters. `1`–`5` also work on the keypad
+- README is shorter; the full controls, map layer and privacy reference moved to `docs/`
 - Fixed: adding a ninth image froze the page (the search for a free line colour never ended); colours now repeat from the ninth image on
 - Show on map in the image metadata card turns into Remove from map once the GPS marker is on the map, and takes it away again
 - The tools of the line bar (new line, metadata, fit, adjust, level) are always visible; without a photo they are greyed out and do nothing, and `E` and `W` do nothing either

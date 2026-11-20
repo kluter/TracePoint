@@ -679,6 +679,24 @@ button.btn-primary:hover:not(:disabled) { background: #004a6e; color: #fff; }
     text-transform: uppercase; letter-spacing: 0.06em;
     margin-bottom: 8px;
 }
+/* "Keys" title with the Photo | Map layout switch on the right */
+.help-shortcuts-head {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 8px;
+}
+.help-shortcuts-head .help-shortcuts-title { margin-bottom: 0; }
+.key-layout-switch {
+    display: inline-flex;
+    border: 1px solid #383838; border-radius: 4px; overflow: hidden;
+}
+.key-layout-switch button {
+    background: #1d1d1d; border: none; color: #777;
+    font-size: 10px; padding: 2px 9px; cursor: pointer;
+    transition: color 0.15s, background 0.15s;
+}
+.key-layout-switch button + button { border-left: 1px solid #383838; }
+.key-layout-switch button:hover { color: #ccc; }
+.key-layout-switch button.active { background: #2c2a1a; color: #ffdc32; }
 .help-shortcuts-grid {
     display: grid;
     grid-template-columns: auto 1fr auto 1fr;   /* two key/text pairs per row */

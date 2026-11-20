@@ -49,6 +49,8 @@ The more lines you add, the more rays are generated and the more robustly the in
 
 ## Controls
 
+Two key layouts, switched with **Photo | Map** in the help card. **Photo** (default) keeps the left hand on the photo tools; **Map** moves the map with `W` `A` `S` `D` and turns it with `Q` / `E` while held. The table shows Photo; Map is in [docs/controls.md](docs/controls.md#keyboard-shortcuts).
+
 | Key | Action |
 |---|---|
 | `E` / `R` | New line / delete active line |
@@ -125,7 +127,7 @@ python3 -m http.server
 
 ## Changelog
 
-Current version: **v2.8.0**. All releases are listed in [CHANGELOG.md](CHANGELOG.md).
+Current version: **v2.9.0**. All releases are listed in [CHANGELOG.md](CHANGELOG.md).
 
 ---
 

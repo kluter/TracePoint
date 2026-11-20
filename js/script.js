@@ -20,6 +20,33 @@ const R   = 6371; // Earth radius km
 
 const MAX_LINES = 5;   // per image; keys 1–5 jump to them
 
+/* Key layouts, switched in the help card. Photo: the left hand works the photo, the mouse the map.
+   Map: W A S D move the map and Q / E turn it while held. Keys are physical positions (KeyboardEvent.code),
+   so a French or German keyboard uses the same places. Fixed keys (Esc, Del, F2, 1–5, Ctrl+…) are not in here. */
+const KEY_LAYOUT_STORE = 'tp-keys';
+const KEY_LAYOUTS = {
+    photo: { newLine: 'KeyE', removeLine: 'KeyR', nextPoint: 'KeyF', level: 'KeyW', help: 'KeyX',
+             measure: 'KeyM', north: 'KeyN' },
+    map:   { newLine: 'KeyR', nextPoint: 'KeyG', level: 'KeyL', help: 'KeyH',
+             measure: 'KeyM', north: 'KeyN', topDown: 'KeyT',
+             panUp: 'KeyW', panLeft: 'KeyA', panDown: 'KeyS', panRight: 'KeyD', turnLeft: 'KeyQ', turnRight: 'KeyE' }
+};
+let keyLayout = localStorage.getItem(KEY_LAYOUT_STORE) === 'map' ? 'map' : 'photo';
+let keyNames = null;   // physical key → its letter on this keyboard; only Chrome and Edge tell, others show US letters
+
+/* The letter to show for a physical key, and for an action of the active layout ('' if it has no key) */
+function keyLabel(code) {
+    return (keyNames?.get(code) || code.replace(/^Key/, '')).toUpperCase();
+}
+function keyFor(action) {
+    const code = KEY_LAYOUTS[keyLayout][action];
+    return code ? keyLabel(code) : '';
+}
+function actionForKey(code) {
+    for (const [action, c] of Object.entries(KEY_LAYOUTS[keyLayout])) if (c === code) return action;
+    return null;
+}
+
 function finite(v) { return typeof v === 'number' && Number.isFinite(v); }
 
 const toastCounts = new Map();
@@ -1270,11 +1297,11 @@ function updateUI() {
    ============================================================ */
 const GUIDE_STEPS = [
     { title: 'Load an image',            key: '',    icon: '<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-8 8"/>' },
-    { title: 'Add a line',               key: 'E',   icon: '<line x1="12" y1="3" x2="12" y2="21"/>' },
+    { title: 'Add a line',               key: 'newLine', icon: '<line x1="12" y1="3" x2="12" y2="21"/>' },
     { title: 'Drag the line onto a feature', key: '', icon: '<line x1="12" y1="3" x2="12" y2="21"/><path d="M4 12h5M15 12h5"/><path d="M6 9l-3 3 3 3M18 9l3 3-3 3"/>' },
     { title: 'Click the line to place P1 and P2', key: '', icon: '<line x1="12" y1="3" x2="12" y2="21"/><circle cx="12" cy="8" r="2.5"/><circle cx="12" cy="16" r="2.5"/>' },
-    { title: 'Mark the points on the map', key: 'F', icon: '<path d="M12 21s-6-5.5-6-10a6 6 0 0 1 12 0c0 4.5-6 10-6 10z"/><circle cx="12" cy="11" r="2"/>' },
-    { title: 'Add a second line',         key: 'E',   icon: '<line x1="8" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="16" y2="21"/>' },
+    { title: 'Mark the points on the map', key: 'nextPoint', icon: '<path d="M12 21s-6-5.5-6-10a6 6 0 0 1 12 0c0 4.5-6 10-6 10z"/><circle cx="12" cy="11" r="2"/>' },
+    { title: 'Add a second line',         key: 'newLine', icon: '<line x1="8" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="16" y2="21"/>' },
     { title: 'Position found',            key: '',    icon: '<circle cx="12" cy="12" r="7"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/>' }
 ];
 
@@ -1294,7 +1321,7 @@ function guideStatus() {
     const progress = Math.min(done / TOTAL, 1);
 
     if (!s.imgElement) return { idx: 0, progress, hint: 'Drop or paste an image, or browse' };
-    if (s.lines.length === 0) return { idx: 1, progress, hint: 'Press E for a new line' };
+    if (s.lines.length === 0) return { idx: 1, progress, hint: `Press ${keyFor('newLine')} for a new line` };
 
     // The first line that still needs work drives the guide
     const lIdx = s.lines.findIndex(l => l.points.length < 2 || l.points.some(p => !p.geo));
@@ -1311,9 +1338,9 @@ function guideStatus() {
             const t = state.mapPointTarget;
             return { idx: 4, progress, pressed: true, hint: `Click the map to place L${t.lineIndex + 1} · P${t.pointIndex + 1}` };
         }
-        return { idx: 4, progress, hint: `Press F to place ${L} · P${pIdx + 1} on the map` };
+        return { idx: 4, progress, hint: `Press ${keyFor('nextPoint')} to place ${L} · P${pIdx + 1} on the map` };
     }
-    if (s.lines.length < 2) return { idx: 5, progress, hint: 'Press E for a second line' };
+    if (s.lines.length < 2) return { idx: 5, progress, hint: `Press ${keyFor('newLine')} for a second line` };
     if (s.lines.length === 2) return { idx: 6, progress, hint: 'Position found · a third line adds an ellipse' };
     return { idx: 6, progress, hint: 'Done · more lines tighten the ellipse' };
 }
@@ -1323,11 +1350,12 @@ function buildGuide() {
     const rail = el('div', 'guide-rail', guideEl);
     el('div', 'guide-rail-fill', rail);
     GUIDE_STEPS.forEach((st, i) => {
-        const b = el('button', 'guide-step' + (st.key ? '' : ' no-key'), guideEl);
+        const key = st.key ? keyFor(st.key) : '';   // the step's action, as a key of the active layout
+        const b = el('button', 'guide-step' + (key ? '' : ' no-key'), guideEl);
         b.type = 'button';
-        b.title = st.title + (st.key ? ` (${st.key})` : '');
+        b.title = st.title + (key ? ` (${key})` : '');
         b.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${st.icon}</svg>` +
-                      (st.key ? `<span class="guide-key">${st.key}</span>` : '');
+                      (key ? `<span class="guide-key">${key}</span>` : '');
         b.onclick = () => guideAction(i);
     });
 }
@@ -1613,69 +1641,166 @@ document.addEventListener('keydown', (e) => {
         return;
     }
 
-    // F — map placement for the next unmapped point: of the active line, else of the first line that has one
-    if (e.key === 'f' || e.key === 'F') {
+    // 1–5 (number row or keypad) — jump to line
+    const digit = /^(?:Digit|Numpad)([1-9])$/.exec(e.code);
+    if (digit) {
+        const lineNum = Number(digit[1]);
+        if (lineNum > MAX_LINES) return;
         e.preventDefault();
+        if (lineNum - 1 < sess().lines.length && state.mode !== 'horizon') selectLine(lineNum - 1);
+        return;
+    }
+
+    // Letter keys: what they do depends on the key layout chosen in the help card
+    const action = actionForKey(e.code);
+    if (!action) return;
+    e.preventDefault();
+    if (MOVE_ACTIONS.has(action)) { holdMapMove(action); return; }
+    KEY_ACTIONS[action]?.(e);
+});
+
+/* What each action of a key layout does */
+const KEY_ACTIONS = {
+    newLine() {
+        if (!sess().imgElement) return;   // like the greyed-out button
+        addLine(true);
+    },
+    removeLine() {
+        if (state.activeLineIndex !== -1) deleteLine(state.activeLineIndex);
+    },
+    // Map placement for the next unmapped point: of the active line, else of the first line that has one
+    nextPoint() {
         const s = sess();
         const hasUnmapped = (l) => !!l && l.points.some(p => !p.geo);
         const lIdx = hasUnmapped(s.lines[state.activeLineIndex]) ? state.activeLineIndex : s.lines.findIndex(hasUnmapped);
         if (lIdx !== -1) startMapPoint(lIdx, s.lines[lIdx].points.findIndex(p => !p.geo));
-        return;
-    }
-
-    // W — level tool (toggle / reset)
-    if (e.key === 'w' || e.key === 'W') {
-        e.preventDefault();
+    },
+    // Level tool (toggle / reset)
+    level() {
         if (!sess().imgElement) return;   // like the greyed-out button
         btnHorizon.click();
-        return;
-    }
-
-    // X — toggle help card
-    if (e.key === 'x' || e.key === 'X') {
-        e.preventDefault();
+    },
+    help() {
         const card = document.getElementById('help-card');
         if (card.style.display === 'none') showHelp(false); else hideHelp();
-        return;
-    }
-
-    // E — new line
-    if (e.key === 'e' || e.key === 'E') {
-        e.preventDefault();
-        if (!sess().imgElement) return;   // like the greyed-out button
-        addLine(true);
-        return;
-    }
-
-    // R — remove active line
-    if (e.key === 'r' || e.key === 'R') {
-        e.preventDefault();
-        if (state.activeLineIndex !== -1) deleteLine(state.activeLineIndex);
-        return;
-    }
-
-    // M — measure a distance on the map (again to clear)
-    if (e.key === 'm' || e.key === 'M') {
-        e.preventDefault();
+    },
+    // Measure a distance on the map (again to clear)
+    measure(e) {
         if (!e.repeat) { if (measure.active) clearMeasure(); else startMeasure(); }
-        return;
-    }
+    },
+    // Same as clicking the compass: reset bearing and tilt
+    north() { map.resetNorthPitch(); },
+    // Look straight down; the bearing stays
+    topDown(e) { if (!e.repeat) map.easeTo({ pitch: 0 }); }
+};
 
-    // N — same as clicking the compass: reset bearing and tilt
-    if (e.key === 'n' || e.key === 'N') {
-        e.preventDefault();
-        map.resetNorthPitch();
-        return;
-    }
+/* Map layout: while W A S D are held the map glides in screen directions, so "up" stays up on a turned map;
+   Q and E turn it. Several keys at once combine. Everything stops when the window loses focus. */
+const MOVE_ACTIONS = new Set(['panUp', 'panLeft', 'panDown', 'panRight', 'turnLeft', 'turnRight']);
+const MOVE_SPEED = 380;   // screen pixels per second
+const TURN_SPEED = 70;    // degrees per second
+const mapMove = { held: new Set(), frame: null, last: 0 };
 
-    // 1–5 — jump to line
-    const lineNum = parseInt(e.key);
-    if (lineNum >= 1 && lineNum <= MAX_LINES) {
-        e.preventDefault();
-        const idx = lineNum - 1;
-        if (idx < sess().lines.length && state.mode !== 'horizon') selectLine(idx);
-    }
+function holdMapMove(action) {
+    mapMove.held.add(action);
+    if (mapMove.frame !== null) return;
+    mapMove.last = performance.now();
+    mapMove.frame = requestAnimationFrame(mapMoveStep);
+}
+
+function mapMoveStep(now) {
+    const h = mapMove.held;
+    if (!h.size) { mapMove.frame = null; return; }
+    const dt = Math.min(0.05, (now - mapMove.last) / 1000);   // a stalled frame does not jump the map
+    mapMove.last = now;
+    const dx = (h.has('panRight') ? 1 : 0) - (h.has('panLeft') ? 1 : 0);
+    const dy = (h.has('panDown') ? 1 : 0) - (h.has('panUp') ? 1 : 0);
+    const turn = (h.has('turnRight') ? 1 : 0) - (h.has('turnLeft') ? 1 : 0);
+    if (dx || dy) map.panBy([dx * MOVE_SPEED * dt, dy * MOVE_SPEED * dt], { animate: false });
+    if (turn) map.setBearing(map.getBearing() + turn * TURN_SPEED * dt);
+    mapMove.frame = requestAnimationFrame(mapMoveStep);
+}
+
+function stopMapMove() { mapMove.held.clear(); }
+
+document.addEventListener('keyup', (e) => {
+    const action = actionForKey(e.code);
+    if (action) mapMove.held.delete(action);
 });
+window.addEventListener('blur', stopMapMove);
+document.addEventListener('visibilitychange', () => { if (document.hidden) stopMapMove(); });
+
+/* Switch the key layout: saved in this browser; the help card, guide and tooltips follow */
+function setKeyLayout(name) {
+    keyLayout = name === 'map' ? 'map' : 'photo';
+    localStorage.setItem(KEY_LAYOUT_STORE, keyLayout);
+    stopMapMove();
+    showKeyLayout();
+}
+
+/* Everything that names a key of the active layout */
+function showKeyLayout() {
+    renderHelpKeys();
+    buildGuide();
+    updateGuide();
+    const add = document.getElementById('btn-add-line');
+    add.dataset.title = `New line (${keyFor('newLine')})`;
+    if (!add.disabled) add.title = add.dataset.title;
+    if (measure.button) measure.button.title = `Measure distance (${keyFor('measure')})`;
+}
+
+/* The key list of the help card, for the active layout. Fixed keys are the same in both. */
+function renderHelpKeys() {
+    const k = keyFor;
+    const rows = keyLayout === 'map' ? [
+        [k('panUp') + k('panLeft') + k('panDown') + k('panRight'), 'Move the map'],
+        [`${k('turnLeft')} / ${k('turnRight')}`, 'Turn the map'],
+        [k('newLine'), 'New line'],
+        ['1–5', 'Jump to line'],
+        [k('nextPoint'), 'Map next point'],
+        ['Del', 'Delete point or line'],
+        [k('level'), 'Level tool'],
+        [k('topDown'), 'Look straight down'],
+        [k('north'), 'Map north and flat'],
+        [k('measure'), 'Measure distance'],
+        ['Ctrl+Z', 'Undo; Ctrl+Y redo'],
+        ['Esc', 'Cancel'],
+        ['Ctrl+V', 'Paste photo / coordinates'],
+        ['Ctrl+S', 'Export all'],
+        ['F2', 'Rename image'],
+        [k('help'), 'This help']
+    ] : [
+        [k('newLine'), 'New line'],
+        [k('removeLine'), 'Delete line'],
+        ['1–5', 'Jump to line'],
+        [k('nextPoint'), 'Map next point'],
+        ['Del', 'Delete point or line'],
+        [k('level'), 'Level tool'],
+        ['Ctrl+Z', 'Undo; Ctrl+Y redo'],
+        ['Esc', 'Cancel'],
+        ['Ctrl+V', 'Paste photo / coordinates'],
+        ['Ctrl+S', 'Export all'],
+        ['F2', 'Rename image'],
+        [k('north'), 'Map north and flat'],
+        [k('measure'), 'Measure distance'],
+        [k('help'), 'This help']
+    ];
+    const grid = document.getElementById('help-keys');
+    grid.innerHTML = '';
+    for (const [key, text] of rows) {
+        el('span', 'help-key', grid).textContent = key;
+        el('span', '', grid).textContent = text;
+    }
+    document.querySelectorAll('#key-layout-switch button').forEach(b => {
+        const on = b.dataset.layout === keyLayout;
+        b.classList.toggle('active', on);
+        b.setAttribute('aria-pressed', on);
+    });
+}
+
+document.querySelectorAll('#key-layout-switch button').forEach(b => { b.onclick = () => setKeyLayout(b.dataset.layout); });
+// Chrome and Edge tell which letter each key carries on this keyboard; the labels follow once they know
+navigator.keyboard?.getLayoutMap?.().then(m => { keyNames = m; showKeyLayout(); }).catch(() => {});
 
 /* ============================================================
    SESSION MANAGEMENT
@@ -4543,4 +4668,5 @@ makeSplitter(streetUi.splitter, document.getElementById('map-stack'),
    ============================================================ */
 renderSessionMenu();   // the image tabs are there from the start
 updateAdjustUI();      // tools greyed out until a photo is loaded
+showKeyLayout();       // help card keys, guide and tooltips of the saved key layout
 autosaveRestore();
