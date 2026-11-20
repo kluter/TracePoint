@@ -122,7 +122,7 @@
                 <input type="file" id="json-picker" accept=".json" style="display:none">
                 <div id="zoom-hint">
                     <span class="step-hint" id="image-hint"></span>
-                    <span class="hint-pill">v2.8.0</span>
+                    <span class="hint-pill">v2.9.0</span>
                 </div>
             </div>
         </div>
@@ -205,23 +205,14 @@
                     <li><b>Repeat:</b> two rays cross at the camera; a third adds an ellipse</li>
                 </ol>
                 <div class="help-shortcuts">
-                    <div class="help-shortcuts-title">Keys</div>
-                    <div class="help-shortcuts-grid">
-                        <span class="help-key">E</span><span>New line</span>
-                        <span class="help-key">R</span><span>Delete line</span>
-                        <span class="help-key">1–5</span><span>Jump to line</span>
-                        <span class="help-key">F</span><span>Map next point</span>
-                        <span class="help-key">Del</span><span>Delete point or line</span>
-                        <span class="help-key">W</span><span>Level tool</span>
-                        <span class="help-key">Ctrl+Z</span><span>Undo; Ctrl+Y redo</span>
-                        <span class="help-key">Esc</span><span>Cancel</span>
-                        <span class="help-key">Ctrl+V</span><span>Paste photo / coordinates</span>
-                        <span class="help-key">Ctrl+S</span><span>Export all</span>
-                        <span class="help-key">F2</span><span>Rename image</span>
-                        <span class="help-key">N</span><span>Map north and flat</span>
-                        <span class="help-key">M</span><span>Measure distance</span>
-                        <span class="help-key">X</span><span>This help</span>
+                    <div class="help-shortcuts-head">
+                        <div class="help-shortcuts-title">Keys</div>
+                        <div class="key-layout-switch" id="key-layout-switch" role="group" aria-label="Key layout">
+                            <button type="button" data-layout="photo" title="The left hand works the photo, the mouse the map">Photo</button>
+                            <button type="button" data-layout="map" title="W A S D move the map, Q and E turn it">Map</button>
+                        </div>
                     </div>
+                    <div class="help-shortcuts-grid" id="help-keys"></div>
                     <div class="help-shortcuts-title help-shortcuts-more">Mouse</div>
                     <div class="help-shortcuts-grid">
                         <span class="help-key">Scroll</span><span>Zoom</span>
