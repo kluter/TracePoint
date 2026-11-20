@@ -3116,9 +3116,11 @@ document.addEventListener('keyup', (e) => { if (e.code === 'Space') spaceDown = 
 /* A key or button released while the window is not focused never reports back */
 window.addEventListener('blur', () => {
     spaceDown = false;
+    panPress = null;
     if (isPanning) { isPanning = false; container.style.cursor = ''; }
 });
 
+let panPress = null;   // a left press on empty photo: becomes a pan once the mouse travels, else stays a click
 container.addEventListener('mousedown', (e) => {
     if (e.button === 1 || (e.button === 0 && spaceDown)) {
         isPanning = true;
@@ -3126,10 +3128,27 @@ container.addEventListener('mousedown', (e) => {
         panOrigin = { tx: sess().view.tx, ty: sess().view.ty };
         container.style.cursor = 'grabbing';
         e.preventDefault();
+        return;
     }
+    // The photo's own handler runs first: a press on a line or point is its business. The level tool needs its clicks.
+    if (e.button !== 0 || !sess().imgElement || state.mode === 'horizon') return;
+    if (e.target !== container && !(e.target === canvas && !state.press && !state.pointDrag)) return;
+    panPress = { x: e.clientX, y: e.clientY };
+    e.preventDefault();   // no text selection while dragging
+});
+window.addEventListener('mousemove', (e) => {
+    if (!panPress) return;
+    if (e.buttons !== 1) { panPress = null; return; }   // released outside the window
+    if (Math.hypot(e.clientX - panPress.x, e.clientY - panPress.y) <= CLICK_SLOP) return;
+    isPanning = true;
+    panStart  = panPress;   // from where the press began, so the photo stays under the mouse
+    panOrigin = { tx: sess().view.tx, ty: sess().view.ty };
+    container.style.cursor = 'grabbing';
+    panPress = null;
 });
 window.addEventListener('mouseup', () => {
     if (isPanning) { isPanning = false; container.style.cursor = ''; }
+    panPress = null;
     const wasLineDrag = state.isDragging, press = state.press;
     state.isDragging = false;
     state.press = null;

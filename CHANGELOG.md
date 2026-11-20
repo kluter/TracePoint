@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Dragging an empty part of the photo pans it, like the map; a click there still deselects. Space + drag and middle-click drag work as before
+
 ## v2.9.0
 
 - Two key layouts, switched with Photo | Map in the help card and remembered in this browser. Photo is the layout so far. Map moves the map with `W` `A` `S` `D` and turns it with `Q` / `E` while the keys are held; `T` looks straight down, and new line, next point, level tool and help move to `R`, `G`, `L` and `H`. The help card, the step guide and the tooltips show the keys of the active layout

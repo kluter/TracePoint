@@ -6,7 +6,7 @@ The full reference for TracePoint's mouse, menu and keyboard controls. For a qui
 
 | Action | How |
 |---|---|
-| Pan image | Space + drag, or middle-click drag |
+| Pan image | Drag an empty part of the photo (away from the lines), Space + drag, or middle-click drag. A click without moving still deselects |
 | Level image | Level button in the line bar, in the button group left of the ☰ menu, then click two points on a horizontal reference. Click it again to reset |
 | Deselect / cancel | Click blank canvas, or `Esc` |
 | Place point on map | Click the map pill, then click the map |
@@ -73,7 +73,7 @@ The same in both layouts:
 | `Ctrl+Z` | Undo a line or point edit; `Ctrl+Shift+Z` or `Ctrl+Y` redoes |
 | `Ctrl+S` | Export all sessions (with photos if **Include photos** is on) |
 | `Ctrl+V` | Paste a photo → new image; paste coordinates → pin on map |
-| Space + drag | Pan the photo |
+| Drag empty photo, or Space + drag | Pan the photo |
 
 ## Loading photos
 

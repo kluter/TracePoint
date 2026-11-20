@@ -65,7 +65,7 @@ Two key layouts, switched with **Photo | Map** in the help card. **Photo** (defa
 | `M` | Measure a distance on the map |
 | `N` | Reset the map to north |
 | `X` | Toggle the help card |
-| Space + drag | Pan the photo |
+| Drag (empty photo) | Pan the photo |
 | Ctrl + drag | Rotate and tilt the map |
 
 Every mouse and menu control, street-level imagery, and the accepted coordinate formats are listed in **[docs/controls.md](docs/controls.md)**.
