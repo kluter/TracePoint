@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Map credits are readable on any basemap (light text on a dark pill), and the ⓘ button folds them away; they also fold on the first map drag
+
 ## v2.9.1
 
 - Dragging an empty part of the photo pans it, like the map; a click there still deselects. Space + drag and middle-click drag work as before

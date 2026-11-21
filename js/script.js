@@ -260,7 +260,7 @@ const map = new maplibregl.Map({
     zoom: WORLD_VIEW.zoom,
     minZoom: 0, maxZoom: 20,
     maxPitch: 90,
-    attributionControl: { compact: false },
+    attributionControl: { compact: true },   // the ⓘ button folds the credits away; MapLibre folds them on the first drag
     /* Ctrl+drag or right-drag rotates and tilts. aroundCenter: false = plain horizontal
        drag → bearing; the default hybrid mode wobbles when dragging slowly near the centre line. */
     aroundCenter: false,
