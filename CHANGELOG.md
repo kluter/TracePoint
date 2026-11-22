@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Fixed: at zoom 19 and 20 a ray placed on the map could stay invisible until the next zoom
+
 ## v2.10.0
 
 - Export for Google Earth and GIS: a download button in the map bar saves the rays, map points, estimated position and error ellipse of all images as KML or GeoJSON, grouped by image and line. See `docs/export.md`

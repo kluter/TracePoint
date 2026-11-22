@@ -3814,8 +3814,12 @@ map.on('click', (e) => {
    ============================================================ */
 /* Rays and ellipses of all sessions share one GeoJSON source; markers are DOM elements.
    Everything is visible at once, as before (sessions used to each have a layer group on the map). */
+const WORK_MAX_ZOOM = 22;   // rays, ellipse and measurement: cut into tiles at every zoom the map can show
+
 map.on('load', () => {
-    map.addSource('work', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+    /* maxzoom above the map's own limit (20): MapLibre's default of 18 makes it enlarge and slice the
+       zoom-18 tiles at zoom 19–20, and a ray placed there could stay invisible until the next zoom */
+    map.addSource('work', { type: 'geojson', data: { type: 'FeatureCollection', features: [] }, maxzoom: WORK_MAX_ZOOM });
     map.addLayer({
         id: 'ellipse', type: 'fill', source: 'work', filter: ['==', ['get', 'kind'], 'ellipse'],
         paint: { 'fill-color': '#ffdc32', 'fill-opacity': 0.08 }
@@ -3829,7 +3833,7 @@ map.on('load', () => {
         paint: { 'line-color': ['get', 'colour'], 'line-width': 2, 'line-opacity': 0.85, 'line-dasharray': [3, 2] }
     });
     // Distance measurement: on top of everything else drawn on the map
-    map.addSource('measure', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+    map.addSource('measure', { type: 'geojson', data: { type: 'FeatureCollection', features: [] }, maxzoom: WORK_MAX_ZOOM });
     map.addLayer({
         id: 'measure-line', type: 'line', source: 'measure', filter: ['==', ['geometry-type'], 'LineString'],
         paint: { 'line-color': '#fff', 'line-width': 2, 'line-dasharray': [3, 3] }
