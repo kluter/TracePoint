@@ -27,7 +27,7 @@ The more lines you add, the more rays are generated and the more robustly the in
 - **Check against reality:** 3D terrain and buildings with the camera's field of view matched to the photo's lens, street-level imagery from Panoramax or Mapillary, and the GPS position from the photo's metadata
 - **Paste any coordinates:** decimal, degrees-minutes-seconds, or a link from Google Maps, Apple Maps, Bing, OpenStreetMap and [more](docs/controls.md#accepted-formats) drops a pin
 - **Any basemap:** satellite, Sentinel-2, topographic and street maps built in, plus [custom XYZ layers](docs/map-layers.md) such as dated historical imagery from Esri Wayback
-- **Local only:** no server, no uploads, no tracking. Work is autosaved in your browser and can be exported to a file, photos included
+- **Local only:** no server, no uploads, no tracking. Work is autosaved in your browser and can be exported to a file, photos included, or as [KML and GeoJSON](docs/export.md) for Google Earth and GIS
 
 ---
 

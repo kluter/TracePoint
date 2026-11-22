@@ -790,7 +790,7 @@ function buildLayerSwitcher() {
     const close = () => { menu.style.display = 'none'; };
     btn.onclick = () => {
         menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
-        if (menu.style.display !== 'none') { hideHelp(); closeBasemapMenu(); }   // only one of them is open
+        if (menu.style.display !== 'none') { hideHelp(); closeBasemapMenu(); closeGisMenu(); }   // only one of them is open
     };
     map.on('click', close);
     document.addEventListener('click', (e) => { if (!wrap.contains(e.target) && e.target.isConnected) close(); });
@@ -814,6 +814,7 @@ basemapBtn.onclick = () => {
     layerList.style.display = 'block';
     basemapBtn.setAttribute('aria-expanded', 'true');
     hideHelp();
+    closeGisMenu();
     if (layerMenu) layerMenu.style.display = 'none';
 };
 document.addEventListener('click', (e) => {
@@ -1393,18 +1394,8 @@ function updateLineManager() {
         const colour = line.colour || lineColour(lIdx, activeSessionIndex);
         const active = lIdx === state.activeLineIndex;
 
-        const placedPts = line.points.filter(p => p.geo);
-        const intersection = sess().mapObjects.intersectionLatLng;
-        const bearingLabel = (placedPts.length >= 2 && intersection)
-            ? (() => {
-                const mid = {
-                    lat: (placedPts[0].geo.lat + placedPts[1].geo.lat) / 2,
-                    lng: (placedPts[0].geo.lng + placedPts[1].geo.lng) / 2
-                };
-                const deg = Math.round(bearingDeg(intersection, mid));
-                return `<span class="line-bearing">${deg.toString().padStart(3, '0')}°</span>`;
-            })()
-            : '';
+        const deg = lineBearing(sess(), line);
+        const bearingLabel = deg !== null ? `<span class="line-bearing">${String(deg).padStart(3, '0')}°</span>` : '';
 
         const item = document.createElement('div');
         item.className = 'line-item' + (active ? ' active-line' : '');
@@ -1584,12 +1575,13 @@ btnHorizon.onclick = () => {
    Runs before every other key handler (capture on window). */
 window.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
-    const open = [layerMenu, layerList, adjustCard, ctxMenu,
+    const open = [layerMenu, layerList, adjustCard, ctxMenu, gisUi.menu,
                   document.getElementById('session-menu'), document.getElementById('exif-card')]
         .filter(node => node && node.style.display !== 'none');
     if (!open.length) return;
     if (layerMenu) layerMenu.style.display = 'none';
     closeBasemapMenu();
+    closeGisMenu();
     adjustCard.style.display = 'none';
     hideCtxMenu();
     document.getElementById('session-menu').style.display = 'none';
@@ -2702,30 +2694,18 @@ function sessionToData(s) {
     return {
         name:              s.name,
         imageFilename:     s.imageFilename || null,
-        lines:             s.lines.map((l, lIdx) => {
-            const placed = l.points.filter(p => p.geo);
-            const intersection = s.mapObjects.intersectionLatLng;
-            let bearing = null;
-            if (placed.length >= 2 && intersection) {
-                const mid = {
-                    lat: (placed[0].geo.lat + placed[1].geo.lat) / 2,
-                    lng: (placed[0].geo.lng + placed[1].geo.lng) / 2
-                };
-                bearing = Math.round(bearingDeg(intersection, mid));
-            }
-            return {
-                label:   `L${lIdx + 1}`,
-                x:       l.x,
-                colour:  l.colour || null,
-                source:  l.source || null,
-                bearing: bearing,
-                points:  l.points.map((pt, pIdx) => ({
-                    label: `L${lIdx + 1}P${pIdx + 1}`,
-                    y:     pt.y,
-                    geo:   pt.geo || null
-                }))
-            };
-        }),
+        lines:             s.lines.map((l, lIdx) => ({
+            label:   `L${lIdx + 1}`,
+            x:       l.x,
+            colour:  l.colour || null,
+            source:  l.source || null,
+            bearing: lineBearing(s, l),
+            points:  l.points.map((pt, pIdx) => ({
+                label: `L${lIdx + 1}P${pIdx + 1}`,
+                y:     pt.y,
+                geo:   pt.geo || null
+            }))
+        })),
         view:              { ...s.view },
         mapView:           s.mapView
             ? { center: { lat: s.mapView.center.lat, lng: s.mapView.center.lng }, zoom: s.mapView.zoom,
@@ -2737,8 +2717,22 @@ function sessionToData(s) {
     };
 }
 
+/* Bearing from the estimated position to the middle of a line's two map points: the number on the
+   line's pill, in the session file and in the GIS export. null until both exist. */
+function lineBearing(s, line) {
+    const placed = line.points.filter(p => p.geo);
+    const pos = s.mapObjects.intersectionLatLng;
+    if (placed.length < 2 || !pos) return null;
+    const mid = { lat: (placed[0].geo.lat + placed[1].geo.lat) / 2, lng: (placed[0].geo.lng + placed[1].geo.lng) / 2 };
+    return Math.round(bearingDeg(pos, mid));
+}
+
 function downloadJSON(data, filename) {
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    downloadText(JSON.stringify(data, null, 2), filename, 'application/json');
+}
+
+function downloadText(text, filename, type) {
+    const blob = new Blob([text], { type });
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement('a');
     a.href = url; a.download = filename; a.click();
@@ -2831,6 +2825,185 @@ function exportAllSessions() {
     }
     return exportSessions(sessions.filter(s => s.imgElement), `tracepoint_all_${exportStamp()}.json`, 'All sessions exported.');
 }
+
+/* ============================================================
+   GIS EXPORT – the map work of every image as KML (Google Earth) or GeoJSON (QGIS, ArcGIS, …)
+   The download button in the map bar, as in ShadowFinder Web. Grouped by image, and within an
+   image by line: its ray and its map points. Built in the browser, nothing is uploaded. Export only:
+   the session file (☰) stays the one to import again. Format notes: docs/export.md.
+   ============================================================ */
+const gisUi = {
+    wrap:   document.getElementById('gis-export-wrap'),
+    button: document.getElementById('btn-gis-export'),
+    menu:   document.getElementById('gis-export-menu')
+};
+const GIS_RAY_KM      = 50;   // each way from P1, as on the map
+const GIS_RAY_STEP_KM = 5;    // a vertex every 5 km keeps the ray on its great circle in other software
+
+function hasRay(line) { return line.points.filter(p => p.geo).length >= 2; }
+
+/* The ray through a line's two map points, from 50 km behind P1 to 50 km ahead, as [lng, lat] */
+function gisRayCoords(line) {
+    if (!hasRay(line)) return null;
+    const [a, b] = line.points.filter(p => p.geo).map(p => p.geo);
+    const bearing = bearingDeg(a, b), coords = [];
+    for (let d = -GIS_RAY_KM; d <= GIS_RAY_KM; d += GIS_RAY_STEP_KM) {
+        const p = destinationPoint(a, d < 0 ? bearing + 180 : bearing, Math.abs(d));
+        coords.push([p.lng, p.lat]);
+    }
+    return coords;
+}
+
+/* What goes out: per image its name, position, ellipse and lines; images with nothing on the map are left out */
+function gisGroups() {
+    return sessions.map((s, sIdx) => ({
+        name:     s.name,
+        position: s.mapObjects.intersectionLatLng,
+        ellipse:  s.mapObjects.ellipseRing,
+        lines:    s.lines.map((line, lIdx) => ({
+            label:   `L${lIdx + 1}`,
+            colour:  line.colour || lineColour(lIdx, sIdx),
+            source:  line.source || null,
+            bearing: lineBearing(s, line),
+            ray:     gisRayCoords(line),
+            points:  line.points.map((p, pIdx) => p.geo && { point: `P${pIdx + 1}`, lat: p.geo.lat, lng: p.geo.lng }).filter(Boolean)
+        })).filter(l => l.ray || l.points.length)
+    })).filter(g => g.lines.length);
+}
+
+/* Longitudes into −180…180. MapLibre keeps them unwrapped past the antimeridian; a line or ring is
+   moved as a whole, so one that crosses it stays in one piece. */
+const lngShift = (lng) => 360 * Math.round(lng / 360);
+const gisNum   = (n) => +n.toFixed(7);
+function gisCoords(list) {
+    const shift = lngShift(list[0][0]);
+    return list.map(([lng, lat]) => [gisNum(lng - shift), gisNum(lat)]);
+}
+const gisPoint = (lat, lng) => gisCoords([[lng, lat]])[0];
+
+function gisGeoJson(groups) {
+    const features = [];
+    const add = (geometry, properties) => features.push({ type: 'Feature', properties, geometry });
+    groups.forEach(g => {
+        if (g.position) {
+            add({ type: 'Point', coordinates: gisPoint(g.position.lat, g.position.lng) },
+                { image: g.name, kind: 'position', label: 'Estimated position' });
+        }
+        if (g.ellipse) {
+            add({ type: 'Polygon', coordinates: [gisCoords(g.ellipse)] },   // counter-clockwise, as RFC 7946 asks
+                { image: g.name, kind: 'ellipse', label: 'Error ellipse' });
+        }
+        g.lines.forEach(l => {
+            const common = { image: g.name, line: l.label, colour: l.colour, source: l.source };
+            if (l.ray) add({ type: 'LineString', coordinates: gisCoords(l.ray) },
+                           { ...common, kind: 'ray', label: `${l.label} ray`, bearing: l.bearing });
+            l.points.forEach(p => add({ type: 'Point', coordinates: gisPoint(p.lat, p.lng) },
+                                      { ...common, kind: 'point', point: p.point, label: `${l.label} ${p.point}` }));
+        });
+    });
+    return JSON.stringify({ type: 'FeatureCollection', name: 'TracePoint export', exported: new Date().toISOString(),
+                            tracepoint_geojson_version: 1, features }, null, 2);
+}
+
+/* KML colours are aabbggrr */
+const kmlColour = (hex, alpha = 'ff') => alpha + hex.slice(5, 7) + hex.slice(3, 5) + hex.slice(1, 3);
+
+function gisKml(groups) {
+    const x = escHtml;
+    const coords = (list) => gisCoords(list).map(([lng, lat]) => `${lng},${lat},0`).join(' ');
+    const point  = (lat, lng) => coords([[lng, lat]]);
+    const styleId = (hex) => 'c' + hex.slice(1).toLowerCase();
+    const colours = new Set(groups.flatMap(g => g.lines.map(l => l.colour.toLowerCase())));
+    const placemark = (name, style, geometry, description = '') =>
+        `<Placemark><name>${x(name)}</name>${description ? `<description>${x(description)}</description>` : ''}` +
+        `<styleUrl>#${style}</styleUrl>${geometry}</Placemark>`;
+
+    const styles = [...colours].map(c =>
+        `<Style id="${styleId(c)}"><IconStyle><color>${kmlColour(c)}</color><scale>0.8</scale></IconStyle>` +
+        `<LabelStyle><scale>0.8</scale></LabelStyle><LineStyle><color>${kmlColour(c)}</color><width>2</width></LineStyle></Style>`
+    ).join('') +
+        `<Style id="position"><IconStyle><color>${kmlColour('#ffdc32')}</color><scale>1.2</scale></IconStyle></Style>` +
+        `<Style id="ellipse"><LineStyle><color>${kmlColour('#ffdc32')}</color><width>1.5</width></LineStyle>` +
+        `<PolyStyle><color>${kmlColour('#ffdc32', '33')}</color></PolyStyle></Style>`;
+
+    const folders = groups.map(g => {
+        const parts = [];
+        if (g.position) {
+            parts.push(placemark('Estimated position', 'position', `<Point><coordinates>${point(g.position.lat, g.position.lng)}</coordinates></Point>`,
+                                 fmtCoords(g.position)));
+        }
+        if (g.ellipse) {
+            parts.push(placemark('Error ellipse', 'ellipse',
+                `<Polygon><outerBoundaryIs><LinearRing><coordinates>${coords(g.ellipse)}</coordinates></LinearRing></outerBoundaryIs></Polygon>`));
+        }
+        g.lines.forEach(l => {
+            const name = l.label + (l.source === 'exif' ? ' · EXIF direction' : l.bearing !== null ? ` · ${String(l.bearing).padStart(3, '0')}°` : '');
+            const items = [];
+            if (l.ray) items.push(placemark(`${l.label} ray`, styleId(l.colour), `<LineString><tessellate>1</tessellate><coordinates>${coords(l.ray)}</coordinates></LineString>`));
+            l.points.forEach(p => items.push(placemark(`${l.label} ${p.point}`, styleId(l.colour),
+                `<Point><coordinates>${point(p.lat, p.lng)}</coordinates></Point>`, fmtCoords(p))));
+            parts.push(`<Folder><name>${x(name)}</name>${items.join('')}</Folder>`);
+        });
+        return `<Folder><name>${x(g.name)}</name><open>1</open>${parts.join('')}</Folder>`;
+    });
+
+    return '<?xml version="1.0" encoding="UTF-8"?>\n' +
+        '<kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>TracePoint export</name><open>1</open>' +
+        styles + folders.join('') + '</Document></kml>\n';
+}
+
+function exportGis(kind) {
+    closeGisMenu();
+    const groups = gisGroups();
+    if (!groups.length) return showToast('Nothing on the map to export yet.');
+    const stamp = exportStamp();
+    if (kind === 'kml') downloadText(gisKml(groups), `tracepoint_${stamp}.kml`, 'application/vnd.google-earth.kml+xml');
+    else downloadText(gisGeoJson(groups), `tracepoint_${stamp}.geojson`, 'application/geo+json');
+    showToast(`Exported ${groups.length} image${groups.length > 1 ? 's' : ''} as ${kind === 'kml' ? 'KML' : 'GeoJSON'}.`, 'success');
+}
+
+function renderGisMenu() {
+    const menu = gisUi.menu;
+    menu.innerHTML = '';
+    el('div', 'map-panel-title', menu).textContent = 'Export for other software';
+    const entry = (label, ext, hint, kind) => {
+        const item = el('div', 'gis-export-item', menu);
+        item.innerHTML =
+            `<span class="export-icon"><svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="1" x2="5" y2="8"/><polyline points="2,5.5 5,8.5 8,5.5"/></svg></span>` +
+            `<span class="gis-export-text"><span><b>${label}</b> <i>${ext}</i></span><small>${hint}</small></span>`;
+        item.onclick = () => exportGis(kind);
+    };
+    entry('Google Earth', '.kml', 'A folder per image, inside it a folder per line with its ray and points', 'kml');
+    entry('GIS', '.geojson', 'For QGIS, ArcGIS or geojson.io: every ray and point, labelled by image and line', 'geojson');
+    el('div', 'gis-export-note', menu).textContent =
+        'All images, with the estimated position and the error ellipse. To open the work in TracePoint again, use Export in the ☰ menu.';
+}
+
+function closeGisMenu() {
+    gisUi.menu.style.display = 'none';
+    gisUi.button.setAttribute('aria-expanded', 'false');
+}
+
+/* Greyed out until some image has a ray on the map; runs with every change of the rays (rebuildWorkSource) */
+function updateGisButton() {
+    const on = sessions.some(s => s.lines.some(hasRay));
+    gisUi.button.disabled = !on;
+    gisUi.button.title = on ? 'Export the rays and points for Google Earth or GIS' : 'Export for Google Earth or GIS: place a line on the map first';
+    if (!on) closeGisMenu();
+}
+
+gisUi.button.addEventListener('click', () => {
+    const open = gisUi.menu.style.display === 'none';
+    if (!open) { closeGisMenu(); return; }
+    renderGisMenu();
+    gisUi.menu.style.display = 'block';
+    gisUi.button.setAttribute('aria-expanded', 'true');
+    hideHelp(); closeBasemapMenu();
+    if (layerMenu) layerMenu.style.display = 'none';
+});
+document.addEventListener('click', (e) => { if (!gisUi.wrap.contains(e.target) && e.target.isConnected) closeGisMenu(); });
+gisUi.menu.addEventListener('wheel', (e) => e.stopPropagation());
+updateGisButton();
 
 /* Builds sessions from the `sessions` array of a session file; every field is type-checked.
    Used by the JSON import and by the autosave restore. Returns the sessions it filled.
@@ -3701,6 +3874,7 @@ function rayFeature(line, colour) {
 }
 
 function rebuildWorkSource() {
+    updateGisButton();       // the export follows the rays
     if (!mapReady) return;   // run again from the map's load handler
     const features = [];
     sessions.forEach((s, sIdx) => {

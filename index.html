@@ -158,6 +158,13 @@
             <div id="map-bar">
                 <div class="coord-search" id="coord-search"></div>
                 <div id="map-readout" title="Map bearing, tilt and zoom"></div>
+                <!-- Rays, points, position and ellipse as KML or GeoJSON (GIS EXPORT in script.js) -->
+                <div class="layer-switcher-wrap" id="gis-export-wrap">
+                    <button class="layer-burger" id="btn-gis-export" type="button" aria-haspopup="true" aria-expanded="false" aria-label="Export for Google Earth or GIS" disabled>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><polyline points="7 10 12 15 17 10"/><path d="M4 17v3h16v-3"/></svg>
+                    </button>
+                    <div class="layer-menu gis-export-menu" id="gis-export-menu" style="display:none"></div>
+                </div>
                 <button class="layer-burger" id="btn-street" type="button" aria-pressed="false"
                         title="Street-level imagery (Panoramax or Mapillary; their server is only contacted while this is open)" aria-label="Street-level imagery">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">

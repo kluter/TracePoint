@@ -18,6 +18,7 @@ The full reference for TracePoint's mouse, menu and keyboard controls. For a qui
 | New line | **+** button at the left of the line bar, or `E` |
 | Export, import, demo | ☰ button, right of the line bar |
 | Export with photos | **Include photos** switch in the ☰ menu of the photo side, off by default. On: every export stores each photo inside the JSON, unchanged, with its GPS and camera data; the file gets about a third bigger than the photo. Import then restores the photo by itself |
+| Export for Google Earth or GIS | Download button in the map bar, greyed out until a line is on the map: **Google Earth** (`.kml`) or **GIS** (`.geojson`). All images with their rays, map points, estimated position and error ellipse. Export only; see [export](export.md) |
 | Autosave on / off, clear saved work | **This browser** section of the ☰ menu of the photo side. Off or **Clear** deletes the copy kept in the browser |
 | Image metadata | `</>` button in the line bar. **Show on map** places the EXIF GPS position; the same button, now **Remove from map**, takes it away again |
 | Rotate / tilt map | Ctrl + drag, or right-click drag, tilt up to 90°. Click the compass (bottom-left of the map) or press `N` to reset. The map bar shows bearing, tilt and zoom |

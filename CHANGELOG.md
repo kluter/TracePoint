@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Export for Google Earth and GIS: a download button in the map bar saves the rays, map points, estimated position and error ellipse of all images as KML or GeoJSON, grouped by image and line. See `docs/export.md`
 - Map credits are readable on any basemap (light text on a dark pill), and the ⓘ button folds them away; they also fold on the first map drag
 
 ## v2.9.1
