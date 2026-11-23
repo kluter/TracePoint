@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Fixed: since v2.11.0, turning the map with Ctrl+drag or right-drag was twice as fast; it is back to the calmer speed
+
 ## v2.11.0
 
 - Map engine updated to MapLibre GL JS 6.17. The tilted 3D map keeps its centre on the terrain, so turning and zooming over mountains is much steadier

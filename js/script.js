@@ -270,10 +270,12 @@ const map = new maplibregl.Map({
     minZoom: 0, maxZoom: 20,
     maxPitch: 85,   // past 85° the horizon gets unstable (as in briatlon's fork); also in MAP_SETTING_RANGES
     attributionControl: { compact: true },   // the ⓘ button folds the credits away; MapLibre folds them on the first drag
-    /* Ctrl+drag or right-drag rotates and tilts, at MapLibre's own speed (0.8°/px; rotateSpeed would
-       change it). aroundCenter: false = plain horizontal drag → bearing; the default hybrid mode wobbles
-       when dragging slowly near the centre line. */
-    aroundCenter: false
+    /* Ctrl+drag or right-drag rotates and tilts. aroundCenter: false = plain horizontal drag → bearing;
+       the default hybrid mode wobbles when dragging slowly near the centre line. rotateSpeed: degrees
+       per pixel of horizontal drag; MapLibre's 0.8 is twitchy, half of it feels right. (MapLibre 5
+       called this option rotateDegreesPerPixelMoved.) */
+    aroundCenter: false,
+    rotateSpeed: 0.4
 });
 // The compass (reset bearing and tilt) is the only button on the map, bottom-left; zooming is done with the wheel,
 // double-click or the keyboard. Search box and map panel live in the map bar under the header.
