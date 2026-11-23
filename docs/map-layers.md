@@ -2,7 +2,7 @@
 
 ## Built-in layers
 
-Esri Satellite, Sentinel-2 2024, OpenStreetMap, Esri Dark Gray, Esri Topo and Esri Streets. Optional 3D terrain with adjustable height and hillshade, and OpenStreetMap buildings as 3D blocks, are switched on in the sliders panel right of the map bar. Click the basemap name in the map header to switch layers.
+Esri Satellite, Sentinel-2 2024, OpenStreetMap, Esri Dark Gray, Esri Topo and Esri Streets. Optional 3D terrain with adjustable height and hillshade, and OpenStreetMap buildings as 3D blocks, are switched on in the sliders panel right of the map bar; there you also pick the elevation tiles, AWS Terrarium (even detail everywhere) or Mapterhorn (newer data, finer in parts of Europe). Click the basemap name in the map header to switch layers. **Distant detail** at the bottom of that list keeps the imagery sharp toward the horizon of a tilted map; it loads more tiles, so it is off by default.
 
 ## Custom map layers
 
