@@ -1,8 +1,15 @@
 # Changelog
 
-## Unreleased
+## v2.11.0
 
+- Map engine updated to MapLibre GL JS 6.17. The tilted 3D map keeps its centre on the terrain, so turning and zooming over mountains is much steadier
+- A sky above the horizon of a tilted map, blue fading to pale at the horizon, instead of the black page. **Haze** in the Terrain section of the map panel adds a light veil over the farthest ground; it is off by default because it hides distant ranges
+- **Distant detail** under the basemap list keeps the imagery sharp toward the horizon of a tilted map. It loads more tiles, so it is off by default
+- **Elevation** in the Terrain section picks the elevation tiles for 3D terrain and hillshade: AWS Terrarium (as before, even detail everywhere) or Mapterhorn (newer data, finer in parts of Europe)
+- The map tilts up to 85°; past that the horizon became unstable
 - Fixed: at zoom 19 and 20 a ray placed on the map could stay invisible until the next zoom
+
+Sky, tile detail values and Mapterhorn after briatlon's fork.
 
 ## v2.10.0
 

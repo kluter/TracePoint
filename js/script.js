@@ -250,9 +250,6 @@ function clientToImage(e) {
    single 512 px tile). Saved session files use MapLibre zooms since json_version 2. */
 const WORLD_VIEW = { center: { lat: 20, lng: 0 }, zoom: 1, bearing: 0, pitch: 0 };
 
-/* Mouse rotation sensitivity: MapLibre's default 0.8°/px is twitchy; half of it feels right. */
-const ROTATE_DEG_PER_PX = 0.4;
-
 /* The sky fills the space above the horizon of a tilted map instead of the black page (idea from
    briatlon's fork): blue at the top, fading to a pale lavender white at the horizon. Haze, a switch in
    the map panel and off by default, adds a light blue veil over the farthest ground; it looks natural
@@ -262,6 +259,7 @@ const SKY = {
 };
 const SKY_HAZE    = { 'fog-color': '#a9c7ea', 'horizon-fog-blend': 0.6, 'fog-ground-blend': 0.4 };
 const SKY_NO_HAZE = { 'fog-color': 'rgba(0,0,0,0)', 'horizon-fog-blend': 0, 'fog-ground-blend': 1 };
+let skyHazeApplied = false;   // the map's style starts without haze
 
 const map = new maplibregl.Map({
     container: 'map-container',
@@ -272,10 +270,10 @@ const map = new maplibregl.Map({
     minZoom: 0, maxZoom: 20,
     maxPitch: 85,   // past 85° the horizon gets unstable (as in briatlon's fork); also in MAP_SETTING_RANGES
     attributionControl: { compact: true },   // the ⓘ button folds the credits away; MapLibre folds them on the first drag
-    /* Ctrl+drag or right-drag rotates and tilts. aroundCenter: false = plain horizontal
-       drag → bearing; the default hybrid mode wobbles when dragging slowly near the centre line. */
-    aroundCenter: false,
-    rotateDegreesPerPixelMoved: ROTATE_DEG_PER_PX
+    /* Ctrl+drag or right-drag rotates and tilts, at MapLibre's own speed (0.8°/px; rotateSpeed would
+       change it). aroundCenter: false = plain horizontal drag → bearing; the default hybrid mode wobbles
+       when dragging slowly near the centre line. */
+    aroundCenter: false
 });
 // The compass (reset bearing and tilt) is the only button on the map, bottom-left; zooming is done with the wheel,
 // double-click or the keyboard. Search box and map panel live in the map bar under the header.
@@ -563,14 +561,19 @@ function setTileSet(id) {
    at a modest tile count. The 50°/55° pair keeps the map from reloading tiles while the tilt hovers
    around the threshold. Imagery only: the elevation sources keep MapLibre's own choice. */
 const MAPLIBRE_TILE_LOD = [9.314, 3];
-let tileDetailSteep = null;
-function applyTileDetail(force = false) {
+let tileDetailSteep = false;
+let tileDetailApplied = null;   // the values the imagery sources have now, as "levels,ratio"
+/* newSources: the imagery layers were just (re)created and have no values yet. Otherwise the values
+   are only sent when they change: each send makes MapLibre work out the visible tiles again, and this
+   runs on every tilt step and every tick of a map panel slider. */
+function applyTileDetail(newSources = false) {
     if (!mapReady) return;
     const pitch = map.getPitch();
-    const steep = tileDetailSteep ? pitch > 50 : pitch >= 55;
-    if (steep === tileDetailSteep && !force) return;
-    tileDetailSteep = steep;
-    const [levels, ratio] = !mapSettings.distantDetail ? MAPLIBRE_TILE_LOD : steep ? [6, 2] : [2, 8];
+    tileDetailSteep = tileDetailSteep ? pitch > 50 : pitch >= 55;
+    const [levels, ratio] = !mapSettings.distantDetail ? MAPLIBRE_TILE_LOD : tileDetailSteep ? [6, 2] : [2, 8];
+    const key = `${levels},${ratio}`;
+    if (key === tileDetailApplied && !newSources) return;
+    tileDetailApplied = key;
     activeTileLayerIds.forEach(lid => { if (map.getSource(lid)) map.setSourceTileLodParams(levels, ratio, lid); });
 }
 map.on('pitch', () => applyTileDetail());
@@ -594,7 +597,9 @@ setTileSet(localStorage.getItem('tp-tileset') || 'esri-sat');
    - Mapterhorn: 512 px, newer sources (elevation from briatlon's fork). How deep it goes depends on the
      region (checked 2026-11: zoom 17 in the Swiss Alps, 16 around Potsdam, 14 in the Italian Alps, 12 in
      Kenya and Nepal, nothing over open sea). Its tile list names no max zoom; past the regional
-     depth the server answers 404 and MapLibre keeps using the coarser tile it has. */
+     depth the server answers 404 and MapLibre keeps using the coarser tile it has. Those 404s show as
+     failed requests in the browser console and are harmless. maxzoom 17 keeps the deepest (Swiss)
+     data; a lower one would save some of these requests elsewhere but lose that detail. */
 const ELEVATION_SOURCES = {
     aws: {
         label: 'AWS Terrarium',
@@ -679,11 +684,19 @@ function applyMapSettings() {
     map.setMinZoom(s.minZoom);
     if (!mapReady) return;        // terrain and hillshade need the style; applied again from the map's load handler
     if (elevationBuilt !== s.elevation) buildElevationSources(s.elevation);
-    map.setTerrain(terrainOn ? { source: 'dem', exaggeration: s.exaggeration } : null);
+    /* This runs on every tick of a map panel slider: terrain and sky are only set again when they
+       change, since setting either one makes MapLibre rebuild it, even with the same values. */
+    const terrain = map.getTerrain();
+    if (terrainOn ? !terrain || terrain.exaggeration !== s.exaggeration : terrain) {
+        map.setTerrain(terrainOn ? { source: 'dem', exaggeration: s.exaggeration } : null);
+    }
     map.setLayoutProperty('hillshade', 'visibility', s.hillshade ? 'visible' : 'none');
     applyBuildings();
-    applyTileDetail(true);
-    map.setSky({ ...SKY, ...(s.haze ? SKY_HAZE : SKY_NO_HAZE) });
+    applyTileDetail();
+    if (skyHazeApplied !== s.haze) {
+        map.setSky({ ...SKY, ...(s.haze ? SKY_HAZE : SKY_NO_HAZE) });
+        skyHazeApplied = s.haze;
+    }
 }
 
 /* ---- 3D BUILDINGS ----
