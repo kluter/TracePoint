@@ -253,13 +253,24 @@ const WORLD_VIEW = { center: { lat: 20, lng: 0 }, zoom: 1, bearing: 0, pitch: 0 
 /* Mouse rotation sensitivity: MapLibre's default 0.8°/px is twitchy; half of it feels right. */
 const ROTATE_DEG_PER_PX = 0.4;
 
+/* The sky fills the space above the horizon of a tilted map instead of the black page (idea from
+   briatlon's fork): blue at the top, fading to a pale lavender white at the horizon. Haze, a switch in
+   the map panel and off by default, adds a light blue veil over the farthest ground; it looks natural
+   but hides distant ranges, which a line-up may need. Without it the fog is fully transparent. */
+const SKY = {
+    'sky-color': '#7fb8ee', 'horizon-color': '#ebe9f6', 'sky-horizon-blend': 1, 'atmosphere-blend': 0
+};
+const SKY_HAZE    = { 'fog-color': '#a9c7ea', 'horizon-fog-blend': 0.6, 'fog-ground-blend': 0.4 };
+const SKY_NO_HAZE = { 'fog-color': 'rgba(0,0,0,0)', 'horizon-fog-blend': 0, 'fog-ground-blend': 1 };
+
 const map = new maplibregl.Map({
     container: 'map-container',
-    style: { version: 8, sources: {}, layers: [] },   // empty style; raster sources are added below
+    // Empty style; raster sources are added below. The haze follows the setting once the map has loaded.
+    style: { version: 8, sources: {}, layers: [], sky: { ...SKY, ...SKY_NO_HAZE } },
     center: [WORLD_VIEW.center.lng, WORLD_VIEW.center.lat],
     zoom: WORLD_VIEW.zoom,
     minZoom: 0, maxZoom: 20,
-    maxPitch: 90,
+    maxPitch: 85,   // past 85° the horizon gets unstable (as in briatlon's fork); also in MAP_SETTING_RANGES
     attributionControl: { compact: true },   // the ⓘ button folds the credits away; MapLibre folds them on the first drag
     /* Ctrl+drag or right-drag rotates and tilts. aroundCenter: false = plain horizontal
        drag → bearing; the default hybrid mode wobbles when dragging slowly near the centre line. */
@@ -269,37 +280,6 @@ const map = new maplibregl.Map({
 // The compass (reset bearing and tilt) is the only button on the map, bottom-left; zooming is done with the wheel,
 // double-click or the keyboard. Search box and map panel live in the map bar under the header.
 map.addControl(new maplibregl.NavigationControl({ showZoom: false, visualizePitch: true }), 'bottom-left');
-
-/* With 3D terrain, dragging and wheel zooming work on the ground point under the mouse. Near the horizon
-   of a tilted view, or over terrain that has not loaded yet, that point is far away or wrong, and one
-   step then throws the map kilometres off or changes the zoom by many levels. While the mouse drags or
-   the wheel turns, a single camera update may not move the centre further than the view is large or
-   change the zoom by more than 1.5 levels; a bigger step is dropped and the map stays put for that
-   frame. Flights and jumps made by the app are not touched. */
-let mapMouseDown = false, mapLastWheel = 0;
-{
-    const box = map.getCanvasContainer();
-    box.addEventListener('mousedown', () => { mapMouseDown = true; }, true);
-    box.addEventListener('wheel', () => { mapLastWheel = performance.now(); }, { capture: true, passive: true });
-    window.addEventListener('mouseup', () => { mapMouseDown = false; }, true);
-    window.addEventListener('blur',    () => { mapMouseDown = false; });
-}
-let mapGuardWarned = 0;
-map.transformCameraUpdate = (next) => {
-    const byHand = mapMouseDown || performance.now() - mapLastWheel < 500;   // the wheel zoom glides on for a moment
-    if (!byHand || !map.getTerrain()) return {};
-    const cur = map.getCenter(), zoom = map.getZoom();
-    const metresPerPixel = 40075016.686 * Math.cos(cur.lat * Math.PI / 180) / (512 * Math.pow(2, zoom));
-    const c = map.getCanvas();
-    const limit = Math.hypot(c.clientWidth, c.clientHeight) * metresPerPixel;
-    const moved = cur.distanceTo(next.center);
-    if (moved <= limit && Math.abs(next.zoom - zoom) <= 1.5) return {};
-    if (performance.now() - mapGuardWarned > 2000) {   // a trace for bug reports, at most every 2 s
-        mapGuardWarned = performance.now();
-        console.warn(`TracePoint: dropped a map step with 3D terrain (zoom ${zoom.toFixed(2)} → ${next.zoom.toFixed(2)}, ${(moved / 1000).toFixed(1)} km)`);
-    }
-    return { center: cur, zoom };
-};
 
 let mapReady = false;   // sources and layers can only be added once the style has loaded
 
@@ -572,7 +552,28 @@ function setTileSet(id) {
         }, map.getLayer('hillshade') ? 'hillshade' : undefined);   // base imagery stays below the hillshade and the work layers
         activeTileLayerIds.push(lid);
     });
+    applyTileDetail(true);
 }
+
+/* Distant detail: tile detail toward the horizon of a tilted map, a switch under the basemap list, off
+   by default (values from briatlon's fork, "More detail"). Off is MapLibre's own (9.314, 3), which drops
+   to coarse tiles quickly with distance: far slopes look blurry, but few tiles load. On, [2, 8] keeps
+   distant tiles close to the zoom of the near ones. Past about 55° of tilt that would ask for hundreds
+   of tiles (375 at 85° in a small window), so steep views use [6, 2]: still sharper than the default
+   at a modest tile count. The 50°/55° pair keeps the map from reloading tiles while the tilt hovers
+   around the threshold. Imagery only: the elevation sources keep MapLibre's own choice. */
+const MAPLIBRE_TILE_LOD = [9.314, 3];
+let tileDetailSteep = null;
+function applyTileDetail(force = false) {
+    if (!mapReady) return;
+    const pitch = map.getPitch();
+    const steep = tileDetailSteep ? pitch > 50 : pitch >= 55;
+    if (steep === tileDetailSteep && !force) return;
+    tileDetailSteep = steep;
+    const [levels, ratio] = !mapSettings.distantDetail ? MAPLIBRE_TILE_LOD : steep ? [6, 2] : [2, 8];
+    activeTileLayerIds.forEach(lid => { if (map.getSource(lid)) map.setSourceTileLodParams(levels, ratio, lid); });
+}
+map.on('pitch', () => applyTileDetail());
 
 /* Mirrors Leaflet's 'tileerror' toast: shown once per custom layer */
 map.on('error', (e) => {
@@ -586,10 +587,51 @@ map.on('error', (e) => {
 setTileSet(localStorage.getItem('tp-tileset') || 'esri-sat');
 
 /* ---- 3D TERRAIN ---- */
-/* Mapzen Terrarium DEM tiles from AWS (keyless, CORS ok). The sources are registered at map load but
-   no tile is requested until terrain or hillshade is switched on. Independent of the chosen imagery. */
-const TERRAIN_TILES = 'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png';
+/* Elevation tiles, picked in the map panel (Terrain → Elevation). Both keyless, CORS ok, Terrarium
+   encoding. The sources are registered at map load but no tile is requested until terrain or hillshade
+   is switched on. Independent of the chosen imagery.
+   - AWS: Mapzen Terrarium, 256 px down to zoom 15 everywhere: even, but a mix of older sources.
+   - Mapterhorn: 512 px, newer sources (elevation from briatlon's fork). How deep it goes depends on the
+     region (checked 2026-11: zoom 17 in the Swiss Alps, 16 around Potsdam, 14 in the Italian Alps, 12 in
+     Kenya and Nepal, nothing over open sea). Its tile list names no max zoom; past the regional
+     depth the server answers 404 and MapLibre keeps using the coarser tile it has. */
+const ELEVATION_SOURCES = {
+    aws: {
+        label: 'AWS Terrarium',
+        source: {
+            type: 'raster-dem', encoding: 'terrarium', tileSize: 256, maxzoom: 15,
+            tiles: ['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'],
+            attribution: 'Terrain: <a href="https://github.com/tilezen/joerd/blob/master/docs/attribution.md" target="_blank" rel="noopener">Mapzen Terrarium</a> via AWS'
+        }
+    },
+    mapterhorn: {
+        label: 'Mapterhorn',
+        source: {
+            type: 'raster-dem', encoding: 'terrarium', tileSize: 512, maxzoom: 17,
+            tiles: ['https://tiles.mapterhorn.com/{z}/{x}/{y}.webp'],
+            attribution: 'Terrain: <a href="https://mapterhorn.com/attribution/" target="_blank" rel="noopener">© Mapterhorn</a>'
+        }
+    }
+};
 let terrainOn = localStorage.getItem('tp-terrain') === '1';
+let elevationBuilt = null;   // which ELEVATION_SOURCES entry the 'dem' sources were made from
+
+/* (Re)creates the elevation sources and the hillshade layer for the chosen elevation tiles.
+   Hillshade gets a DEM source of its own (same tiles): sharing one with the 3D terrain makes MapLibre
+   render both from a lower-resolution copy. Hidden layers request nothing. */
+function buildElevationSources(id) {
+    if (map.getTerrain()) map.setTerrain(null);   // applyMapSettings switches it on again
+    if (map.getLayer('hillshade')) map.removeLayer('hillshade');
+    ['dem', 'dem-shade'].forEach(sid => { if (map.getSource(sid)) map.removeSource(sid); });
+    const src = ELEVATION_SOURCES[id].source;
+    map.addSource('dem', { ...src });
+    map.addSource('dem-shade', { ...src });
+    map.addLayer({
+        id: 'hillshade', type: 'hillshade', source: 'dem-shade', layout: { visibility: 'none' },
+        paint: { 'hillshade-exaggeration': 0.45, 'hillshade-shadow-color': '#000', 'hillshade-highlight-color': '#fff', 'hillshade-accent-color': '#000' }
+    }, map.getLayer('buildings') ? 'buildings' : 'ellipse');   // above the basemap, below buildings, rays and ellipse
+    elevationBuilt = id;
+}
 
 function setTerrain(on) {
     terrainOn = on;
@@ -605,7 +647,7 @@ const MAP_SETTINGS_KEY = 'tp-map-settings';
 const MAP_SETTING_RANGES = {   // [min, max, default]
     exaggeration: [1, 3, 1],
     fov:          [10, 90, 37],     // vertical field of view in degrees; MapLibre's own default is 36.87
-    maxPitch:     [0, 90, 90],
+    maxPitch:     [0, 85, 85],
     minZoom:      [0, 20, 0],
     maxZoom:      [0, 20, 20],
     buildingsOpacity: [20, 100, 80]   // percent
@@ -614,7 +656,11 @@ const MAP_SETTING_RANGES = {   // [min, max, default]
 function loadMapSettings() {
     let saved = {};
     try { saved = JSON.parse(localStorage.getItem(MAP_SETTINGS_KEY)) || {}; } catch (err) { /* start from the defaults */ }
-    const s = { hillshade: saved.hillshade === true, buildings: saved.buildings === true };
+    const s = {
+        hillshade: saved.hillshade === true, buildings: saved.buildings === true, distantDetail: saved.distantDetail === true,
+        elevation: ELEVATION_SOURCES[saved.elevation] ? saved.elevation : 'aws',
+        haze: saved.haze === true
+    };
     Object.entries(MAP_SETTING_RANGES).forEach(([key, [min, max, def]]) => {
         s[key] = finite(saved[key]) ? Math.min(max, Math.max(min, saved[key])) : def;
     });
@@ -632,9 +678,12 @@ function applyMapSettings() {
     map.setMaxZoom(s.maxZoom);
     map.setMinZoom(s.minZoom);
     if (!mapReady) return;        // terrain and hillshade need the style; applied again from the map's load handler
+    if (elevationBuilt !== s.elevation) buildElevationSources(s.elevation);
     map.setTerrain(terrainOn ? { source: 'dem', exaggeration: s.exaggeration } : null);
     map.setLayoutProperty('hillshade', 'visibility', s.hillshade ? 'visible' : 'none');
     applyBuildings();
+    applyTileDetail(true);
+    map.setSky({ ...SKY, ...(s.haze ? SKY_HAZE : SKY_NO_HAZE) });
 }
 
 /* ---- 3D BUILDINGS ----
@@ -748,12 +797,25 @@ function buildLayerSwitcher() {
 
     // Terrain
     const terrain = section('Terrain');
-    addSwitch(terrain, '3D terrain', 'Elevation tiles from AWS. Tilt the map (Ctrl+drag) to see the relief.',
+    addSwitch(terrain, '3D terrain', 'Relief from the elevation tiles picked under Elevation. Tilt the map (Ctrl+drag) to see it.',
         () => terrainOn, setTerrain);
     addSlider(terrain, 'Height', 'How much the relief is exaggerated. Needs 3D terrain.',
         'exaggeration', 0.1, v => `${v.toFixed(1)}×`, () => terrainOn);
     addSwitch(terrain, 'Hillshade', 'Shades the slopes on top of the basemap, with or without 3D terrain. Uses the same elevation tiles.',
         () => mapSettings.hillshade, on => setMapSetting('hillshade', on));
+    addSwitch(terrain, 'Haze', 'A light blue veil over the farthest ground of a tilted map, like the air in a real view. Hides distant ranges.',
+        () => mapSettings.haze, on => setMapSetting('haze', on));
+    {   // Which elevation tiles 3D terrain and hillshade use
+        const { r, id } = row(terrain, 'Elevation', 'Elevation tiles for 3D terrain and hillshade. AWS Terrarium: even detail everywhere. Mapterhorn: newer data, finer in parts of Europe (Alps, Germany), coarser in other places.');
+        const select = el('select', 'map-panel-select', r);
+        select.id = id;
+        Object.entries(ELEVATION_SOURCES).forEach(([key, e]) => {
+            const o = el('option', '', select);
+            o.value = key; o.textContent = e.label;
+        });
+        select.onchange = () => setMapSetting('elevation', select.value);
+        mapPanelSync.push(() => { select.value = mapSettings.elevation; });
+    }
 
     // Buildings
     const buildings = section('Buildings');
@@ -857,6 +919,15 @@ function renderLayerMenu() {
     const add = el('div', 'layer-item layer-add', list);
     add.textContent = '＋ Add custom layer…';
     add.onclick = () => { closeBasemapMenu(); openLayerModal(null); };
+
+    // How sharp the imagery stays toward the horizon (see applyTileDetail); the list stays open
+    el('div', 'layer-divider', list);
+    const detail = el('div', 'layer-option', list);
+    detail.innerHTML =
+        `<label for="distant-detail-switch" title="Sharper imagery toward the horizon of a tilted map, for every basemap. Loads more tiles, so the map can fill in more slowly.">
+             Distant detail</label>
+         <input type="checkbox" id="distant-detail-switch" class="adjust-switch" role="switch" aria-label="Distant detail" ${mapSettings.distantDetail ? 'checked' : ''}>`;
+    detail.querySelector('input').onchange = (e) => setMapSetting('distantDetail', e.target.checked);
 }
 
 function removeCustomLayer(id) {
@@ -3842,20 +3913,7 @@ map.on('load', () => {
         id: 'measure-points', type: 'circle', source: 'measure', filter: ['==', ['geometry-type'], 'Point'],
         paint: { 'circle-radius': 5, 'circle-color': '#fff', 'circle-stroke-color': '#111', 'circle-stroke-width': 1.5 }
     });
-    map.addSource('dem', {
-        type: 'raster-dem', tiles: [TERRAIN_TILES], encoding: 'terrarium', tileSize: 256, maxzoom: 15,
-        attribution: 'Terrain: <a href="https://github.com/tilezen/joerd/blob/master/docs/attribution.md" target="_blank" rel="noopener">Mapzen Terrarium</a> via AWS'
-    });
-    /* Hillshade gets a DEM source of its own (same tiles): sharing one with the 3D terrain makes
-       MapLibre render both from a lower-resolution copy. Hidden layers request nothing. */
-    map.addSource('dem-shade', {
-        type: 'raster-dem', tiles: [TERRAIN_TILES], encoding: 'terrarium', tileSize: 256, maxzoom: 15,
-        attribution: 'Terrain: <a href="https://github.com/tilezen/joerd/blob/master/docs/attribution.md" target="_blank" rel="noopener">Mapzen Terrarium</a> via AWS'
-    });
-    map.addLayer({
-        id: 'hillshade', type: 'hillshade', source: 'dem-shade', layout: { visibility: 'none' },
-        paint: { 'hillshade-exaggeration': 0.45, 'hillshade-shadow-color': '#000', 'hillshade-highlight-color': '#fff', 'hillshade-accent-color': '#000' }
-    }, 'ellipse');   // above the basemap, below rays and ellipse
+    buildElevationSources(mapSettings.elevation);   // elevation sources and the hillshade layer
     mapReady = true;
     setTileSet(activeTileSetId);
     applyMapSettings();

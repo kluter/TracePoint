@@ -517,6 +517,14 @@ button:disabled     { opacity: 0.3; cursor: not-allowed; }
 
 .layer-add       { color: #777; }
 .layer-add:hover { color: #fff; }
+/* An on/off option under the basemap list (Distant detail), laid out like Include photos */
+.layer-option {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 6px 8px 6px 14px; font-size: 12px; color: #777;
+}
+.layer-option label { cursor: pointer; }
+.layer-option label:hover { color: #fff; }
+.layer-option .adjust-switch { width: 26px; flex-shrink: 0; }
 
 /* ---- COORDINATE SEARCH ---- */
 .coord-search {
@@ -1014,6 +1022,12 @@ button.btn-primary:hover:not(:disabled) { background: #004a6e; color: #fff; }
 .map-panel .adjust-row { grid-template-columns: 82px 1fr 74px; margin-bottom: 2px; min-height: 24px; }
 .map-panel .adjust-row.disabled { opacity: 0.35; }
 .map-panel .adjust-row.disabled input { cursor: not-allowed; }
+/* A choice (Elevation) takes the control and value columns */
+.map-panel-select {
+    grid-column: 2 / 4; height: 24px; box-sizing: border-box; padding: 0 6px; font-size: 11px;
+    background: #151515; border: 1px solid #333; border-radius: 4px; color: #ccc; cursor: pointer;
+}
+.map-panel-select:focus { border-color: #ffdc32; outline: none; }
 .map-panel-actions { display: flex; gap: 6px; margin-top: 8px; }
 .map-panel-actions button { font-size: 11px; padding: 4px 10px; }
 .map-panel-actions .map-panel-reset { margin-left: auto; color: #888; }
