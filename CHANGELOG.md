@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v2.11.1
 
 - Fixed: since v2.11.0, turning the map with Ctrl+drag or right-drag was twice as fast; it is back to the calmer speed
 
