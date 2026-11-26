@@ -493,6 +493,12 @@ button:disabled     { opacity: 0.3; cursor: not-allowed; }
 .layer-action:hover:not(:disabled)        { color: #fff; }
 .layer-action-delete:hover:not(:disabled) { color: #ff4444; }
 .layer-divider { height: 1px; background: #2a2a2a; margin: 2px 0; }
+/* Group headings in the basemap list (Imagery, Historical, Maps, Custom), like the map panel's titles */
+.layer-group {
+    padding: 8px 14px 3px; font-size: 10px; font-weight: 600; letter-spacing: 0.8px;
+    text-transform: uppercase; color: #777; border-top: 1px solid #2a2a2a; cursor: default; user-select: none;
+}
+.layer-group.first { border-top: none; }
 /* ---- MAP CONTEXT MENU ---- */
 .map-ctx-menu {
     position: absolute; z-index: 1000;
@@ -1259,3 +1265,31 @@ body.pane-resizing #street-view { pointer-events: none; }
 #line-bar .exif-burger:disabled:hover { background: #151515; color: #aaa; }
 /* Adjust and Show original side by side, like the other tools */
 .adjust-wrap { display: flex; }
+
+/* ---- ESRI WAYBACK TIMELINE: top centre of the map while the Wayback basemap is on ---- */
+.wayback-bar {
+    position: absolute; left: 50%; top: 10px; transform: translateX(-50%); z-index: 5;
+    width: min(480px, calc(100% - 40px)); min-width: 220px;
+    padding: 6px 14px 4px; box-sizing: border-box;
+    background: #151515e6; border: 1px solid #2a2a2a; border-radius: 6px; box-shadow: 0 4px 16px #0008;
+    color: #ccc; font-size: 11px; user-select: none;
+}
+.wayback-bar[hidden] { display: none; }
+.wayback-head { display: flex; align-items: center; justify-content: center; gap: 8px; }
+.wayback-date { min-width: 150px; text-align: center; color: #eee; font-size: 12px; }
+.wayback-step {
+    width: 22px; height: 20px; padding: 0; line-height: 18px; font-size: 15px;
+    background: transparent; border: 1px solid #333; border-radius: 4px; color: #ccc; cursor: pointer;
+}
+.wayback-step:hover:not(:disabled) { color: #ffdc32; border-color: #ffdc32; }
+.wayback-step:disabled { opacity: 0.3; cursor: default; }
+.wayback-track { position: relative; height: 20px; margin: 2px 4px 0; cursor: pointer; outline: none; touch-action: none; }
+.wayback-line { position: absolute; left: 0; right: 0; top: 50%; height: 2px; margin-top: -1px; background: #3a3a3a; border-radius: 1px; }
+.wayback-mark {
+    position: absolute; top: 50%; width: 3px; height: 10px; margin: -5px 0 0 -1.5px;
+    background: #999; border-radius: 1px; pointer-events: none;
+}
+.wayback-mark.active { width: 12px; height: 12px; margin: -6px 0 0 -6px; border-radius: 50%; background: #ffdc32; box-shadow: 0 0 0 2px #151515; z-index: 1; }
+.wayback-track:focus-visible .wayback-mark.active { box-shadow: 0 0 0 2px #151515, 0 0 0 4px #ffdc32aa; }
+.wayback-axis { position: relative; height: 13px; margin: 0 4px; }
+.wayback-year { position: absolute; transform: translateX(-50%); color: #777; font-size: 10px; }

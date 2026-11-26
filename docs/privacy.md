@@ -6,7 +6,7 @@ A polished interface is not the same as a safe one. This page explains exactly w
 
 Photos are loaded directly into an HTML5 `<canvas>` element and processed in the browser. No upload, no base64 POST, no fetch call carries image data anywhere. To verify, open **DevTools → Network** (`F12`) and load an image: no request involving it appears.
 
-The only outbound requests are map tile fetches from public servers (Esri, OpenStreetMap, EOX), elevation tiles from AWS or Mapterhorn (whichever you picked) while 3D terrain or hillshade is switched on, building shapes from OpenFreeMap while 3D buildings is switched on, plus the servers of any [custom map layer](map-layers.md#custom-map-layers) you add yourself. They contain no session data, no coordinates from your work, and no image content.
+The only outbound requests are map tile fetches from public servers (Esri, OpenStreetMap, EOX), elevation tiles from AWS or Mapterhorn (whichever you picked) while 3D terrain or hillshade is switched on, building shapes from OpenFreeMap while 3D buildings is switched on, Esri's Wayback release list, tile index and imagery metadata while the Esri Wayback basemap is active (these name the map tile in the middle of the view, like any tile request), plus the servers of any [custom map layer](map-layers.md#custom-map-layers) you add yourself. They contain no session data, no coordinates from your work, and no image content.
 
 Street-level imagery is the one feature that sends a position on purpose: while its panel is open, Panoramax or Mapillary (whichever you picked) receives a small box around the spot you look up, and serves the photo. The panel is closed on every start, and nothing is sent until you open it. Your own photo is never part of it.
 
@@ -46,6 +46,7 @@ Photo adjustments and coordinate pins are not saved. Besides that, `localStorage
 ```javascript
 // Verify in DevTools → Application → Storage
 // localStorage:   { "tp-tileset": "esri-sat" }  ← your map layer choice
+//                 { "tp-wayback-release": "…" } ← the Esri Wayback imagery last shown
 //                 { "tp-terrain": "0" }         ← 3D terrain on/off
 //                 { "tp-map-settings": {...} }  ← terrain height, hillshade, haze, elevation tiles, distant detail, 3D buildings, field of view, camera limits
 //                 { "tp-custom-layers": [...] } ← name + URL of custom layers, if you added any

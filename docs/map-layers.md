@@ -2,7 +2,19 @@
 
 ## Built-in layers
 
-Esri Satellite, Sentinel-2 2024, OpenStreetMap, Esri Dark Gray, Esri Topo and Esri Streets. Optional 3D terrain with adjustable height and hillshade, and OpenStreetMap buildings as 3D blocks, are switched on in the sliders panel right of the map bar; there you also pick the elevation tiles, AWS Terrarium (even detail everywhere) or Mapterhorn (newer data, finer in parts of Europe). Click the basemap name in the map header to switch layers. **Distant detail** at the bottom of that list keeps the imagery sharp toward the horizon of a tilted map; it loads more tiles, so it is off by default.
+The basemap list is grouped: **Imagery** (Esri Satellite, Sentinel-2 2024), **Historical** (Esri Wayback), **Maps** (OpenStreetMap, Esri Streets, Esri Topo, Esri Dark Gray) and, once you add some, **Custom**. Optional 3D terrain with adjustable height and hillshade, and OpenStreetMap buildings as 3D blocks, are switched on in the sliders panel right of the map bar; there you also pick the elevation tiles, AWS Terrarium (even detail everywhere) or Mapterhorn (newer data, finer in parts of Europe). Click the basemap name in the map header to switch layers. **Distant detail** at the bottom of that list keeps the imagery sharp toward the horizon of a tilted map; it loads more tiles, so it is off by default.
+
+### Esri Wayback
+
+Esri has kept every version of its World Imagery basemap since 2014, about 200 of them. Pick **Esri Wayback** as the basemap and a timeline appears at the top of the map, showing the imagery that existed for the place in the middle of the map:
+
+- **One mark per capture.** Only versions whose imagery differs at the map centre are listed, at the detail of the current zoom. Releases that repeat the same picture are skipped, so every step shows something new.
+- **Dated by capture.** Marks sit on a time axis by the date the imagery was taken, from Esri's metadata, not by when Esri published it. Hover the date for the provider and resolution. Coarse mosaics seen when zoomed out often have no date and show as "Undated imagery".
+- **Drag or click** along the timeline, or use ‹ › and the arrow keys, to step to the next older or newer capture.
+- **Zoom in** to about town level for the timeline. Further out the imagery is a mosaic of many dates.
+- **Updates on move.** After each pan or zoom the list is looked up again for the new spot. That takes a few seconds; the marks fill in as they arrive.
+
+Where an old capture does not reach the current zoom, its last tile is enlarged instead of leaving a gap. The capture you picked is remembered, also in the session: a session left on Wayback reopens on the same imagery, in the export file too.
 
 ## Custom map layers
 
@@ -38,20 +50,8 @@ Google does not permit direct tile access outside its official APIs. These URLs 
 | Layer | URL | Notes |
 |---|---|---|
 | Esri Clarity | `https://clarity.maptiles.arcgis.com/arcgis/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}` | Esri's sharper imagery set. Sometimes shows a different capture than the built-in Esri Satellite |
-| Esri Wayback | `https://wayback.maptiles.arcgis.com/arcgis/rest/services/World_Imagery/WMTS/1.0.0/default028mm/MapServer/tile/RELEASE/{z}/{y}/{x}` | Historical Esri imagery. Replace `RELEASE` with a release number from the table below |
+| Esri Wayback | `https://wayback.maptiles.arcgis.com/arcgis/rest/services/World_Imagery/WMTS/1.0.0/default028mm/MapServer/tile/RELEASE/{z}/{y}/{x}` | One fixed release of Esri's historical imagery. Replace `RELEASE` with a release number (see below) |
 
 ### Esri Wayback releases
 
-Esri has published the World Imagery basemap as a dated snapshot roughly every few weeks since 2014. Each snapshot has a release number, and that number goes into the URL in place of `RELEASE`. The numbers are IDs, not dates, so they do not run in order. Add several releases as separate layers to flip between dates and see when a building appeared or a road changed.
-
-| Snapshot | Release | Snapshot | Release |
-|---|---|---|---|
-| 2014-02-20 | `10` | 2021-01-13 | `1049` |
-| 2015-01-21 | `20222` | 2022-01-12 | `42663` |
-| 2016-01-13 | `3515` | 2023-01-11 | `11475` |
-| 2017-01-11 | `577` | 2024-01-18 | `41468` |
-| 2018-01-08 | `13161` | 2025-01-30 | `36557` |
-| 2019-01-09 | `6036` | 2026-01-29 | `22252` |
-| 2020-01-08 | `23001` | 2026-10-29 | `43291` |
-
-All ~200 releases are listed in Esri's [Wayback config](https://s3-us-west-2.amazonaws.com/config.maptiles.arcgis.com/waybackconfig.json): search for a date, and the number after `tile/` in that entry's `itemURL` is the release. To find which releases actually changed the imagery at a given place, use Esri's [Wayback app](https://livingatlas.arcgis.com/wayback/). A snapshot date is when Esri published the release, not when the imagery was captured. Where nothing changed between releases, they show the same imagery.
+Esri Wayback is also a built-in basemap with a timeline (see [Built-in layers](#esri-wayback)), which is usually easier. A custom layer is only needed to keep one release fixed next to the built-in one. Each release has a number that goes into the URL in place of `RELEASE`; all ~200 are listed in Esri's [Wayback config](https://s3-us-west-2.amazonaws.com/config.maptiles.arcgis.com/waybackconfig.json), where the number after `tile/` in an entry's `itemURL` is the release.
