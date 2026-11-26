@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Esri Wayback always opens on the newest imagery, after a reload and every time it is picked. The date shown is no longer remembered, neither in the browser nor in sessions, and switching images no longer switches the basemap
+
 ## v2.12.1
 
 - Privacy: an exported session file carries the photos' metadata (GPS position, camera serial numbers, creator) only with **Include photos** on. Before, it was always in the file

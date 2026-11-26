@@ -46,7 +46,6 @@ Photo adjustments and coordinate pins are not saved. Besides that, `localStorage
 ```javascript
 // Verify in DevTools → Application → Storage
 // localStorage:   { "tp-tileset": "esri-sat" }  ← your map layer choice
-//                 { "tp-wayback-release": "…" } ← the Esri Wayback imagery last shown
 //                 { "tp-terrain": "0" }         ← 3D terrain on/off
 //                 { "tp-map-settings": {...} }  ← terrain height, hillshade, haze, elevation tiles, distant detail, 3D buildings, field of view, camera limits
 //                 { "tp-custom-layers": [...] } ← name + URL of custom layers, if you added any

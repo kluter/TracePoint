@@ -14,7 +14,7 @@ Esri has kept every version of its World Imagery basemap since 2014, about 200 o
 - **Zoom in** to about town level for the timeline. Further out the imagery is a mosaic of many dates.
 - **Updates on move.** After each pan or zoom the list is looked up again for the new spot. That takes a few seconds; the marks fill in as they arrive.
 
-Where an old capture does not reach the current zoom, its last tile is enlarged instead of leaving a gap. The capture you picked is remembered, also in the session: a session left on Wayback reopens on the same imagery, in the export file too.
+Where an old capture does not reach the current zoom, its last tile is enlarged instead of leaving a gap. Wayback always opens on the newest imagery, after a reload and every time you pick it; the date you looked at is not remembered, neither in the browser nor in sessions.
 
 ## Custom map layers
 

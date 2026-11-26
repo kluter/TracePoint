@@ -118,7 +118,6 @@ function createSession(name) {
         horizonPoints:    [],
         view:             { scale: 1, tx: 0, ty: 0, rotation: 0 },
         mapView:          null,   // { center: {lat, lng}, zoom, bearing, pitch }
-        wayback:          null,   // Esri Wayback release on screen when the session was last left, or null
         /* Rays and the ellipse of every session live in one shared GeoJSON source (see rebuildWorkSource);
            markers are DOM elements owned here. */
         mapObjects:       { geoMarkers: [], intersectionMarker: null, intersectionLatLng: null, ellipseRing: null },
@@ -547,9 +546,13 @@ let tileErrorShown     = false;
    (MapLibre overzooms past it on its own), {s} → one URL per subdomain, opacity → paint. */
 function setTileSet(id) {
     const set = allTileSets().find(s => s.id === id) || TILE_SETS[0];
+    const previous = activeTileSetId;
     activeTileSetId = set.id;
     localStorage.setItem('tp-tileset', set.id);
     if (!mapReady) return;   // applied again from the map's load handler
+    // Picking Esri Wayback always starts on the newest imagery: no earlier date is remembered.
+    // Without the release list yet, the list sets the newest once it is in (waybackLoadConfig).
+    if (set.wayback && previous !== set.id) wayback.release = wayback.releases?.[0]?.id ?? null;
 
     activeTileLayerIds.forEach(lid => {
         if (map.getLayer(lid))  map.removeLayer(lid);
@@ -624,11 +627,11 @@ setTileSet(localStorage.getItem('tp-tileset') || 'esri-sat');
    release just older than that one, and so on until a release has no tile there. About one small
    request per version found, plus one metadata query per version for its capture date. Nothing is
    asked while another basemap is active. All endpoints are keyless and send CORS headers (checked
-   2026-11). The release in use is remembered in this browser and per session (`wayback` in the session
-   file), so a session reopens on the same imagery. */
+   2026-11). The timeline always opens on the newest imagery, on every page load and every time
+   Wayback is picked: the date shown is never remembered, neither in the browser nor in sessions. */
 const WAYBACK_CONFIG_URL = 'https://s3-us-west-2.amazonaws.com/config.maptiles.arcgis.com/waybackconfig.json';
 const WAYBACK_TILEMAP    = 'https://wayback.maptiles.arcgis.com/arcgis/rest/services/World_Imagery/MapServer/tilemap';
-const WAYBACK_KEY        = 'tp-wayback-release';
+localStorage.removeItem('tp-wayback-release');   // v2.12.0–v2.12.1 remembered the date shown there
 const WAYBACK_MIN_ZOOM   = 11;   // tile zoom (map zoom 10, a town on screen); further out Esri's imagery is a
                                  // mosaic of many dates and the timeline would have nothing useful to say
 const WAYBACK_MAX_ZOOM   = 16;   // tile zoom the versions are looked up at, at most: a zoom-16 tile is about
@@ -640,7 +643,7 @@ const WAYBACK_FALLBACK   = 3692; // World Imagery (Wayback 2026-11-18): shown wh
 const WAYBACK_META_HOST  = /^https:\/\/metadata\.maptiles\.arcgis\.com\//;   // the only server the list may send metadata queries to
 
 const wayback = {
-    release:   validRelease(Number(localStorage.getItem(WAYBACK_KEY))),
+    release:   null,        // the release on screen; the newest one each time Wayback is picked
     releases:  null,        // [{ id, date: 'YYYY-MM-DD', meta: metadata service URL }], newest first
     index:     new Map(),   // release id → position in releases
     loading:   null,        // promise of the release list
@@ -669,7 +672,7 @@ function waybackLoadConfig() {
                 if (!list.length) throw new Error('empty config');
                 wayback.releases = list;
                 list.forEach((r, i) => wayback.index.set(r.id, i));
-                if (!wayback.release) setWaybackRelease(list[0].id);   // first visit: the newest imagery
+                if (!wayback.release) setWaybackRelease(list[0].id);   // the newest imagery
             })
             .catch(err => { wayback.loading = null; throw err; });   // a later visit may try again
     }
@@ -683,14 +686,12 @@ function setWaybackRelease(id) {
     if (!id) return;
     const changed = id !== wayback.release;
     wayback.release = id;
-    localStorage.setItem(WAYBACK_KEY, String(id));
     if (waybackActive()) {
         const src = map.getSource('base-0');
         if (src && activeTileLayerIds.length) { if (changed) src.setTiles([fallbackUrl(waybackTileUrl(id))]); }
         else setTileSet(activeTileSetId);   // the layer was waiting for a release
     }
     waybackRender();
-    if (changed) scheduleAutosave();
 }
 
 /* Slippy-map tile of a position, and the centre of a tile */
@@ -986,17 +987,9 @@ waybackBar.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') e.stopPropagation();   // the map and photo shortcuts stay out of the timeline
 });
 
-/* Per session: the release goes with the map view when a session is left, exported or autosaved, and
-   comes back when it is opened. A session saved on another basemap leaves the basemap alone. */
+/* The live map view into a session, when it is left, exported or autosaved */
 function saveLiveMap(s) {
     s.mapView = getMapView();
-    s.wayback = waybackActive() ? wayback.release : null;
-}
-
-function restoreSessionWayback(s) {
-    if (!s.wayback) return;
-    setWaybackRelease(s.wayback);
-    if (activeTileSetId !== 'esri-wayback') { setTileSet('esri-wayback'); renderLayerMenu(); }
 }
 
 /* ---- 3D TERRAIN ---- */
@@ -2505,7 +2498,6 @@ function switchToSession(idx) {
         const hasGeoWork = s.lines.some(l => l.points.some(p => p.geo));
         if (!hasGeoWork) applyMapView(WORLD_VIEW);
     }
-    restoreSessionWayback(s);
 
     const exifCard = document.getElementById('exif-card');
     exifCard.style.display = 'none';
@@ -3245,7 +3237,6 @@ function sessionToData(s) {
             ? { center: { lat: s.mapView.center.lat, lng: s.mapView.center.lng }, zoom: s.mapView.zoom,
                 bearing: s.mapView.bearing ?? 0, pitch: s.mapView.pitch ?? 0 }
             : null,
-        wayback:           s.wayback || null,   // Esri Wayback release, when the session was left on that basemap
         intersection:      s.mapObjects.intersectionLatLng || null,
         exif:              s.exif || null,
         colourIndex:       s.colourIndex ?? null
@@ -3619,8 +3610,6 @@ function applySessionData(list, keepView = false) {
             };
             applyMapView(s.mapView);
         }
-        s.wayback = validRelease(sd.wayback);
-        if (s === sess()) restoreSessionWayback(s);
 
         if (keepView) s.hasAutoZoomed = true;
         s.lines.forEach((_, lIdx) => rebuildMapForLine(lIdx));
