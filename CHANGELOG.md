@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- **Esri Wayback** is a built-in basemap with a timeline at the top of the map: one mark per capture that exists where the map is centred, placed and labelled by the date the imagery was taken. Drag along it, click a mark, or step with ‹ › and the arrow keys. Releases that repeat the same picture are skipped, and old captures that stop short of the zoom are enlarged instead of leaving gaps. See `docs/map-layers.md`
+- A session remembers the Wayback capture it was left on, in autosave and export files too, and reopens on it
+- The basemap list is grouped under small headings: Imagery, Historical, Maps and Custom
+
 ## v2.11.1
 
 - Fixed: since v2.11.0, turning the map with Ctrl+drag or right-drag was twice as fast; it is back to the calmer speed

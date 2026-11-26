@@ -118,6 +118,7 @@ function createSession(name) {
         horizonPoints:    [],
         view:             { scale: 1, tx: 0, ty: 0, rotation: 0 },
         mapView:          null,   // { center: {lat, lng}, zoom, bearing, pitch }
+        wayback:          null,   // Esri Wayback release on screen when the session was last left, or null
         /* Rays and the ellipse of every session live in one shared GeoJSON source (see rebuildWorkSource);
            markers are DOM elements owned here. */
         mapObjects:       { geoMarkers: [], intersectionMarker: null, intersectionLatLng: null, ellipseRing: null },
@@ -372,11 +373,15 @@ function el(tag, className, parent) {
 
 /* sessions initialised after LINE_COLOURS and map are both defined (see below) */
 
-/* ---- TILE LAYER DEFINITIONS ---- */
+/* ---- TILE LAYER DEFINITIONS ----
+   group: the heading the layer is listed under in the basemap dropdown (BASEMAP_GROUPS, in that order;
+   custom layers get a "Custom" group of their own). Within a group the order of this list holds. */
+const BASEMAP_GROUPS = ['Imagery', 'Historical', 'Maps'];
 const TILE_SETS = [
     {
         id: 'esri-sat',
         label: 'Esri Satellite',
+        group: 'Imagery',
         layers: [
             { url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
               opts: { attribution: 'Tiles &copy; Esri', maxZoom: 21, maxNativeZoom: 19 } },
@@ -387,6 +392,7 @@ const TILE_SETS = [
     {
         id: 's2-2024',
         label: 'Sentinel-2 2024',
+        group: 'Imagery',
         layers: [
             { url: 'https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2024_3857/default/g/{z}/{y}/{x}.jpg',
               opts: { attribution: '<a href="https://s2maps.eu" target="_blank" rel="noopener">Sentinel-2 cloudless</a> by EOX IT Services GmbH (contains modified Copernicus Sentinel data 2024)',
@@ -394,37 +400,51 @@ const TILE_SETS = [
         ]
     },
     {
+        id: 'esri-wayback',
+        label: 'Esri Wayback',
+        group: 'Historical',
+        wayback: true,   // the release in the URL is set by the timeline (see ESRI WAYBACK)
+        layers: [
+            { url: 'https://wayback.maptiles.arcgis.com/arcgis/rest/services/World_Imagery/WMTS/1.0.0/default028mm/MapServer/tile/{release}/{z}/{y}/{x}',
+              opts: { attribution: 'Tiles &copy; Esri World Imagery Wayback', maxZoom: 21, maxNativeZoom: 19 } }
+        ]
+    },
+    {
         id: 'osm',
         label: 'OpenStreetMap',
+        group: 'Maps',
         layers: [
             { url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',   // OSM retired the a/b/c subdomains
               opts: { attribution: '&copy; OpenStreetMap contributors', maxZoom: 19 } }
         ]
     },
     {
-        id: 'esri-dark',
-        label: 'Esri Dark Gray',
+        id: 'esri-streets',
+        label: 'Esri Streets',
+        group: 'Maps',
         layers: [
-            { url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
-              opts: { attribution: 'Tiles &copy; Esri', maxZoom: 21, maxNativeZoom: 16 } },
-            { url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}',
-              opts: { attribution: '', maxZoom: 21, maxNativeZoom: 16 } }
+            { url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+              opts: { attribution: 'Tiles &copy; Esri', maxZoom: 21, maxNativeZoom: 19 } }
         ]
     },
     {
         id: 'esri-topo',
         label: 'Esri Topo',
+        group: 'Maps',
         layers: [
             { url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}',
               opts: { attribution: 'Tiles &copy; Esri', maxZoom: 21, maxNativeZoom: 19 } }
         ]
     },
     {
-        id: 'esri-streets',
-        label: 'Esri Streets',
+        id: 'esri-dark',
+        label: 'Esri Dark Gray',
+        group: 'Maps',
         layers: [
-            { url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
-              opts: { attribution: 'Tiles &copy; Esri', maxZoom: 21, maxNativeZoom: 19 } }
+            { url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+              opts: { attribution: 'Tiles &copy; Esri', maxZoom: 21, maxNativeZoom: 16 } },
+            { url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}',
+              opts: { attribution: '', maxZoom: 21, maxNativeZoom: 16 } }
         ]
     }
 ];
@@ -537,12 +557,16 @@ function setTileSet(id) {
     });
     activeTileLayerIds = [];
     tileErrorShown = false;
+    waybackShow(!!set.wayback);
+    if (set.wayback && !wayback.release) return;   // no release known yet: added once the release list is in
 
     set.layers.forEach((l, i) => {
         const lid = `base-${i}`;
         map.addSource(lid, {
             type: 'raster', tileSize: 256,
-            tiles: set.custom ? [fallbackUrl(l.url)] : expandSubdomains(l.url),
+            // Wayback: older releases stop at a lower zoom in many places, so it gets the custom layers' fallback
+            tiles: set.wayback ? [fallbackUrl(waybackTileUrl(wayback.release))]
+                 : set.custom ? [fallbackUrl(l.url)] : expandSubdomains(l.url),
             maxzoom: l.opts.maxNativeZoom ?? l.opts.maxZoom ?? 19,
             attribution: l.opts.attribution || ''
         });
@@ -590,6 +614,374 @@ map.on('error', (e) => {
 });
 
 setTileSet(localStorage.getItem('tp-tileset') || 'esri-sat');
+
+/* ---- ESRI WAYBACK ----
+   Esri's World Imagery as published since 2014, as a basemap with a timeline at the top of the map.
+   The timeline only shows the versions that differ where the map is centred, at the zoom of the tiles
+   on screen, and dates them by when the imagery was captured (Esri's metadata), not by Esri's release.
+   How the versions are found (the way Esri's own Wayback app does it): the tilemap answer for a release
+   names the release that tile's imagery actually comes from ("select"); the next question goes to the
+   release just older than that one, and so on until a release has no tile there. About one small
+   request per version found, plus one metadata query per version for its capture date. Nothing is
+   asked while another basemap is active. All endpoints are keyless and send CORS headers (checked
+   2026-11). The release in use is remembered in this browser and per session (`wayback` in the session
+   file), so a session reopens on the same imagery. */
+const WAYBACK_CONFIG_URL = 'https://s3-us-west-2.amazonaws.com/config.maptiles.arcgis.com/waybackconfig.json';
+const WAYBACK_TILEMAP    = 'https://wayback.maptiles.arcgis.com/arcgis/rest/services/World_Imagery/MapServer/tilemap';
+const WAYBACK_KEY        = 'tp-wayback-release';
+const WAYBACK_MIN_ZOOM   = 11;   // tile zoom (map zoom 10, a town on screen); further out Esri's imagery is a
+                                 // mosaic of many dates and the timeline would have nothing useful to say
+const WAYBACK_MAX_ZOOM   = 19;   // the source's maxzoom: past it MapLibre enlarges the zoom-19 tile
+
+const wayback = {
+    release:   validRelease(Number(localStorage.getItem(WAYBACK_KEY))),
+    releases:  null,        // [{ id, date: 'YYYY-MM-DD', meta: metadata service URL }], newest first
+    index:     new Map(),   // release id → position in releases
+    loading:   null,        // promise of the release list
+    items:     [],          // versions at the map centre: { release, capture (ms or null), source, res }
+    tileKey:   null,        // the z/x/y tile the items belong to
+    status:    '',
+    abort:     null,
+    walkCache: new Map(),   // z/x/y → release ids, newest first
+    metaCache: new Map()    // release|z/x/y → { capture, source, res }
+};
+
+function validRelease(n) { return Number.isInteger(n) && n > 0 ? n : null; }
+function waybackActive() { return mapReady && !!allTileSets().find(s => s.id === activeTileSetId)?.wayback; }
+function waybackTileUrl(release) { return TILE_SETS.find(s => s.wayback).layers[0].url.replace('{release}', release); }
+
+function waybackLoadConfig() {
+    if (!wayback.loading) {
+        wayback.loading = fetch(WAYBACK_CONFIG_URL)
+            .then(res => res.ok ? res.json() : Promise.reject(new Error('config ' + res.status)))
+            .then(cfg => {
+                const list = Object.entries(cfg || {}).map(([id, e]) => {
+                    const date = /\d{4}-\d{2}-\d{2}/.exec(e?.itemTitle || '');
+                    return validRelease(Number(id)) && date && /^https:\/\//.test(e.metadataLayerUrl || '')
+                        ? { id: Number(id), date: date[0], meta: e.metadataLayerUrl } : null;
+                }).filter(Boolean).sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id);
+                if (!list.length) throw new Error('empty config');
+                wayback.releases = list;
+                list.forEach((r, i) => wayback.index.set(r.id, i));
+                if (!wayback.release) setWaybackRelease(list[0].id);   // first visit: the newest imagery
+            })
+            .catch(err => { wayback.loading = null; throw err; });   // a later visit may try again
+    }
+    return wayback.loading;
+}
+
+/* Show the imagery of one release. Swaps the tile URL of the existing source, so the map keeps its
+   layers and only reloads the imagery. */
+function setWaybackRelease(id) {
+    id = validRelease(id);
+    if (!id) return;
+    const changed = id !== wayback.release;
+    wayback.release = id;
+    localStorage.setItem(WAYBACK_KEY, String(id));
+    if (waybackActive()) {
+        const src = map.getSource('base-0');
+        if (src && activeTileLayerIds.length) { if (changed) src.setTiles([fallbackUrl(waybackTileUrl(id))]); }
+        else setTileSet(activeTileSetId);   // the layer was waiting for a release
+    }
+    waybackRender();
+    if (changed) scheduleAutosave();
+}
+
+/* Slippy-map tile of a position, and the centre of a tile */
+function tileOf(lng, lat, z) {
+    const n = 2 ** z, r = Math.max(-85.0511, Math.min(85.0511, lat)) * Math.PI / 180;
+    return {
+        x: Math.min(n - 1, Math.max(0, Math.floor((lng + 180) / 360 * n))),
+        y: Math.min(n - 1, Math.max(0, Math.floor((1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2 * n)))
+    };
+}
+function tileCentre(z, x, y) {
+    const n = 2 ** z;
+    return { lng: (x + 0.5) / n * 360 - 180, lat: Math.atan(Math.sinh(Math.PI * (1 - 2 * (y + 0.5) / n))) * 180 / Math.PI };
+}
+
+/* The releases that differ at one tile, newest first. [] when the newest release has no tile there. */
+async function waybackWalk(z, x, y, signal, onFound) {
+    const key = `${z}/${x}/${y}`;
+    if (wayback.walkCache.has(key)) {
+        const known = wayback.walkCache.get(key);
+        known.forEach(onFound);
+        return known;
+    }
+    const list = wayback.releases, found = [];
+    let i = 0;
+    while (i < list.length) {
+        const res = await fetch(`${WAYBACK_TILEMAP}/${list[i].id}/${z}/${y}/${x}`, { signal });
+        if (!res.ok) break;
+        const t = await res.json();
+        if (!t?.valid || !Array.isArray(t.data) || t.data[0] !== 1) break;   // no tile in this release (nor, in practice, older ones)
+        const sel = validRelease(Array.isArray(t.select) && t.select.length ? t.select[0] : list[i].id);
+        const at = wayback.index.get(sel);
+        if (at === undefined) break;
+        found.push(sel);
+        onFound(sel);
+        i = Math.max(at, i) + 1;
+    }
+    wayback.walkCache.set(key, found);
+    return found;
+}
+
+/* Capture date, source and resolution of a release's imagery at a tile, from its metadata service.
+   Layer 0 describes 1.9 cm imagery (tile zoom 23), each next layer half the detail; a coarser layer is
+   tried when the one for this zoom has nothing here. */
+async function waybackCapture(release, z, x, y, signal) {
+    const key = `${release}|${z}/${x}/${y}`;
+    if (wayback.metaCache.has(key)) return wayback.metaCache.get(key);
+    const r = wayback.releases[wayback.index.get(release)];
+    const { lng, lat } = tileCentre(z, x, y);
+    let info = { capture: null, source: '', res: null };
+    for (let layer = Math.max(0, Math.min(13, 23 - z)); layer <= 13; layer++) {
+        const res = await fetch(`${r.meta}/${layer}/query?geometry=${lng.toFixed(6)},${lat.toFixed(6)}&geometryType=esriGeometryPoint` +
+            `&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=SRC_DATE2,NICE_DESC,SRC_RES&returnGeometry=false&f=json`, { signal });
+        if (!res.ok) break;
+        const a = (await res.json())?.features?.[0]?.attributes;
+        if (!a) continue;
+        info = { capture: finite(a.SRC_DATE2) ? a.SRC_DATE2 : null,
+                 source:  typeof a.NICE_DESC === 'string' ? a.NICE_DESC.trim() : '',
+                 res:     finite(a.SRC_RES) ? a.SRC_RES : null };
+        break;
+    }
+    wayback.metaCache.set(key, info);
+    return info;
+}
+
+/* After each map move: find the versions at the new centre tile (nothing to do while it is the same tile) */
+function waybackRefresh() {
+    if (!waybackActive()) return;
+    const zoom = Math.min(WAYBACK_MAX_ZOOM, Math.round(map.getZoom() + 1));   // 256 px tiles: one zoom above the map's
+    if (zoom < WAYBACK_MIN_ZOOM) {
+        if (wayback.tileKey === 'far') return;
+        if (wayback.abort) wayback.abort.abort();
+        wayback.abort = null;
+        wayback.tileKey = 'far';
+        wayback.items = [];
+        wayback.status = 'Zoom in to see imagery dates';
+        return waybackRender();
+    }
+    const c = map.getCenter();
+    const { x, y } = tileOf(c.lng, c.lat, zoom);
+    const key = `${zoom}/${x}/${y}`;
+    if (key === wayback.tileKey) return;
+    wayback.tileKey = key;
+    if (wayback.abort) wayback.abort.abort();
+    const ctrl = wayback.abort = new AbortController();
+    const current = () => wayback.abort === ctrl;
+    wayback.items = [];
+    wayback.status = 'Finding imagery dates…';
+    waybackRender();
+
+    (async () => {
+        await waybackLoadConfig();
+        // The timeline fills in as versions and their capture dates arrive: the walk is one request after
+        // another, so waiting for all of it would leave the bar empty for many seconds
+        const found = [], infos = new Map(), pending = [];
+        const update = () => {
+            if (!current()) return;
+            // A new release can change the tile without new imagery (colour, a seam elsewhere, a renamed
+            // provider): one entry per capture date, the newest release that has it. Undated imagery (the coarse
+            // mosaics shown when zoomed out) is one entry per source
+            const seen = new Set();
+            wayback.items = found.filter(id => infos.has(id)).map(id => ({ release: id, ...infos.get(id) })).filter(it => {
+                const key = it.capture !== null ? it.capture : `undated|${it.source}|${it.res}`;
+                if (seen.has(key)) return false;
+                seen.add(key);
+                return true;
+            });
+            waybackRender();
+        };
+        // Where the newest release has no tile at this zoom (Esri enlarges a coarser one), look a few zooms out
+        let releases = [];
+        for (let z = zoom; z >= Math.max(WAYBACK_MIN_ZOOM - 2, zoom - 4) && !releases.length; z--) {
+            const t = tileOf(c.lng, c.lat, z);
+            releases = await waybackWalk(z, t.x, t.y, ctrl.signal, (id) => {
+                found.push(id);
+                const p = waybackCapture(id, z, t.x, t.y, ctrl.signal)
+                    .catch(err => { if (ctrl.signal.aborted) throw err; return { capture: null, source: '', res: null }; })
+                    .then(info => { infos.set(id, info); update(); });
+                p.catch(() => {});   // an aborted lookup is no error; the walk's own failure is caught below
+                pending.push(p);
+            });
+        }
+        await Promise.all(pending);
+        if (!current()) return;
+        wayback.status = releases.length ? '' : 'No Wayback imagery here.';
+        update();
+    })().catch(() => {
+        if (!current() || ctrl.signal.aborted) return;
+        wayback.tileKey = null;   // try again on the next move
+        wayback.status = 'Esri Wayback could not be reached.';
+        waybackRender();
+    });
+}
+map.on('moveend', waybackRefresh);
+
+/* ---- WAYBACK TIMELINE (top of the map) ----
+   Marks on a time axis, one per imagery version at the map centre, placed by capture date. Drag along
+   it or click a mark; ‹ › and the arrow keys step to the next older or newer capture. */
+const waybackBar = el('div', 'wayback-bar', document.getElementById('map-container'));
+waybackBar.hidden = true;
+waybackBar.innerHTML = `
+    <div class="wayback-head">
+        <button type="button" class="wayback-step" data-step="-1" title="Older imagery" aria-label="Older imagery">‹</button>
+        <span class="wayback-date" aria-live="polite"></span>
+        <button type="button" class="wayback-step" data-step="1" title="Newer imagery" aria-label="Newer imagery">›</button>
+    </div>
+    <div class="wayback-track" tabindex="0" role="slider" aria-label="Imagery capture date">
+        <div class="wayback-line"></div>
+    </div>
+    <div class="wayback-axis"></div>`;
+const waybackTrack = waybackBar.querySelector('.wayback-track');
+
+const WAYBACK_DATE = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+
+/* The time an item is placed at: its capture date, else its release date */
+function waybackTime(it) {
+    if (it.capture !== null) return it.capture;
+    const r = wayback.releases?.[wayback.index.get(it.release)];
+    return r ? Date.parse(r.date) : 0;
+}
+
+/* Items oldest first */
+function waybackSorted() {
+    return wayback.items.slice().sort((a, b) => waybackTime(a) - waybackTime(b));
+}
+
+/* The item whose imagery is on screen at the centre: the release itself, or else the newest version
+   at or before it (that is what the release shows here) */
+function waybackCurrentItem() {
+    const exact = wayback.items.find(it => it.release === wayback.release);
+    if (exact) return exact;
+    const at = wayback.index.get(wayback.release);
+    if (at === undefined) return null;
+    return wayback.items.find(it => wayback.index.get(it.release) >= at) || null;
+}
+
+function waybackShow(on) {
+    waybackBar.hidden = !on;
+    if (!on) {
+        if (wayback.abort) wayback.abort.abort();
+        wayback.abort = null;
+        wayback.tileKey = null;
+        return;
+    }
+    waybackRender();
+    waybackLoadConfig().then(() => waybackRefresh()).catch(() => {
+        wayback.status = 'Esri Wayback could not be reached.';
+        waybackRender();
+    });
+}
+
+function waybackRender() {
+    if (waybackBar.hidden) return;
+    const items = waybackSorted();
+    const cur = waybackCurrentItem();
+    const label = waybackBar.querySelector('.wayback-date');
+    const steps = waybackBar.querySelectorAll('.wayback-step');
+    waybackTrack.querySelectorAll('.wayback-mark').forEach(m => m.remove());
+    const axis = waybackBar.querySelector('.wayback-axis');
+    axis.innerHTML = '';
+
+    if (!items.length) {
+        label.textContent = wayback.status || 'Finding imagery dates…';
+        label.title = '';
+        steps.forEach(b => { b.disabled = true; });
+        waybackTrack.removeAttribute('aria-valuetext');
+        return;
+    }
+
+    const t0 = waybackTime(items[0]), t1 = waybackTime(items[items.length - 1]);
+    const pos = (t) => t1 > t0 ? (t - t0) / (t1 - t0) * 100 : 50;
+    items.forEach(it => {
+        const m = el('div', 'wayback-mark' + (it === cur ? ' active' : ''), waybackTrack);
+        m.style.left = pos(waybackTime(it)) + '%';
+        m.title = waybackItemText(it);
+    });
+
+    // Years along the axis: every year when there is room, else every 2nd or 5th
+    const y0 = new Date(t0).getUTCFullYear(), y1 = new Date(t1).getUTCFullYear();
+    const every = y1 - y0 > 12 ? 5 : y1 - y0 > 6 ? 2 : 1;
+    for (let yr = y0 + 1; yr <= y1; yr++) {
+        if (yr % every) continue;
+        const tick = el('span', 'wayback-year', axis);
+        tick.textContent = yr;
+        tick.style.left = pos(Date.UTC(yr, 0, 1)) + '%';
+    }
+
+    const idx = cur ? items.indexOf(cur) : -1;
+    label.textContent = cur ? waybackDateText(cur) : (wayback.status || 'Pick a date');
+    label.title = cur ? waybackItemText(cur) : '';
+    steps[0].disabled = idx === 0;
+    steps[1].disabled = idx === items.length - 1;
+    waybackTrack.setAttribute('aria-valuetext', label.textContent);
+}
+
+function waybackDateText(it) {
+    return it.capture !== null ? 'Captured ' + WAYBACK_DATE.format(it.capture) : 'Undated imagery';
+}
+
+function waybackItemText(it) {
+    const extra = [it.source, it.res ? (it.res < 1 ? Math.round(it.res * 100) + ' cm' : it.res.toFixed(1) + ' m') + ' per pixel' : '']
+        .filter(Boolean).join(', ');
+    return waybackDateText(it) + (extra ? ` (${extra})` : '');
+}
+
+function waybackStep(dir) {
+    const items = waybackSorted();
+    if (!items.length) return;
+    const idx = items.indexOf(waybackCurrentItem());
+    const next = items[idx < 0 ? (dir > 0 ? items.length - 1 : 0) : Math.max(0, Math.min(items.length - 1, idx + dir))];
+    setWaybackRelease(next.release);
+}
+
+/* Nearest mark to a pointer position on the track */
+function waybackPick(clientX) {
+    const items = waybackSorted();
+    if (!items.length) return;
+    const box = waybackTrack.getBoundingClientRect();
+    const t0 = waybackTime(items[0]), t1 = waybackTime(items[items.length - 1]);
+    const f = Math.max(0, Math.min(1, (clientX - box.left) / box.width));
+    const t = t0 + f * (t1 - t0);
+    const best = items.reduce((a, b) => Math.abs(waybackTime(b) - t) < Math.abs(waybackTime(a) - t) ? b : a);
+    setWaybackRelease(best.release);
+}
+
+waybackBar.querySelectorAll('.wayback-step').forEach(b => { b.onclick = () => waybackStep(+b.dataset.step); });
+waybackTrack.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0) return;
+    waybackTrack.setPointerCapture(e.pointerId);
+    waybackTrack.focus({ preventScroll: true });
+    waybackPick(e.clientX);
+});
+waybackTrack.addEventListener('pointermove', (e) => {
+    if (waybackTrack.hasPointerCapture(e.pointerId)) waybackPick(e.clientX);
+});
+waybackBar.addEventListener('keydown', (e) => {
+    const step = { ArrowLeft: -1, ArrowDown: -1, ArrowRight: 1, ArrowUp: 1 }[e.key];
+    if (e.target === waybackTrack && (step || e.key === 'Home' || e.key === 'End')) {
+        e.preventDefault();
+        if (step) waybackStep(step);
+        else { const items = waybackSorted(); if (items.length) setWaybackRelease(items[e.key === 'Home' ? 0 : items.length - 1].release); }
+    }
+    if (e.key !== 'Escape') e.stopPropagation();   // the map and photo shortcuts stay out of the timeline
+});
+
+/* Per session: the release goes with the map view when a session is left, exported or autosaved, and
+   comes back when it is opened. A session saved on another basemap leaves the basemap alone. */
+function saveLiveMap(s) {
+    s.mapView = getMapView();
+    s.wayback = waybackActive() ? wayback.release : null;
+}
+
+function restoreSessionWayback(s) {
+    if (!s.wayback) return;
+    setWaybackRelease(s.wayback);
+    if (activeTileSetId !== 'esri-wayback') { setTileSet('esri-wayback'); renderLayerMenu(); }
+}
 
 /* ---- 3D TERRAIN ---- */
 /* Elevation tiles, picked in the map panel (Terrain → Elevation). Both keyless, CORS ok, Terrarium
@@ -927,9 +1319,21 @@ function renderLayerMenu() {
         del.onclick = (e) => { e.stopPropagation(); removeCustomLayer(set.id); };
     };
 
-    TILE_SETS.forEach(addItem);
-    if (customLayers.length) el('div', 'layer-divider', list);
-    allTileSets().filter(s => s.custom).forEach(addItem);
+    // A small heading per group; the first one needs no line above it
+    const heading = (text) => {
+        const h = el('div', 'layer-group' + (list.children.length ? '' : ' first'), list);
+        h.textContent = text;
+    };
+    BASEMAP_GROUPS.forEach(g => {
+        const sets = TILE_SETS.filter(s => s.group === g);
+        if (!sets.length) return;
+        heading(g);
+        sets.forEach(addItem);
+    });
+    const custom = allTileSets().filter(s => s.custom);
+    if (custom.length) heading('Custom');
+    else el('div', 'layer-divider', list);
+    custom.forEach(addItem);
 
     const add = el('div', 'layer-item layer-add', list);
     add.textContent = '＋ Add custom layer…';
@@ -2048,7 +2452,7 @@ function switchToSession(idx) {
 
     // Save outgoing session's map position (guard: session may already be gone if called from removeSession)
     if (sessions[activeSessionIndex]) {
-        sessions[activeSessionIndex].mapView = getMapView();
+        saveLiveMap(sessions[activeSessionIndex]);
         setMarkersDraggable(sessions[activeSessionIndex], false);
     }
     if (sessions[idx]) setMarkersDraggable(sessions[idx], true);
@@ -2062,6 +2466,7 @@ function switchToSession(idx) {
         const hasGeoWork = s.lines.some(l => l.points.some(p => p.geo));
         if (!hasGeoWork) applyMapView(WORLD_VIEW);
     }
+    restoreSessionWayback(s);
 
     const exifCard = document.getElementById('exif-card');
     exifCard.style.display = 'none';
@@ -2797,6 +3202,7 @@ function sessionToData(s) {
             ? { center: { lat: s.mapView.center.lat, lng: s.mapView.center.lng }, zoom: s.mapView.zoom,
                 bearing: s.mapView.bearing ?? 0, pitch: s.mapView.pitch ?? 0 }
             : null,
+        wayback:           s.wayback || null,   // Esri Wayback release, when the session was left on that basemap
         intersection:      s.mapObjects.intersectionLatLng || null,
         exif:              s.exif || null,
         colourIndex:       s.colourIndex ?? null
@@ -2901,13 +3307,13 @@ const exportStamp = () => new Date().toISOString().slice(0, 16).replace('T', '_'
 
 function exportSession(idx) {
     const s = sessions[idx];
-    if (idx === activeSessionIndex) s.mapView = getMapView();
+    if (idx === activeSessionIndex) saveLiveMap(s);
     return exportSessions([s], `tracepoint_${fileSafe(s.name)}_${exportStamp()}.json`, 'Session exported.');
 }
 
 function exportAllSessions() {
     if (sessions[activeSessionIndex]) {
-        sessions[activeSessionIndex].mapView = getMapView();
+        saveLiveMap(sessions[activeSessionIndex]);
     }
     return exportSessions(sessions.filter(s => s.imgElement), `tracepoint_all_${exportStamp()}.json`, 'All sessions exported.');
 }
@@ -3165,6 +3571,8 @@ function applySessionData(list, keepView = false) {
             };
             applyMapView(s.mapView);
         }
+        s.wayback = validRelease(sd.wayback);
+        if (s === sess()) restoreSessionWayback(s);
 
         if (keepView) s.hasAutoZoomed = true;
         s.lines.forEach((_, lIdx) => rebuildMapForLine(lIdx));
@@ -3276,7 +3684,7 @@ function autosaveWrite() {
     clearTimeout(autosaveTimer);
     autosaveTimer = null;
     if (!autosaveOn || !autosaveReady || !autosaveOwner) return;
-    if (sessions[activeSessionIndex]) sessions[activeSessionIndex].mapView = getMapView();
+    if (sessions[activeSessionIndex]) saveLiveMap(sessions[activeSessionIndex]);
     const json = sessionsHaveWork()
         ? JSON.stringify({ json_version: JSON_VERSION, exported: new Date().toISOString(), active: activeSessionIndex,
                            sessions: sessions.map(s => ({ ...sessionToData(s), id: s.id })) })
