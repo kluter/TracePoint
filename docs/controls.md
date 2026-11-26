@@ -17,7 +17,7 @@ The full reference for TracePoint's mouse, menu and keyboard controls. For a qui
 | Layout | Drag the divider between photo and map, double-click it for 50/50, or fold the photo side away with the chevron on it |
 | New line | **+** button at the left of the line bar, or `E` |
 | Export, import, demo | ☰ button, right of the line bar |
-| Export with photos | **Include photos** switch in the ☰ menu of the photo side, off by default. On: every export stores each photo inside the JSON, unchanged, with its GPS and camera data; the file gets about a third bigger than the photo. Import then restores the photo by itself |
+| Export with photos | **Include photos** switch in the ☰ menu of the photo side, off by default. On: every export stores each photo inside the JSON, unchanged, with its GPS and camera data; the file gets about a third bigger than the photo. Import then restores the photo by itself. Off: the file holds neither the photos nor their metadata (GPS position, camera serial numbers, creator) |
 | Export for Google Earth or GIS | Download button in the map bar, greyed out until a line is on the map: **Google Earth** (`.kml`) or **GIS** (`.geojson`). All images with their rays, map points, estimated position and error ellipse. Export only; see [export](export.md) |
 | Autosave on / off, clear saved work | **This browser** section of the ☰ menu of the photo side. Off or **Clear** deletes the copy kept in the browser |
 | Image metadata | `</>` button in the line bar. **Show on map** places the EXIF GPS position; the same button, now **Remove from map**, takes it away again |

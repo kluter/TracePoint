@@ -128,7 +128,7 @@ python3 -m http.server
 
 ## Changelog
 
-Current version: **v2.12.0**. All releases are listed in [CHANGELOG.md](CHANGELOG.md).
+Current version: **v2.12.1**. All releases are listed in [CHANGELOG.md](CHANGELOG.md).
 
 ---
 
