@@ -631,7 +631,13 @@ const WAYBACK_TILEMAP    = 'https://wayback.maptiles.arcgis.com/arcgis/rest/serv
 const WAYBACK_KEY        = 'tp-wayback-release';
 const WAYBACK_MIN_ZOOM   = 11;   // tile zoom (map zoom 10, a town on screen); further out Esri's imagery is a
                                  // mosaic of many dates and the timeline would have nothing useful to say
-const WAYBACK_MAX_ZOOM   = 19;   // the source's maxzoom: past it MapLibre enlarges the zoom-19 tile
+const WAYBACK_MAX_ZOOM   = 16;   // tile zoom the versions are looked up at, at most: a zoom-16 tile is about
+                                 // 600 m wide, so panning around a spot does not start a new lookup every
+                                 // few dozen metres, as zoom-19 tiles (about 50 m) did. Esri updates a
+                                 // place at all zooms at once, so the list is the same.
+const WAYBACK_FALLBACK   = 3692; // World Imagery (Wayback 2026-11-18): shown when the release list cannot
+                                 // be loaded on the very first visit, instead of an empty map
+const WAYBACK_META_HOST  = /^https:\/\/metadata\.maptiles\.arcgis\.com\//;   // the only server the list may send metadata queries to
 
 const wayback = {
     release:   validRelease(Number(localStorage.getItem(WAYBACK_KEY))),
@@ -657,7 +663,7 @@ function waybackLoadConfig() {
             .then(cfg => {
                 const list = Object.entries(cfg || {}).map(([id, e]) => {
                     const date = /\d{4}-\d{2}-\d{2}/.exec(e?.itemTitle || '');
-                    return validRelease(Number(id)) && date && /^https:\/\//.test(e.metadataLayerUrl || '')
+                    return validRelease(Number(id)) && date && WAYBACK_META_HOST.test(e.metadataLayerUrl || '')
                         ? { id: Number(id), date: date[0], meta: e.metadataLayerUrl } : null;
                 }).filter(Boolean).sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id);
                 if (!list.length) throw new Error('empty config');
@@ -712,8 +718,9 @@ async function waybackWalk(z, x, y, signal, onFound) {
     let i = 0;
     while (i < list.length) {
         const res = await fetch(`${WAYBACK_TILEMAP}/${list[i].id}/${z}/${y}/${x}`, { signal });
-        if (!res.ok) break;
+        if (!res.ok) throw new Error('tilemap ' + res.status);   // a failed lookup is not cached: the next move tries again
         const t = await res.json();
+        if (t?.error) throw new Error('tilemap error');   // ArcGIS reports errors with status 200
         if (!t?.valid || !Array.isArray(t.data) || t.data[0] !== 1) break;   // no tile in this release (nor, in practice, older ones)
         const sel = validRelease(Array.isArray(t.select) && t.select.length ? t.select[0] : list[i].id);
         const at = wayback.index.get(sel);
@@ -738,8 +745,10 @@ async function waybackCapture(release, z, x, y, signal) {
     for (let layer = Math.max(0, Math.min(13, 23 - z)); layer <= 13; layer++) {
         const res = await fetch(`${r.meta}/${layer}/query?geometry=${lng.toFixed(6)},${lat.toFixed(6)}&geometryType=esriGeometryPoint` +
             `&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=SRC_DATE2,NICE_DESC,SRC_RES&returnGeometry=false&f=json`, { signal });
-        if (!res.ok) break;
-        const a = (await res.json())?.features?.[0]?.attributes;
+        if (!res.ok) throw new Error('metadata ' + res.status);   // not cached: shown undated this time only
+        const json = await res.json();
+        if (json?.error) throw new Error('metadata error');       // ArcGIS reports errors with status 200
+        const a = json?.features?.[0]?.attributes;
         if (!a) continue;
         info = { capture: finite(a.SRC_DATE2) ? a.SRC_DATE2 : null,
                  source:  typeof a.NICE_DESC === 'string' ? a.NICE_DESC.trim() : '',
@@ -818,7 +827,12 @@ function waybackRefresh() {
         waybackRender();
     });
 }
-map.on('moveend', waybackRefresh);
+/* A short pause after the map stops: a few quick pans in a row start one lookup, not one each */
+let waybackMoveTimer = null;
+map.on('moveend', () => {
+    clearTimeout(waybackMoveTimer);
+    waybackMoveTimer = setTimeout(waybackRefresh, 350);
+});
 
 /* ---- WAYBACK TIMELINE (top of the map) ----
    Marks on a time axis, one per imagery version at the map centre, placed by capture date. Drag along
@@ -872,6 +886,8 @@ function waybackShow(on) {
     waybackRender();
     waybackLoadConfig().then(() => waybackRefresh()).catch(() => {
         wayback.status = 'Esri Wayback could not be reached.';
+        // First visit, no release known yet: recent imagery instead of an empty map
+        if (!wayback.release) setWaybackRelease(WAYBACK_FALLBACK);
         waybackRender();
     });
 }
@@ -1299,11 +1315,28 @@ function renderLayerMenu() {
     document.getElementById('basemap-name').textContent = active.label;
     basemapBtn.title = `Basemap: ${active.label}`;
 
+    // Entries are reachable with Tab and picked with Enter or Space, like buttons
+    const focusable = (item) => {
+        item.tabIndex = 0;
+        item.setAttribute('role', 'button');
+        item.addEventListener('keydown', (e) => {
+            if (e.target !== item || (e.key !== 'Enter' && e.key !== ' ')) return;
+            e.preventDefault();
+            e.stopPropagation();   // not a shortcut, and Space does not pan the photo
+            item.click();
+        });
+    };
     const addItem = (set) => {
         const item = el('div', 'layer-item', list);
         item.dataset.id = set.id;
-        if (set.id === activeTileSetId) item.classList.add('active');
-        item.onclick = () => { setTileSet(set.id); renderLayerMenu(); closeBasemapMenu(); };
+        focusable(item);
+        if (set.id === activeTileSetId) { item.classList.add('active'); item.setAttribute('aria-current', 'true'); }
+        item.onclick = (e) => {
+            setTileSet(set.id); renderLayerMenu(); closeBasemapMenu();
+            // Picked with the keyboard (no mouse click count): focus goes back to the button, not lost.
+            // A mouse pick leaves focus alone, so Space keeps panning the photo.
+            if (e.detail === 0) basemapBtn.focus();
+        };
         if (!set.custom) { item.textContent = set.label; return; }
 
         item.classList.add('layer-item-custom');
@@ -1337,6 +1370,7 @@ function renderLayerMenu() {
 
     const add = el('div', 'layer-item layer-add', list);
     add.textContent = '＋ Add custom layer…';
+    focusable(add);
     add.onclick = () => { closeBasemapMenu(); openLayerModal(null); };
 
     // How sharp the imagery stays toward the horizon (see applyTileDetail); the list stays open
@@ -2318,7 +2352,12 @@ function renderImageTabs() {
         close.title = 'Remove image';
         close.setAttribute('aria-label', `Remove ${s.name}`);
         close.textContent = '×';
-        close.onclick = (e) => { e.stopPropagation(); removeSession(idx); };
+        close.onclick = (e) => {
+            e.stopPropagation();
+            // Removing takes the photo, lines and points with it, and there is no undo for that
+            if (sessionHasWork(s) && !confirm(`Remove "${s.name}" with its lines and points? This cannot be undone.`)) return;
+            removeSession(idx);
+        };
         tab.onclick = (e) => {
             if (e.target.closest('input')) return;   // the name being edited
             if (idx !== activeSessionIndex) switchToSession(idx);
@@ -2362,14 +2401,14 @@ function renderSessionMenu() {
     section('File');
     entry('session-import', `${arrow(true)} Import…`, 'Open a TracePoint session file (.json)', true, () => jsonPicker.click());
     entry('session-export-all', `${arrow(false)} Export this image`, 'Save the image on screen with its lines and points',
-        !!sess()?.imgElement, () => exportSession(activeSessionIndex));
+        !!sess() && sessionHasWork(sess()), () => exportSession(activeSessionIndex));
     entry('session-export-all', `${arrow(false)} Export all <span class="session-key">Ctrl+S</span>`,
-        'Save all images with their lines and points as one file', sessions.some(s => s.imgElement), () => exportAllSessions());
+        'Save all images with their lines and points as one file', sessionsHaveWork(), () => exportAllSessions());
 
     // Export with or without the photos themselves; the note is there only while it is on
     const photoRow = el('div', 'session-autosave session-export-photos', menu);
     photoRow.innerHTML =
-        `<label class="autosave-switch" for="export-photos-switch" title="Store each photo inside the exported file, unchanged, with its GPS and camera data, so an import restores it without asking for the image. The file gets about a third bigger than the photo. Applies to every export, also Ctrl+S.">
+        `<label class="autosave-switch" for="export-photos-switch" title="Store each photo inside the exported file, unchanged, with its GPS and camera data, so an import restores it without asking for the image. The file gets about a third bigger than the photo. Off: the file holds neither the photos nor their metadata. Applies to every export, also Ctrl+S.">
              Include photos</label>
          <input type="checkbox" id="export-photos-switch" class="adjust-switch" role="switch" aria-label="Include photos" ${exportPhotos ? 'checked' : ''}>`;
     photoRow.querySelector('input').onchange = (e) => { setExportPhotos(e.target.checked); renderSessionMenu(); };
@@ -3116,11 +3155,15 @@ function updateAdjustUI() {
     originalBadge.hidden = !state.showOriginal;
 }
 
-/* Changing an adjustment switches back to the adjusted photo: that is what is being tuned */
+/* Changing an adjustment switches back to the adjusted photo: that is what is being tuned.
+   A slider fires many times per frame while dragged, and every redraw filters the photo at its full
+   size (slow on a 24–50 MP photo), so the photo is redrawn at most once per frame. */
+let adjustFrame = null;
 function setAdjust(change) {
     change(sess().adjust);
     state.showOriginal = false;
-    render(); updateAdjustUI();
+    updateAdjustUI();
+    if (adjustFrame === null) adjustFrame = requestAnimationFrame(() => { adjustFrame = null; render(); });
 }
 
 ADJUST_SLIDERS.forEach(sl => {
@@ -3255,9 +3298,13 @@ const blobToDataURL = (blob) => new Promise((resolve, reject) => {
     reader.readAsDataURL(blob);
 });
 
-/* sessionToData plus the photo, when the switch is on and the session has one */
+/* sessionToData plus the photo, when the switch is on and the session has one. The photo's metadata
+   (GPS position, camera serial numbers, creator) goes along only with the photo itself: a session file
+   shared without photos tells nothing about where they were taken. The autosave keeps it, since it
+   never leaves the browser. The EXIF ray does not need it: it is saved as an ordinary line. */
 async function sessionToExport(s) {
     const data = sessionToData(s);
+    if (!exportPhotos) data.exif = null;
     if (exportPhotos && s.imageFile) {
         data.image = {
             name:    s.imageFilename || s.imageFile.name || 'photo',
@@ -3315,7 +3362,8 @@ function exportAllSessions() {
     if (sessions[activeSessionIndex]) {
         saveLiveMap(sessions[activeSessionIndex]);
     }
-    return exportSessions(sessions.filter(s => s.imgElement), `tracepoint_all_${exportStamp()}.json`, 'All sessions exported.');
+    // Images still waiting for their photo go too: their lines and map points are work
+    return exportSessions(sessions.filter(sessionHasWork), `tracepoint_all_${exportStamp()}.json`, 'All sessions exported.');
 }
 
 /* ============================================================
@@ -3670,8 +3718,13 @@ function autosaveFailed() {
     showToast('Autosave failed: browser storage is full or blocked.');
 }
 
+/* A photo, lines, or a session that waits for its photo (imported or restored without it) */
+function sessionHasWork(s) {
+    return !!(s.imgElement || s.lines.length > 0 || s.pendingImageFilename);
+}
+
 function sessionsHaveWork() {
-    return sessions.some(s => s.imgElement || s.lines.length > 0 || s.pendingImageFilename);
+    return sessions.some(sessionHasWork);
 }
 
 function scheduleAutosave() {
@@ -3924,8 +3977,23 @@ function sizeLineCanvas() {
 }
 new ResizeObserver(() => drawLines()).observe(container);
 
+/* The glow of an untouched line and the ring of a point waiting for its map click are redrawn about
+   30 times a second (a timer, then the next frame): smooth enough for a slow pulse, at half the work
+   of every frame. They may stay on screen for a long time while nobody is at the computer. */
+const PULSE_INTERVAL = 33;   // ms
+let pulseTimer = null;
+
 function stopPulse() {
+    if (pulseTimer !== null)   { clearTimeout(pulseTimer); pulseTimer = null; }
     if (pulseFrameId !== null) { cancelAnimationFrame(pulseFrameId); pulseFrameId = null; }
+}
+
+function schedulePulse() {
+    if (pulseTimer !== null || pulseFrameId !== null) return;
+    pulseTimer = setTimeout(() => {
+        pulseTimer = null;
+        pulseFrameId = requestAnimationFrame(() => { pulseFrameId = null; drawLines(); });
+    }, PULSE_INTERVAL);
 }
 
 /* Lines, points and the level tool's guide line. Drawn in image pixels through the photo's view
@@ -4041,8 +4109,7 @@ function drawLines() {
     });
 
     if (needsRerender) {
-        if (pulseFrameId === null)
-            pulseFrameId = requestAnimationFrame(() => { pulseFrameId = null; drawLines(); });
+        schedulePulse();
     } else {
         stopPulse();
     }
@@ -4518,6 +4585,8 @@ function setMarkersDraggable(s, on) {
 function recomputeIntersection() {
     const s  = sess();
     const mo = s.mapObjects;
+    // The popup opens with a newly found position; after that it stays as the user left it
+    const popupOpen = mo.intersectionMarker ? !!mo.intersectionMarker.getPopup()?.isOpen() : true;
     if (mo.intersectionMarker) {
         mo.intersectionMarker.remove();
         mo.intersectionMarker = null;
@@ -4554,7 +4623,7 @@ function recomputeIntersection() {
         .setPopup(coordPopup('Estimated Position', `${avgLat.toFixed(6)}, ${avgLng.toFixed(6)}`, 'tp-popup', 14))
         .addTo(map);
 
-    mo.intersectionMarker.togglePopup();
+    if (popupOpen) mo.intersectionMarker.togglePopup();
 
     if (hits.length >= 3) {
         const center = { lat: avgLat, lng: avgLng };

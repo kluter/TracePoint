@@ -483,6 +483,7 @@ button:disabled     { opacity: 0.3; cursor: not-allowed; }
 }
 .layer-item:hover  { background: #222; color: #fff; }
 .layer-item.active { color: #ffdc32; background: #221c05; }
+.layer-item:focus-visible { outline: 1px solid #ffdc32; outline-offset: -1px; }
 .layer-item-custom { display: flex; align-items: center; gap: 4px; padding-right: 8px; }
 .layer-label { flex: 1; overflow: hidden; text-overflow: ellipsis; max-width: 200px; }
 .layer-action {

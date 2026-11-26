@@ -58,11 +58,15 @@ Photo adjustments and coordinate pins are not saved. Besides that, `localStorage
 //                 { "tp-street-token": "…" }    ← your Mapillary token, if you entered one (never exported)
 //                 { "tp-street-cover": "1" }    ← coverage overlay on/off
 //                 { "tp-street-split": "45.00" } ← height of the street-level panel in percent
-// IndexedDB:      tracepoint → autosave         ← "session" (same JSON as the export) + one "img:…" per image
+// IndexedDB:      tracepoint → autosave         ← "session" (the export's JSON, with the photos' metadata) + one "img:…" per image
 //                                                 empty while autosave is off
 // sessionStorage: empty
 // Cookies:        none set by TracePoint
 ```
+
+## What an exported session file contains
+
+Lines, points, map views and the estimated position, plus the image names. The photos and their metadata (GPS position, camera and lens serial numbers, creator, capture time) go into the file only with **Include photos** switched on. Without it, a session file you share says nothing about where the photos were taken beyond the work on the map itself.
 
 ## Session import cannot run code
 

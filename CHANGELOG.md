@@ -1,5 +1,16 @@
 # Changelog
 
+## v2.12.1
+
+- Privacy: an exported session file carries the photos' metadata (GPS position, camera serial numbers, creator) only with **Include photos** on. Before, it was always in the file
+- Export all (Ctrl+S) also saves images still waiting for their photo; before, their lines and points were left out
+- Removing an image with work on it asks first
+- Esri Wayback looks up its timeline less often: per area of about 600 m and after a short pause, instead of every few dozen metres while panning. A failed lookup is tried again instead of being remembered, and recent imagery shows if Esri's list cannot be reached on the first visit
+- Contrast and brightness sliders stay smooth on large photos
+- The glow of a new line and the waiting point use half the redraws
+- The estimated position's popup stays closed once closed, instead of opening after every change
+- The basemap list can be used with the keyboard (Tab, Enter)
+
 ## v2.12.0
 
 - **Esri Wayback** is a built-in basemap with a timeline at the top of the map: one mark per capture that exists where the map is centred, placed and labelled by the date the imagery was taken. Drag along it, click a mark, or step with ‹ › and the arrow keys. Releases that repeat the same picture are skipped, and old captures that stop short of the zoom are enlarged instead of leaving gaps. See `docs/map-layers.md`
